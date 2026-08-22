@@ -617,6 +617,40 @@ export function injectStyles(): void {
       width: 100%;
       z-index: 10;
     }
+    .docdiagram-diagram-export {
+      position: relative;
+    }
+    .docdiagram-diagram-export-menu {
+      background: var(--docdiagram-background);
+      border: 1px solid var(--docdiagram-border);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgb(21 41 62 / 18%);
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+      padding: .35rem;
+      position: absolute;
+      right: 0;
+      top: calc(100% + .25rem);
+      width: max-content;
+      z-index: 11;
+    }
+    .docdiagram-diagram-export-menu[hidden] {
+      display: none;
+    }
+    .docdiagram-diagram-export-menu button {
+      background: var(--docdiagram-control-background);
+      border: 1px solid var(--docdiagram-border);
+      border-radius: 5px;
+      color: var(--docdiagram-text);
+      cursor: pointer;
+      font: inherit;
+      padding: .35rem .55rem;
+      text-align: left;
+    }
+    .docdiagram-diagram-export-menu button:hover {
+      background: var(--docdiagram-control-hover);
+    }
     .docdiagram-icon-button {
       background: var(--docdiagram-control-background);
       border: 1px solid var(--docdiagram-border);
