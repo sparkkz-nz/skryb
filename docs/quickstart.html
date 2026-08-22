@@ -69,6 +69,13 @@ nodes:
     position: { x: 450, y: 110 }
     size: { width: 180, height: 80 }
     palette: success
+  - id: order-note
+    label: |+
+      ## Order request
+      **Authenticated** customer call
+    shape: text
+    position: { x: 390, y: 18 }
+    size: { width: 260, height: 70 }
 edges:
   - source: browser
     target: api
@@ -83,6 +90,26 @@ Use the diagram toolbar to zoom, fit, or pan. Panning is visual only: it does
 not alter the stored node and waypoint coordinates. Choose **Edit** to make
 flowchart changes, then keep the edit to serialize them into the matching
 diagram fence.
+
+Use the **text** shape for diagram annotations. Its existing **Label** editor
+accepts multiple lines and supports `# Heading`, `## Subheading`, `**bold**`,
+_italic_, and `` `code` `` formatting. A text shape is transparent by default;
+apply any palette, including **None**, to change or remove a shape's fill and
+stroke. See the [reference](reference.html#the-text-shape-and-its-markdown-subset)
+for the complete text-node syntax.
+
+## Export a diagram
+
+Each diagram toolbar has an **Export** menu:
+
+- **Open full diagram** opens the diagram alone in a new browser tab.
+- **Save as SVG** downloads a standalone, scalable vector image that can be
+  opened in a browser or compatible graphics application.
+- **Print / Save as PDF** opens the browser's native print dialog for the
+  diagram alone.
+
+Exports retain the current theme background and diagram font, but omit editor
+controls as well as the current zoom and pan position.
 
 ## Edit canonical source
 
