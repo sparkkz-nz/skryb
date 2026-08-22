@@ -520,7 +520,22 @@ test("keeps rendering document content around an invalid diagram outside source 
   ].join("\n"));
 
   assert.match(markup, /Diagram could not be rendered/);
-  assert.match(markup, /<h2>After<\/h2>/);
+  assert.match(markup, /<h2 id="after">After<\/h2>/);
+});
+
+test("adds deterministic IDs to headings for internal fragment links", () => {
+  const markup = renderMarkdown([
+    "# Overview",
+    "## **API** details",
+    "> ## Overview",
+    "## Overview-2"
+  ].join("\n"));
+
+  assert.match(markup, /<h1 id="overview">Overview<\/h1>/);
+  assert.match(markup, /<h2 id="api-details"><strong>API<\/strong> details<\/h2>/);
+  assert.match(markup, /<blockquote><h2 id="overview-2">Overview<\/h2><\/blockquote>/);
+  assert.match(markup, /<h2 id="overview-2-2">Overview-2<\/h2>/);
+  assert.match(renderInline("[Jump](#overview)"), /<a href="#overview">Jump<\/a>/);
 });
 
 test("renders the documented CommonMark and GFM compatibility baseline semantically", () => {
@@ -609,7 +624,7 @@ test("renders diagram references in reading order and omits their later definiti
   ].join("\n"));
 
   assert.equal([...markup.matchAll(/<figure class="docdiagram"/g)].length, 1);
-  assert.ok(markup.indexOf('<figure class="docdiagram"') < markup.indexOf("<h2>Next section</h2>"));
+  assert.ok(markup.indexOf('<figure class="docdiagram"') < markup.indexOf('<h2 id="next-section">Next section</h2>'));
 });
 
 test("reports missing, duplicate, and repeated diagram references", () => {
