@@ -21,6 +21,43 @@ type DiagramReferenceRegistry = {
   referenceCounts: Map<string, number>;
 };
 
+type MarkdownRenderState = {
+  diagramIndex: number;
+  headingOccurrences?: Map<string, number>;
+  usedHeadingIds?: Set<string>;
+};
+
+function createHeadingSlug(value: string): string {
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(\*\*|__|~~|\*|_)/g, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/[\s-]+/g, "-") || "section";
+}
+
+function getHeadingId(source: string, state: MarkdownRenderState): string {
+  const base = createHeadingSlug(source);
+  const occurrences = state.headingOccurrences || (state.headingOccurrences = new Map());
+  const usedIds = state.usedHeadingIds || (state.usedHeadingIds = new Set());
+  let occurrence = (occurrences.get(base) || 0) + 1;
+  let id = occurrence === 1 ? base : `${base}-${occurrence}`;
+
+  while (usedIds.has(id)) {
+    occurrence += 1;
+    id = `${base}-${occurrence}`;
+  }
+
+  occurrences.set(base, occurrence);
+  usedIds.add(id);
+  return id;
+}
+
 function splitTableRow(line: string): string[] {
   const cells: string[] = [];
   let cell = "";
@@ -215,7 +252,7 @@ export function renderInline(source: string): string {
 
 export function renderMarkdown(
   source: string,
-  state: { diagramIndex: number } = { diagramIndex: 0 },
+  state: MarkdownRenderState = { diagramIndex: 0 },
   options?: {
     renderDiagram?: (source: string, index: number) => string;
     documentColorScheme?: string;
@@ -489,7 +526,7 @@ export function renderMarkdown(
 
       const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
       if (heading) {
-        output.push(`<h${heading[1].length}>${renderInline(heading[2])}</h${heading[1].length}>`);
+        output.push(`<h${heading[1].length} id="${getHeadingId(heading[2], state)}">${renderInline(heading[2])}</h${heading[1].length}>`);
         index += 1;
         continue;
       }
