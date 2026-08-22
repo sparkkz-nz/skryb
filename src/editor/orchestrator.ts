@@ -723,6 +723,8 @@ export class BrowserRuntime {
     if (!svg) {
       return null;
     }
+    const diagram = svg.closest<HTMLElement>(".docdiagram");
+    const backgroundColour = globalThis.getComputedStyle(diagram || svg).backgroundColor;
     const copy = svg.cloneNode(true) as SVGSVGElement;
     copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     copy.removeAttribute("style");
@@ -734,12 +736,19 @@ export class BrowserRuntime {
     });
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = [
+      "svg{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}",
       ".docdiagram-edge,.docdiagram-edge-hit{fill:none}",
       ".docdiagram-edge-label{font-size:15px}",
       ".docdiagram-node-label{font-size:16px;font-weight:650}",
       ".docdiagram-node-subtitle{font-size:13px}"
     ].join("");
     copy.insertBefore(style, copy.firstChild);
+    const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    background.setAttribute("class", "docdiagram-export-background");
+    background.setAttribute("width", "100%");
+    background.setAttribute("height", "100%");
+    background.setAttribute("fill", backgroundColour);
+    copy.insertBefore(background, style.nextSibling);
     return copy;
   }
 
