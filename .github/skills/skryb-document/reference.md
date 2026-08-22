@@ -483,6 +483,14 @@ self-contained copy with the selected runtime embedded at the end of its body.
 The latter reports an error rather than producing a partial document if the
 runtime cannot be obtained.
 
+Each rendered diagram has an **Export** menu in its toolbar. **Open full
+diagram** opens a standalone SVG in a new tab without editor controls. **Save
+as SVG** downloads that same vector image; it can be opened directly in a
+browser or a compatible graphics application. **Print / Save as PDF** opens the
+browser print dialog for the diagram alone. All three actions preserve the
+diagram's current theme background and system sans-serif font stack. The
+standalone export never includes editing controls, current zoom, or pan state.
+
 ## Runtime channels and limitations
 
 Use `/latest/skryb-runtime.js` for normal use, `/dev/skryb-runtime.js` only for
