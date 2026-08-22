@@ -800,13 +800,11 @@ export class BrowserRuntime {
       globalThis.alert("Your browser blocked the print window. Allow pop-ups and try again.");
       return;
     }
-    printWindow.addEventListener("load", () => {
-      printWindow.focus();
-      printWindow.print();
-    }, { once: true });
     printWindow.document.open();
     printWindow.document.write(documentHtml);
     printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   }
 
   private closeDiagramExportMenus(): void {
