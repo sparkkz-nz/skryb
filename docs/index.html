@@ -7,34 +7,52 @@
   <script src="https://sparkkz-nz.github.io/skryb/latest/skryb-runtime.js" defer></script>
 </head>
 <body>
-  <template id="source" type="text/markdown">
----
+  <template id="source" type="text/markdown">---
 theme: auto
 colourScheme: ice
 ---
 
-# Skryb quickstart
+# Skryb Quickstart
 
-Skryb makes portable, editable technical documents from an ordinary HTML file.
-The canonical Markdown and diagram YAML stay inside the file; the browser
-runtime renders them into a readable document and saves updated copies.
+**Skryb** turns standard Markdown and simple YAML diagram blocks into an ordinary
+HTML file, viewable in any browser. The canonical Markdown and YAML source remains
+inside the file; the browser runtime renders them into a readable, editable document
+and saves updated copies.
 
-:::callout { title="What you need" palette=accent }
-A modern browser and one HTML file. Hosted-runtime documents need network
-access when opened; use **Save for Offline** when the recipient must work
-without it.
+
+:::grid { columns=2 }
+:::panel { title="What you need" palette=accent-soft }
+A modern browser and one HTML file. The default file uses an online-hosted
+runtime, keeping the document small. Use **Save for Offline** to embed the
+runtime and make the document truly standalone.
 :::
+
+:::panel { title="This is a Skryb Document" palette=accent-soft}
+Use the document menu to change the theme. Open the built-in editor with
+shift-cmd/ctrl-E and explore the source, make live changes, and save a copy
+locally. Open a diagram editor to drag, drop, add and edit nodes and connectors.
+Explore, and have fun!
+:::
+:::
+
+## Designed so that Agents and Humans can work together
+
+While its easy to start with the [basic document template](https://sparkkz-nz.github.io/skryb/templates/skryb-document-template.html)
+and add some standard markdown or yaml diagram blocks, the real power of **Skryb**
+comes when your agent is given the [skills](https://sparkkz-nz.github.io/skryb/docs/quickstart.html#use-skryb-with-coding-agents) to use it.
+Let your agents generate beautifil documentation for you, and then jump in with tweaks and
+edits as needed.
 
 ## Create and open a document
 
-1. [Download the basic document template](../templates/skryb-document-template.html).
+1. [Download the basic document template](https://sparkkz-nz.github.io/skryb/templates/skryb-document-template.html).
    It has a title, introductory text, and editable flowchart.
 2. Open the downloaded file directly in a browser, including through a local
    `file://` URL.
 3. Choose **Edit source** in the document menu to replace the template content,
    then use **Save As** whenever you want a new document.
 4. To start from scratch instead, use the HTML shell in the
-   [reference](reference.html#html-document-shell). Put Markdown and diagram
+   [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#html-document-shell). Put Markdown and diagram
    YAML in `template#source`; keep
    `main#rendered-document` empty.
 
@@ -88,14 +106,14 @@ edges:
 
 Use the diagram toolbar to zoom, fit, or pan. Panning is visual only: it does
 not alter the stored node and waypoint coordinates. Choose **Edit** to make
-flowchart changes, then keep the edit to serialize them into the matching
+flowchart changes, then keep the edit to serialize them back into the matching
 diagram fence.
 
 Use the **text** shape for diagram annotations. Its existing **Label** editor
 accepts multiple lines and supports `# Heading`, `## Subheading`, `**bold**`,
-_italic_, and `` `code` `` formatting. A text shape is transparent by default;
+_italic_, and ``code`` formatting. A text shape is transparent by default;
 apply any palette, including **None**, to change or remove a shape's fill and
-stroke. See the [reference](reference.html#the-text-shape-and-its-markdown-subset)
+stroke. See the [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#the-text-shape-and-its-markdown-subset)
 for the complete text-node syntax.
 
 ## Export a diagram
@@ -113,12 +131,12 @@ controls as well as the current zoom and pan position.
 
 ## Edit canonical source
 
-**Edit source** opens the resizable source tray. Drag its top edge to change the
-tray height, or focus that edge and use the arrow keys; double-click it to
-restore the default height. It live-renders valid changes,
+**Edit source**, or Cmd/Ctrl+Shift+E, opens the resizable source tray. Drag its
+top edge to change the tray height, or focus that edge and use the arrow keys;
+double-click it to restore the default height. It live-renders valid changes,
 while preserving the last valid document and showing a precise error for an
 invalid draft. Double-click rendered text to open the tray at its matching
-source.
+source. Double-click and drag a text selection for more search precision.
 
 The tray menu inserts valid templates for a flowchart, sequence, diagram
 reference, panel, or grid. Use it for document structure and all sequence
@@ -136,7 +154,7 @@ top to bottom in source order.
 
 ## Keep going
 
-- Read the [Skryb reference](reference.html) for the supported document,
+- Read the [Skryb reference](https://sparkkz-nz.github.io/skryb/docs/reference.html) for the supported document,
   formatting, flowchart, and sequence fields.
 
 ## Use Skryb with coding agents
@@ -153,5 +171,7 @@ receive the latest version. The [skill source](https://github.com/sparkkz-nz/skr
 is versioned alongside Skryb.
   </template>
   <main id="rendered-document"></main>
+
+
 </body>
 </html>
