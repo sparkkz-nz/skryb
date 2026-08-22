@@ -164,6 +164,7 @@ test("standalone diagram SVG exports embed the runtime font stack", () => {
     runtime,
     /svg\{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif\}/
   );
+  assert.match(runtime, /docdiagram-export-background/);
 });
 
 test("uses the hosted runtime for a portable Save As when local runtime paths are unavailable", () => {
