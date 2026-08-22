@@ -80,9 +80,9 @@ Use `section` for semantic grouping, `panel` for a bordered visual container,
 and `callout` for a labelled `note`, `info`, `warning`, or `success` message.
 Use one semantic `palette` role (`background`, `pale`, `light`, `neutral`,
 `dark`, `accent-soft`, `accent`, `accent-strong`, `note`, `success`, `warning`,
-`danger`, or `highlight`). The document's colour scheme and theme resolve its
-visual treatment. `fill`, `stroke`, and `text` accept only documented
-hexadecimal overrides and take precedence over a palette.
+`danger`, `highlight`, or `none`). The document's colour scheme and theme
+resolve its visual treatment. `fill`, `stroke`, and `text` accept only
+documented hexadecimal overrides and take precedence over a palette.
 
 Use `grid` only for the documented `columns` presets: `2`, `3`, `"2fr 1fr"`,
 or `"1fr 2fr"`. A grid's direct children must be `panel`, `callout`, or
@@ -101,8 +101,10 @@ flowchart edge must include both `sourceAnchor` and `targetAnchor`. Use only
 the values in the syntax reference, including:
 
 - node shapes: `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`,
-  `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, and `document`;
-- node palettes: `palette: background|pale|light|neutral|dark|accent-soft|accent|accent-strong|note|success|warning|danger|highlight`;
+  `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, and
+  `text` (a borderless, unfilled shape whose `label` renders headings,
+  **bold**, _italic_, and `code` as native SVG text);
+- node palettes: `palette: background|pale|light|neutral|dark|accent-soft|accent|accent-strong|note|success|warning|danger|highlight|none` (`none` clears fill and stroke on any shape);
 - anchors: `top`, `right`, `bottom`, and `left`;
 - routes: `orthogonal`, `straight`, and `curved`;
 - endpoint markers: `none`, `arrow`, and `circle`.

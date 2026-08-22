@@ -5,6 +5,7 @@ import {
   edgeRoutes,
   colourSchemes,
   nodeShapes,
+  paletteRoles,
   supportedDiagramTypes,
   type Diagram,
   type FlowchartDiagram,
@@ -14,7 +15,7 @@ import {
   type SequenceNote,
   type SequenceParticipant
 } from "../core/diagrams/schema";
-import { escapeHtml, parseDiagram } from "../core/diagrams/parser";
+import { escapeHtml, parseDiagram, desugarBlockScalars } from "../core/diagrams/parser";
 import { serializeDiagram } from "../core/diagrams/serializer";
 import { findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, reparentFlowchartNode } from "../core/diagrams/hierarchy";
 import {
@@ -65,6 +66,7 @@ import {
   renderTextBlock,
   splitTextLines
 } from "../core/diagrams/geometry";
+import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
   findSourceTextRange,
   parseDocumentFrontmatter,
@@ -413,6 +415,7 @@ export class BrowserRuntime {
       colourSchemes,
       supportedDiagramTypes,
       nodeShapes,
+      paletteRoles,
       edgeAnchors,
       edgeRoutes,
       edgeMarkerStyles,
@@ -483,7 +486,10 @@ export class BrowserRuntime {
       renderNodeBody,
       buildEdgePath,
       buildEdgeInspectorFields,
-      clampZoom
+      clampZoom,
+      renderTextShapeContent,
+      parseTextShapeInlineRuns,
+      desugarBlockScalars
     };
   }
 

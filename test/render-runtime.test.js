@@ -78,7 +78,11 @@ const {
   renderNodeBody,
   buildEdgePath,
   buildEdgeInspectorFields,
-  clampZoom
+  clampZoom,
+  paletteRoles,
+  desugarBlockScalars,
+  parseTextShapeInlineRuns,
+  renderTextShapeContent
 } = context.globalThis.DocDiagramCore;
 
 function readTemplateSource(filePath) {
@@ -1578,7 +1582,7 @@ test("renders edges as selectable groups with a wide hit target", () => {
 
 test("supportedDiagramTypes, nodeShapes, edgeAnchors, edgeRoutes, and edgeMarkerStyles expose the supported option sets", () => {
   assert.equal(JSON.stringify([...supportedDiagramTypes]), JSON.stringify(["flowchart", "sequence"]));
-  assert.equal(JSON.stringify([...nodeShapes]), JSON.stringify(["rounded-rectangle", "circle", "oval", "database", "diamond", "rhombus", "flattened-hexagon", "chevron", "right-chevron", "document"]));
+  assert.equal(JSON.stringify([...nodeShapes]), JSON.stringify(["rounded-rectangle", "circle", "oval", "database", "diamond", "rhombus", "flattened-hexagon", "chevron", "right-chevron", "document", "text"]));
   assert.equal(JSON.stringify([...edgeAnchors]), JSON.stringify(["top", "right", "bottom", "left"]));
   assert.equal(JSON.stringify([...edgeRoutes]), JSON.stringify(["orthogonal", "straight", "curved"]));
   assert.equal(JSON.stringify([...edgeMarkerStyles]), JSON.stringify(["none", "arrow", "circle"]));
@@ -1619,7 +1623,11 @@ test("colour schemes provide every semantic role in distinct light and dark vari
   assert.deepEqual(Object.keys(colourSchemes), ["classic", "ice", "midnight", "paper"]);
   for (const scheme of Object.values(colourSchemes)) {
     assert.deepEqual(Object.keys(scheme.light), Object.keys(scheme.dark));
-    assert.equal(Object.keys(scheme.light).length, 13);
+    assert.equal(Object.keys(scheme.light).length, 14);
+    assert.equal(scheme.light.none.fill, "none");
+    assert.equal(scheme.light.none.stroke, "none");
+    assert.equal(scheme.dark.none.fill, "none");
+    assert.equal(scheme.dark.none.stroke, "none");
   }
   assert.notEqual(colourSchemes.ice.light.accent.fill, colourSchemes.ice.dark.accent.fill);
 });
@@ -1634,6 +1642,32 @@ test("palette selection serializes without an empty style mapping", () => {
     JSON.stringify(parseDiagram(serializeDiagram(diagram))),
     JSON.stringify(diagram)
   );
+});
+
+test("a None palette clears fill/stroke to none for any node shape and restores when another palette is chosen", () => {
+  assert.ok(paletteRoles.includes("none"));
+
+  const diagram = parseDiagram(twoNodeEdgeSource([]));
+  const node = diagram.nodes[0];
+
+  setNodeColorPalette(node, "none");
+  assert.equal(node.palette, "none");
+  const noneStyle = getNodeEffectiveStyle(diagram, node, "light", "classic");
+  assert.equal(noneStyle.fill, "none");
+  assert.equal(noneStyle.stroke, "none");
+
+  // The None palette must validate and round-trip through the canonical serializer/parser.
+  const serialized = serializeDiagram(diagram);
+  assert.match(serialized, /palette: none/);
+  const reparsed = parseDiagram(serialized);
+  assert.equal(reparsed.nodes[0].palette, "none");
+  assert.equal(JSON.stringify(reparsed), JSON.stringify(diagram));
+
+  // Choosing a different palette afterwards must restore that palette's normal styling.
+  setNodeColorPalette(node, "danger");
+  const restored = getNodeEffectiveStyle(diagram, node, "light", "classic");
+  assert.equal(restored.fill, colourSchemes.classic.light.danger.fill);
+  assert.equal(restored.stroke, colourSchemes.classic.light.danger.stroke);
 });
 
 test("requires supported node shapes and explicit edge anchors without retaining style.width aliases", () => {
@@ -1914,11 +1948,94 @@ test("computeNodeTextLayout stacks label and subtitle lines and keeps the block 
   assert.ok(withSubtitle.labelStartY < withSubtitle.subtitleStartY);
 });
 
+test("the text shape renders a plain, square-cornered rect distinct from the rounded-rectangle default", () => {
+  const textGeometry = getNodeGeometry({ shape: "text" }, 20, 40, 200, 100);
+  const rectGeometry = getNodeGeometry({ shape: "rounded-rectangle" }, 20, 40, 200, 100);
+
+  assert.match(textGeometry.bodyMarkup, /<rect/);
+  assert.doesNotMatch(textGeometry.bodyMarkup, /rx="/);
+  assert.match(rectGeometry.bodyMarkup, /rx="12"/);
+});
+
+test("a text shape node defaults to transparent fill/stroke while keeping readable text, unless a palette or style override is applied", () => {
+  const diagram = { theme: "light" };
+  const textNode = { id: "note", label: "Note", shape: "text" };
+
+  const defaultStyle = getNodeEffectiveStyle(diagram, textNode, "light", "classic");
+  assert.equal(defaultStyle.fill, "none");
+  assert.equal(defaultStyle.stroke, "none");
+  assert.ok(defaultStyle.text, "text colour should still be set for readability");
+
+  setNodeColorPalette(textNode, "danger");
+  const paletteStyle = getNodeEffectiveStyle(diagram, textNode, "light", "classic");
+  assert.equal(paletteStyle.fill, colourSchemes.classic.light.danger.fill);
+  assert.equal(paletteStyle.stroke, colourSchemes.classic.light.danger.stroke);
+
+  const overriddenNode = { id: "note2", label: "Note", shape: "text", style: { fill: "#ff0000" } };
+  const overriddenStyle = getNodeEffectiveStyle(diagram, overriddenNode, "light", "classic");
+  assert.equal(overriddenStyle.fill, "#ff0000");
+});
+
+test("parseTextShapeInlineRuns tokenizes bold, italic, and inline code runs while leaving plain text untouched", () => {
+  assert.equal(JSON.stringify(parseTextShapeInlineRuns("plain text")), JSON.stringify([{ text: "plain text" }]));
+  assert.equal(
+    JSON.stringify(parseTextShapeInlineRuns("**bold** and _italic_ and `code`")),
+    JSON.stringify([
+      { text: "bold", bold: true },
+      { text: " and " },
+      { text: "italic", italic: true },
+      { text: " and " },
+      { text: "code", code: true }
+    ])
+  );
+  assert.equal(
+    JSON.stringify(parseTextShapeInlineRuns("Set max_retries_count for user_id.")),
+    JSON.stringify([{ text: "Set max_retries_count for user_id." }])
+  );
+});
+
+test("renders a text shape node's label with the native-SVG markdown subset and preserves its subtitle below, without foreignObject", () => {
+  const source = flowchartSource([
+    "theme: light",
+    "canvas:",
+    "  width: 600",
+    "  height: 300",
+    "nodes:",
+    "  - id: note",
+    "    label: |",
+    "      # Heading",
+    "      ## Subheading",
+    "      Body with **bold**, _italic_, and `code`.",
+    "    shape: text",
+    "    subtitle: Preserved subtitle",
+    "    position: { x: 20, y: 40 }",
+    "    size: { width: 240, height: 140 }",
+    "edges:",
+    "  - source: note",
+    "    target: note",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ].join("\n"));
+
+  const markup = renderDiagram(source, 0);
+
+  assert.doesNotMatch(markup, /foreignObject/);
+  assert.match(markup, /class="docdiagram-node-label docdiagram-node-label-markdown"/);
+  assert.match(markup, /font-size:26px[^"]*"[^>]*>Heading<\/tspan>/);
+  assert.match(markup, /font-size:20px[^"]*"[^>]*>Subheading<\/tspan>/);
+  assert.match(markup, /font-weight:700[^"]*"[^>]*>bold<\/tspan>/);
+  assert.match(markup, /font-style:italic[^"]*"[^>]*>italic<\/tspan>/);
+  assert.match(markup, /font-family:ui-monospace[^"]*"[^>]*>code<\/tspan>/);
+  assert.match(markup, /class="docdiagram-node-subtitle"[^>]*>[\s\S]*?Preserved subtitle/);
+  // The transparent shape default must still surface in the rendered body when no palette is set.
+  assert.match(markup, /fill="none" stroke="none"/);
+});
+
 test("shape geometry renders every supported shape with usable text bounds and perimeter anchors", () => {
   const expectedMarkup = {
     "rounded-rectangle": "<rect", circle: "<circle", oval: "<ellipse", database: "<path",
     diamond: "<polygon", rhombus: "<polygon", "flattened-hexagon": "<polygon",
-    chevron: "<polygon", "right-chevron": "<polygon"
+    chevron: "<polygon", "right-chevron": "<polygon", text: "<rect"
   };
 
   for (const shape of nodeShapes) {
@@ -2006,9 +2123,11 @@ test("parses and serializes a node subtitle, including multiline values, with a 
   assert.equal(diagram.nodes[0].label, "Multiline\nLabel");
 
   const serialized = serializeDiagram(diagram);
-  // Newline-bearing scalars must be JSON-quoted so the YAML-like format stays one physical line per entry.
-  assert.match(serialized, /subtitle: "Line one\\nLine two"/);
-  assert.match(serialized, /label: "Multiline\\nLabel"/);
+  // Newline-bearing scalars are emitted as YAML literal block scalars ("key: |" plus indented
+  // content lines) rather than JSON-escaped "\n" strings, so multiline labels/subtitles stay
+  // human-readable in the canonical source.
+  assert.match(serialized, /subtitle: \|\+\n {6}Line one\n {6}Line two\n/);
+  assert.match(serialized, /label: \|\+\n {6}Multiline\n {6}Label\n/);
 
   const reparsed = parseDiagram(serialized);
   assert.equal(reparsed.nodes[0].subtitle, "Line one\nLine two");
@@ -2022,6 +2141,92 @@ test("setNodeSubtitle trims whitespace and allows clearing the subtitle back to 
   assert.equal(node.subtitle, "New subtitle");
   setNodeSubtitle(node, "   ");
   assert.equal(node.subtitle, "");
+});
+
+test("desugarBlockScalars converts a literal block scalar into a JSON-quoted single line and leaves other lines untouched", () => {
+  const lines = [
+    "nodes:",
+    "  - id: api",
+    "    label: |",
+    "      Multiline",
+    "      Label",
+    "    shape: text"
+  ];
+  const desugared = desugarBlockScalars(lines);
+  assert.equal(JSON.stringify(desugared), JSON.stringify([
+    "nodes:",
+    "  - id: api",
+    `    label: ${JSON.stringify("Multiline\nLabel")}`,
+    "    shape: text"
+  ]));
+});
+
+test("a markdown heading inside a multiline label block scalar is preserved as content, not treated as a YAML comment", () => {
+  const source = flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 300",
+    "nodes:",
+    "  - id: note",
+    "    label: |",
+    "      # Heading",
+    "      Body _text_",
+    "    shape: text",
+    "    position: { x: 20, y: 40 }",
+    "    size: { width: 180, height: 80 }",
+    "edges:",
+    "  - source: note",
+    "    target: note",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ].join("\n"));
+  const diagram = parseDiagram(source);
+
+  assert.equal(diagram.nodes[0].label, "# Heading\nBody _text_");
+
+  const serialized = serializeDiagram(diagram);
+  assert.match(serialized, /label: \|\+\n {6}# Heading\n {6}Body _text_/);
+
+  const reparsed = parseDiagram(serialized);
+  assert.equal(reparsed.nodes[0].label, "# Heading\nBody _text_");
+  assert.equal(JSON.stringify(reparsed), JSON.stringify(diagram));
+});
+
+test("multiline block scalar serialization preserves every trailing blank line", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "nodes:",
+    "  - id: note",
+    "    label: \"Line one\\n\\n\\n\"",
+    "    shape: text",
+    "edges:"
+  ].join("\n")));
+  const serialized = serializeDiagram(diagram);
+
+  assert.match(serialized, /label: \|\+/);
+  assert.equal(parseDiagram(serialized).nodes[0].label, "Line one\n\n\n");
+});
+
+test("legacy JSON-quoted single-line multiline labels still parse for backward compatibility", () => {
+  const source = flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 300",
+    "nodes:",
+    "  - id: api",
+    "    label: \"Multiline\\nLabel\"",
+    "    shape: rounded-rectangle",
+    "    position: { x: 20, y: 40 }",
+    "    size: { width: 180, height: 80 }",
+    "edges:",
+    "  - source: api",
+    "    target: api",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ].join("\n"));
+  const diagram = parseDiagram(source);
+
+  assert.equal(diagram.nodes[0].label, "Multiline\nLabel");
 });
 
 test("multiline edge labels round-trip through serialization safely", () => {
@@ -2048,7 +2253,7 @@ test("multiline edge labels round-trip through serialization safely", () => {
   assert.equal(edge.label, "Retry\nwith backoff");
 
   const serialized = serializeDiagram(diagram);
-  assert.match(serialized, /label: "Retry\\nwith backoff"/);
+  assert.match(serialized, /label: \|\+\n {6}Retry\n {6}with backoff/);
 
   const reparsed = parseDiagram(serialized);
   assert.equal(reparsed.edges[0].label, "Retry\nwith backoff");
