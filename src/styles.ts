@@ -566,6 +566,47 @@ export function injectStyles(): void {
       min-width: 0;
       width: 3.2rem;
     }
+    .docdiagram-inspector-text-row {
+      align-items: center;
+      color: var(--docdiagram-muted);
+      display: grid;
+      font-size: .9rem;
+      gap: .4rem;
+      grid-template-columns: 2.8rem 2.6rem;
+    }
+    .docdiagram-inspector-text-row input[type="color"] {
+      height: 1.9rem;
+      padding: 2px;
+      width: 2.6rem;
+    }
+    .docdiagram-inspector-paired-controls {
+      align-items: center;
+      color: var(--docdiagram-muted);
+      display: grid;
+      font-size: .9rem;
+      gap: .4rem;
+      grid-template-columns: 2.8rem repeat(2, minmax(0, 1fr));
+    }
+    .docdiagram-inspector-paired-controls select,
+    .docdiagram-inspector-paired-controls input,
+    .docdiagram-inspector-paired-controls button {
+      box-sizing: border-box;
+      height: 2rem;
+      min-width: 0;
+      width: 100%;
+    }
+    .docdiagram-inspector-paired-controls button {
+      background: var(--docdiagram-control-background);
+      border: 1px solid var(--docdiagram-border);
+      border-radius: 6px;
+      color: var(--docdiagram-text);
+      cursor: pointer;
+      font: inherit;
+      padding: .35rem .55rem;
+    }
+    .docdiagram-inspector-paired-controls .docdiagram-inspector-delete {
+      color: #b42318;
+    }
     .docdiagram-inspector-actions {
       display: flex;
       gap: .5rem;
