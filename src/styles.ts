@@ -579,6 +579,25 @@ export function injectStyles(): void {
       padding: 2px;
       width: 2.6rem;
     }
+    .docdiagram-inspector-shape-row {
+      align-items: center;
+      color: var(--docdiagram-muted);
+      display: grid;
+      font-size: .9rem;
+      gap: .4rem;
+      grid-template-columns: 2.8rem minmax(0, 1fr);
+    }
+    .docdiagram-inspector-shape-row select {
+      background: var(--docdiagram-control-background);
+      border: 1px solid var(--docdiagram-border);
+      border-radius: 6px;
+      box-sizing: border-box;
+      color: var(--docdiagram-text);
+      font-size: .85rem;
+      min-width: 0;
+      padding: .3rem .4rem;
+      width: 100%;
+    }
     .docdiagram-inspector-paired-controls {
       align-items: center;
       color: var(--docdiagram-muted);
