@@ -159,6 +159,12 @@ test("runtime packages its source for local offline export without fetching", ()
   assert.match(context.globalThis.DocDiagramRuntimeSource, /DocDiagramCore/);
 });
 
+test("portable document exports remove page-level runtime theme state", () => {
+  assert.ok((runtime.match(/\.removeAttribute\("data-docdiagram-theme"\)/g) || []).length >= 2);
+  assert.match(runtime, /\.style\.removeProperty\("--docdiagram-page-background"\)/);
+  assert.match(runtime, /\.style\.removeProperty\("--docdiagram-page-text"\)/);
+});
+
 test("standalone diagram SVG exports embed the runtime font stack", () => {
   assert.match(
     runtime,

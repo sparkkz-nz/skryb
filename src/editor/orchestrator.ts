@@ -313,6 +313,7 @@ export class BrowserRuntime {
     const toolbar = copy.querySelector(".docdiagram-toolbar");
     const sourceTray = copy.querySelector(".docdiagram-source-tray");
     const output = copy.querySelector<HTMLElement>("#rendered-document");
+    const body = copy.querySelector("body");
     sourceCopy?.content.replaceChildren(document.createTextNode(this.getSource()));
     toolbar?.remove();
     sourceTray?.remove();
@@ -322,6 +323,13 @@ export class BrowserRuntime {
         style.remove();
       }
     }
+    copy.removeAttribute("data-docdiagram-theme");
+    copy.style.removeProperty("--docdiagram-page-background");
+    copy.style.removeProperty("--docdiagram-page-text");
+    if (!copy.getAttribute("style")) {
+      copy.removeAttribute("style");
+    }
+    body?.removeAttribute("data-docdiagram-theme");
     output?.replaceChildren();
     output?.removeAttribute("data-editing-shortcuts-bound");
     for (const attribute of [...(output?.attributes || [])]) {
