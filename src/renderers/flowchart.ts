@@ -11,6 +11,7 @@ import { escapeHtml } from "../core/diagrams/parser";
 import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
 import { getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef } from "../core/diagrams/geometry";
+import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramRenderState, DiagramToolbarRenderer } from "./types";
 
 export function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: number; height: number } {
@@ -180,14 +181,17 @@ export function renderFlowchartDiagram(
     const strokeWidth = (Number(style.strokeWidth) || 2) + (isSelected ? 2 : 0);
     const geometry = getNodeGeometry(node, x, y, nodeWidth, nodeHeight);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
+    const isTextShape = node.shape === "text";
 
     return [
       `<g class="docdiagram-node${isSelected ? " docdiagram-node-selected" : ""}" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}">`,
       renderNodeBody(geometry, style, strokeWidth),
       isEditing
         ? `<foreignObject class="docdiagram-inline-editor-host" x="${geometry.textBounds.x}" y="${geometry.textBounds.y}" width="${geometry.textBounds.width}" height="${geometry.textBounds.height}"><textarea class="docdiagram-inline-editor docdiagram-inline-editor-node" aria-label="Edit node label. Press Enter for a new line. Press Control or Command plus Enter to save. Press Escape to cancel.">${escapeHtml(node.label)}</textarea></foreignObject>`
-        : renderTextBlock(layout.centerX, layout.labelStartY, layout.labelLines, layout.labelLineHeight, "docdiagram-node-label", style.text || "", layout.textAnchor),
-      !isEditing && layout.subtitleLines.length
+        : isTextShape
+          ? renderTextShapeContent(geometry.textBounds, node, style.text || "")
+          : renderTextBlock(layout.centerX, layout.labelStartY, layout.labelLines, layout.labelLineHeight, "docdiagram-node-label", style.text || "", layout.textAnchor),
+      !isEditing && !isTextShape && layout.subtitleLines.length
         ? renderTextBlock(layout.centerX, layout.subtitleStartY, layout.subtitleLines, layout.subtitleLineHeight, "docdiagram-node-subtitle", style.text || "", layout.textAnchor)
         : "",
       isSelected && isDiagramEditing && !isEditing

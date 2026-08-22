@@ -50,7 +50,8 @@ function paletteMarkup(colourScheme: string, theme: string, selectedPalette: str
   return [
     ["Structure", paletteRoles.slice(0, 5)],
     ["Accent", paletteRoles.slice(5, 8)],
-    ["Status", paletteRoles.slice(8)]
+    ["Status", paletteRoles.slice(8, 13)],
+    ["Style", paletteRoles.slice(13)]
   ].map(([group, roles]) =>
     `<fieldset class="docdiagram-palette-group"><legend>${group}</legend>${(roles as readonly string[]).map((role) => {
       const preset = palette?.[role as keyof typeof palette];

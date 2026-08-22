@@ -108,6 +108,8 @@ export function getNodeGeometry(
     textBounds.y += 2;
     textBounds.height -= 2;
     bodyMarkup = `<path class="docdiagram-node-body" d="M ${x} ${y} H ${x + nodeWidth - fold} L ${x + nodeWidth} ${y + fold} V ${y + nodeHeight} H ${x} Z M ${x + nodeWidth - fold} ${y} V ${y + fold} H ${x + nodeWidth}"/>`;
+  } else if (shape === "text") {
+    bodyMarkup = `<rect class="docdiagram-node-body" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}"/>`;
   } else {
     bodyMarkup = `<rect class="docdiagram-node-body" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="12"/>`;
   }

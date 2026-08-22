@@ -115,7 +115,7 @@ padded visual container. Both may use:
 | Attribute | Values / behaviour |
 | --- | --- |
 | `title` | Optional visible title. |
-| `palette` | Optional semantic role: `background`, `pale`, `light`, `neutral`, `dark`, `accent-soft`, `accent`, `accent-strong`, `note`, `success`, `warning`, `danger`, or `highlight`. |
+| `palette` | Optional semantic role: `background`, `pale`, `light`, `neutral`, `dark`, `accent-soft`, `accent`, `accent-strong`, `note`, `success`, `warning`, `danger`, `highlight`, or `none` (clears fill and stroke, leaving only text). |
 | `fill`, `stroke`, `text` | Optional `#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA` overrides. These take precedence over a selected palette. |
 
 Palettes use the document's `colourScheme` and resolved theme. Use structural
@@ -279,11 +279,11 @@ child nodes at any depth:
 | Field | Values / behaviour |
 | --- | --- |
 | `id` | **Required.** Stable identifier used by edges. |
-| `label` | **Required.** Node text; use `label: ""` for an unlabeled shape. Newlines are supported with `\n` inside a double-quoted scalar, for example `label: "Payments\nAPI"`. |
-| `subtitle` | Optional text below the label; use the same double-quoted `\n` form for multiple lines. |
+| `label` | **Required.** Node text; use `label: ""` for an unlabeled shape. A multiline label is written as a YAML literal block scalar (`label: \|+` followed by indented lines); a single-line double-quoted scalar with `\n`, for example `label: "Payments\nAPI"`, still parses for backward compatibility. |
+| `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
-| `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, or `document`. The `document` shape is a sheet of paper with a folded top-right corner. |
+| `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, or `text`. The `document` shape is a sheet of paper with a folded top-right corner. The `text` shape is a plain text box: it renders its (multiline) `label` with a native-SVG Markdown subset, and its fill and stroke default to transparent unless a `palette` or `style` override is set. |
 | `position` | `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
 | `size` | `{ width: number, height: number }`. Nodes have a minimum size; circles remain square. |
 | `palette` | Optional semantic palette role; selects the scheme-aware node treatment and clears explicit node colour overrides. |
@@ -292,8 +292,44 @@ child nodes at any depth:
 
 Palette roles are `background`, `pale`, `light`, `neutral`, `dark`,
 `accent-soft`, `accent`, `accent-strong`, `note`, `success`, `warning`,
-`danger`, and `highlight`. A diagram always inherits the document-wide theme
-and colour scheme; per-diagram scheme overrides are not supported.
+`danger`, `highlight`, and `none`. The `none` role sets both fill and stroke
+to `none` (no background, no border) while keeping readable text, and works
+on any node shape; selecting any other palette restores that palette's normal
+styling. A diagram always inherits the document-wide theme and colour scheme;
+per-diagram scheme overrides are not supported.
+
+#### The `text` shape and its Markdown subset
+
+The `text` shape is a borderless, unfilled rectangle intended for free-form
+annotations. Author its content in the same `label` field as any other node;
+each line is rendered with a small, native-SVG Markdown subset instead of
+plain text:
+
+- A line starting `# ` renders as a level-1 heading; `## ` renders as a
+  level-2 heading.
+- Inline `**bold**`, `_italic_`, and `` `code` `` are supported within any
+  line, including heading lines.
+- Line breaks are explicit: each line of the `label` becomes its own rendered
+  line, with no reflow or wrapping.
+
+No other Markdown (links, lists, images, nested emphasis, HTML) is
+recognised; unsupported syntax renders as literal text. This subset is
+implemented with `<text>`/`<tspan>` elements only, so `text`-shape nodes
+render identically inside the editor and in a standalone exported SVG file
+(no `foreignObject` is used). A `text` shape's optional `subtitle` still
+renders in the normal, unformatted subtitle style directly below the
+formatted label content.
+
+```yaml
+- id: note
+  label: |+
+    # Summary
+    Retries use **exponential backoff** with `jitter`.
+  shape: text
+  position: { x: 40, y: 40 }
+  size: { width: 260, height: 100 }
+```
+
 
 Node IDs are unique across the whole diagram, including descendants. Edges can
 connect to a parent or any child node. A child can visually extend beyond its
@@ -319,7 +355,7 @@ Every edge requires both explicit endpoint anchors:
 | --- | --- |
 | `source`, `target` | IDs of the connected nodes. |
 | `sourceAnchor`, `targetAnchor` | **Required.** `top`, `right`, `bottom`, or `left`. |
-| `label` | Optional edge label; newlines are supported. |
+| `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
 | `waypoint` | Optional `{ x: number, y: number }` canvas coordinate. The flowchart editor exposes one draggable waypoint for a selected edge; it splits the route into two segments via that point. |
 | `start`, `end` | `none`, `arrow`, or `circle`. Omit `start` for `none`; omit `end` for `arrow`. |
@@ -374,7 +410,7 @@ groups:
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `participants` | Yes | Ordered entries with unique `id`, visible `label`, optional `kind: actor`, and optional `palette`, `style`, or `size`. Participant labels support newlines in a double-quoted scalar. Participant presentation also styles its activation bars. |
+| `participants` | Yes | Ordered entries with unique `id`, visible `label`, optional `kind: actor`, and optional `palette`, `style`, or `size`. A multiline participant label is written as a YAML literal block scalar; the legacy double-quoted `\n` form still parses. Participant presentation also styles its activation bars. |
 | `messages` | Yes | Ordered entries with existing `from` and `to` participant IDs, visible `label`, and optional `style: solid` or `dashed`. |
 | `activations` | No | Entries with `participant` and inclusive one-based `from`/`to` message positions. |
 | `notes` | No | Entries with `at` participant ID, `after` message position, visible `label`, and optional `palette`, `style`, or `size`. Notes render above activation bars. |

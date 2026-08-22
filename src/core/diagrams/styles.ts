@@ -50,10 +50,13 @@ export function getNodeEffectiveStyle(
 ): NodeStyle {
   const theme = getTheme(diagram, documentTheme);
   const defaults = theme.node;
+  // A "text" shape node is a plain text box: its fill/stroke default to transparent while its
+  // text keeps the normal readable colour, unless a palette or explicit style overrides it.
+  const shapeDefaults = node.shape === "text" ? { fill: "none", stroke: "none" } : null;
   const palette = node.palette
     ? getNodeColorPalette(documentColorScheme, documentTheme, node.palette)
     : null;
-  return mergeStyle(mergeStyle(defaults, palette), node.style);
+  return mergeStyle(mergeStyle(mergeStyle(defaults, shapeDefaults), palette), node.style);
 }
 
 export function getSequenceElementEffectiveStyle(

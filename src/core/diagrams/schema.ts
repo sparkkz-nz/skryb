@@ -26,7 +26,8 @@ export interface Size {
 export const paletteRoles = [
   "background", "pale", "light", "neutral", "dark",
   "accent-soft", "accent", "accent-strong",
-  "note", "success", "warning", "danger", "highlight"
+  "note", "success", "warning", "danger", "highlight",
+  "none"
 ] as const;
 
 export type PaletteRole = (typeof paletteRoles)[number];
@@ -164,7 +165,8 @@ export const nodeShapes = [
   "flattened-hexagon",
   "chevron",
   "right-chevron",
-  "document"
+  "document",
+  "text"
 ] as const;
 
 export const edgeAnchors = ["top", "right", "bottom", "left"] as const;
@@ -190,7 +192,8 @@ const roles = (
 ): Record<PaletteRole, ColorPaletteEntry> => ({
   background, pale, light, neutral, dark,
   "accent-soft": accentSoft, accent, "accent-strong": accentStrong,
-  note, success, warning, danger, highlight
+  note, success, warning, danger, highlight,
+  none: colour("None", "none", "none", background.text)
 });
 
 const colour = (label: string, fill: string, stroke: string, text: string, gradient?: string, glow?: string): ColorPaletteEntry =>

@@ -93,8 +93,83 @@ export function parseScalar(value: string): unknown {
   return trimmed;
 }
 
+const blockScalarStartPattern = /^(\s*)((?:- )?)([A-Za-z_][\w-]*):\s*\|([+-])?\s*$/;
+
+// Desugars YAML literal block scalars ("key: |" followed by indented content lines) into the
+// single-line JSON-quoted scalar form the rest of the parser already understands. This runs on
+// the raw, unfiltered lines so that blank lines and "#"-prefixed markdown headings inside a block
+// are captured as literal content rather than being treated as diagram blank/comment lines. Lines
+// outside a detected block are passed through unchanged, preserving existing comment handling.
+export function desugarBlockScalars(lines: string[]): string[] {
+  const result: string[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const match = line.match(blockScalarStartPattern);
+
+    if (!match) {
+      result.push(line);
+      index += 1;
+      continue;
+    }
+
+    const [, indent, listPrefix, key, chomping] = match;
+    let scanIndex = index + 1;
+    let contentIndent: number | null = null;
+
+    while (scanIndex < lines.length) {
+      const candidate = lines[scanIndex];
+      if (candidate.trim() === "") {
+        scanIndex += 1;
+        continue;
+      }
+      contentIndent = candidate.length - candidate.trimStart().length;
+      break;
+    }
+
+    if (contentIndent === null || contentIndent <= indent.length) {
+      result.push(`${indent}${listPrefix}${key}: ""`);
+      index += 1;
+      continue;
+    }
+
+    const blockLines: string[] = [];
+    let cursor = index + 1;
+    let trailingBlankCount = 0;
+
+    while (cursor < lines.length) {
+      const candidate = lines[cursor];
+      if (candidate.trim() === "") {
+        blockLines.push("");
+        trailingBlankCount += 1;
+        cursor += 1;
+        continue;
+      }
+      if (candidate.length - candidate.trimStart().length < contentIndent) {
+        break;
+      }
+      blockLines.push(candidate.slice(contentIndent));
+      trailingBlankCount = 0;
+      cursor += 1;
+    }
+
+    // YAML "clip" chomping: any run of trailing blank lines collapses to a single trailing newline.
+    // `|+` keeps those lines, which the serializer uses to preserve exact text round trips.
+    if (trailingBlankCount > 0 && chomping !== "+") {
+      blockLines.length -= trailingBlankCount - 1;
+    }
+
+    const joined = blockLines.join("\n");
+    result.push(`${indent}${listPrefix}${key}: ${JSON.stringify(joined)}`);
+    index = cursor;
+  }
+
+  return result;
+}
+
 export function parseDiagram(source: string, colorScheme = "classic"): Diagram {
-  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const lines = desugarBlockScalars(source.replace(/\r\n/g, "\n").split("\n"));
   const meaningfulLines = lines.filter((line) => line.trim() && !line.trimStart().startsWith("#"));
   for (const line of meaningfulLines) {
     if (line.trimStart() !== line || !line.trimEnd().endsWith(":")) {

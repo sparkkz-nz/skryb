@@ -17,10 +17,24 @@ function formatScalar(value: unknown): string {
     : JSON.stringify(String(value));
 }
 
+// Emits a single field as one or more lines. Multiline string values are emitted as a YAML
+// literal block scalar ("key: |" followed by indented content lines) instead of a JSON-escaped
+// "\n" string, so authored labels/subtitles stay human-readable in the canonical source. `prefix`
+// carries the list-item "- " marker for a first field, and `contentIndent` is the column used for
+// the block's content lines (always deeper than any sibling field so parsing is unambiguous).
+function formatField(key: string, value: unknown, lineIndent: number, contentIndent: number, prefix = ""): string[] {
+  if (typeof value === "string" && value.includes("\n")) {
+    const contentLines = value.split("\n").map((line) => line.length ? `${" ".repeat(contentIndent)}${line}` : "");
+    return [`${" ".repeat(lineIndent)}${prefix}${key}: |+`, ...contentLines];
+  }
+
+  return [`${" ".repeat(lineIndent)}${prefix}${key}: ${formatScalar(value)}`];
+}
+
 function serializeItem(item: Record<string, unknown>, indent = 2): string[] {
   const entries = Object.entries(item);
   const [firstKey, firstValue] = entries[0];
-  const lines = [`${" ".repeat(indent)}- ${firstKey}: ${formatScalar(firstValue)}`];
+  const lines = formatField(firstKey, firstValue, indent, indent + 4, "- ");
 
   for (const [key, value] of entries.slice(1)) {
     if (key === "children" && Array.isArray(value) && !value.length) {
@@ -32,7 +46,7 @@ function serializeItem(item: Record<string, unknown>, indent = 2): string[] {
         lines.push(...serializeItem(child as Record<string, unknown>, indent + 4));
       }
     } else {
-      lines.push(`${" ".repeat(indent + 2)}${key}: ${formatScalar(value)}`);
+      lines.push(...formatField(key, value, indent + 2, indent + 4));
     }
   }
 
@@ -47,14 +61,14 @@ export function serializeDiagram(diagram: Diagram): string {
       key === "participants" || key === "messages" || key === "activations" || key === "notes" || key === "groups") {
       continue;
     }
-    lines.push(`${key}: ${formatScalar(value)}`);
+    lines.push(...formatField(key, value, 0, 2));
   }
 
   if (diagram.type === "sequence") {
     if (diagram.canvas !== undefined) {
       lines.push("canvas:");
       for (const [key, value] of Object.entries(diagram.canvas)) {
-        lines.push(`  ${key}: ${formatScalar(value)}`);
+        lines.push(...formatField(key, value, 2, 4));
       }
     }
 
@@ -94,7 +108,7 @@ export function serializeDiagram(diagram: Diagram): string {
 
   lines.push("canvas:");
   for (const [key, value] of Object.entries(diagram.canvas || {})) {
-    lines.push(`  ${key}: ${formatScalar(value)}`);
+    lines.push(...formatField(key, value, 2, 4));
   }
 
   lines.push("nodes:");
