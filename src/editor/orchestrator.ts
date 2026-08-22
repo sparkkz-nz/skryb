@@ -795,18 +795,18 @@ export class BrowserRuntime {
       new XMLSerializer().serializeToString(svg),
       "</body></html>"
     ].join("");
-    const url = URL.createObjectURL(new Blob([documentHtml], { type: "text/html;charset=utf-8" }));
-    const printWindow = globalThis.open(url, "_blank");
+    const printWindow = globalThis.open("", "_blank");
     if (!printWindow) {
-      URL.revokeObjectURL(url);
       globalThis.alert("Your browser blocked the print window. Allow pop-ups and try again.");
       return;
     }
     printWindow.addEventListener("load", () => {
       printWindow.focus();
       printWindow.print();
-      URL.revokeObjectURL(url);
     }, { once: true });
+    printWindow.document.open();
+    printWindow.document.write(documentHtml);
+    printWindow.document.close();
   }
 
   private closeDiagramExportMenus(): void {
