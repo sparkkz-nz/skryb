@@ -734,6 +734,7 @@ export class BrowserRuntime {
     });
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = [
+      "svg{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}",
       ".docdiagram-edge,.docdiagram-edge-hit{fill:none}",
       ".docdiagram-edge-label{font-size:15px}",
       ".docdiagram-node-label{font-size:16px;font-weight:650}",

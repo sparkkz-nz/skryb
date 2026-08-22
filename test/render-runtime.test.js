@@ -159,6 +159,13 @@ test("runtime packages its source for local offline export without fetching", ()
   assert.match(context.globalThis.DocDiagramRuntimeSource, /DocDiagramCore/);
 });
 
+test("standalone diagram SVG exports embed the runtime font stack", () => {
+  assert.match(
+    runtime,
+    /svg\{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif\}/
+  );
+});
+
 test("uses the hosted runtime for a portable Save As when local runtime paths are unavailable", () => {
   assert.equal(
     getPortableRuntimeUrl("./dist/skryb-runtime.js"),
