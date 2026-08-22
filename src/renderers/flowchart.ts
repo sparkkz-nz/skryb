@@ -38,6 +38,14 @@ export function renderDiagramToolbar(
     `<button type="button" class="docdiagram-icon-button docdiagram-zoom-in" data-diagram-index="${diagramIndex}" aria-label="Zoom in" title="Zoom in">+</button>`,
     `<button type="button" class="docdiagram-icon-button docdiagram-zoom-out" data-diagram-index="${diagramIndex}" aria-label="Zoom out" title="Zoom out">−</button>`,
     `<button type="button" class="docdiagram-icon-button docdiagram-fit" data-diagram-index="${diagramIndex}" aria-label="Zoom to fit" title="Zoom to fit">⊡</button>`,
+    `<div class="docdiagram-diagram-export">`,
+    `<button type="button" class="docdiagram-icon-button docdiagram-export-toggle" data-diagram-index="${diagramIndex}" aria-label="Export diagram" aria-expanded="false" title="Export diagram">⇧</button>`,
+    `<div class="docdiagram-diagram-export-menu" hidden>`,
+    `<button type="button" class="docdiagram-open-diagram" data-diagram-index="${diagramIndex}">Open full diagram</button>`,
+    `<button type="button" class="docdiagram-download-diagram" data-diagram-index="${diagramIndex}">Save as SVG</button>`,
+    `<button type="button" class="docdiagram-print-diagram" data-diagram-index="${diagramIndex}">Print / Save as PDF</button>`,
+    `</div>`,
+    `</div>`,
     allowsEditing
       ? state.editingDiagramIndex === diagramIndex
         ? `<button type="button" class="docdiagram-icon-button docdiagram-done-editing" aria-label="Done editing" title="Done editing">✓</button><button type="button" class="docdiagram-icon-button docdiagram-cancel-editing" aria-label="Cancel editing and discard changes" title="Cancel editing and discard changes">×</button>${allowsNodeCreation ? `<button type="button" class="docdiagram-icon-button docdiagram-create-node" data-diagram-index="${diagramIndex}" aria-label="New node" title="New node">+</button>` : ""}`

@@ -785,7 +785,7 @@ test("marks explicitly styled components so their palette takes precedence over 
   assert.match(runtime, /\.docdiagram-component blockquote \{[\s\S]*color: inherit/);
 });
 
-test("diagram markup provides compact view-mode zoom and edit controls", () => {
+test("diagram markup provides compact view-mode zoom, export, and edit controls", () => {
   const markup = renderDiagram(flowchartSource([
     "canvas:",
     "  width: 800",
@@ -803,10 +803,15 @@ test("diagram markup provides compact view-mode zoom and edit controls", () => {
   assert.match(markup, /class="docdiagram-icon-button docdiagram-zoom-in"/);
   assert.match(markup, /class="docdiagram-icon-button docdiagram-zoom-out"/);
   assert.match(markup, /class="docdiagram-icon-button docdiagram-fit"/);
+  assert.match(markup, /class="docdiagram-icon-button docdiagram-export-toggle"/);
   assert.match(markup, /class="docdiagram-icon-button docdiagram-start-editing"/);
   assert.match(markup, /aria-label="Zoom in"/);
   assert.match(markup, /aria-label="Zoom to fit"/);
+  assert.match(markup, /aria-label="Export diagram"/);
   assert.match(markup, /aria-label="Edit diagram"/);
+  assert.match(markup, />Open full diagram<\/button>/);
+  assert.match(markup, />Save as SVG<\/button>/);
+  assert.match(markup, />Print \/ Save as PDF<\/button>/);
 });
 
 test("flowchart nodes support arbitrary nesting with relative coordinates and edge endpoints", () => {

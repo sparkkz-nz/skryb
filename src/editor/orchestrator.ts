@@ -385,6 +385,11 @@ export class BrowserRuntime {
       if (toolbar && event.target instanceof Node && !toolbar.contains(event.target)) {
         this.closeDocumentMenu();
       }
+      if (event.target instanceof Node && !(
+        event.target instanceof Element && event.target.closest(".docdiagram-diagram-export")
+      )) {
+        this.closeDiagramExportMenus();
+      }
       if (!(event.target instanceof Element) || event.target.closest(
         ".docdiagram-toolbar, .docdiagram-node, .docdiagram-edge-group, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-inline-editor, .docdiagram-sequence-participant, .docdiagram-sequence-note, .docdiagram-sequence-message"
       ) || (!this.state.selectedNode && !this.state.selectedEdge && !this.state.selectedSequenceElement)) {
@@ -634,6 +639,36 @@ export class BrowserRuntime {
     if (!this.outputElement) {
       return;
     }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-export-toggle")) {
+      button.addEventListener("click", () => {
+        const menu = button.parentElement?.querySelector<HTMLElement>(".docdiagram-diagram-export-menu");
+        if (!menu) {
+          return;
+        }
+        const open = menu.hidden;
+        this.closeDiagramExportMenus();
+        menu.hidden = !open;
+        button.setAttribute("aria-expanded", String(open));
+      });
+    }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-open-diagram")) {
+      button.addEventListener("click", () => {
+        this.closeDiagramExportMenus();
+        this.openDiagram(Number(button.dataset.diagramIndex));
+      });
+    }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-download-diagram")) {
+      button.addEventListener("click", () => {
+        this.closeDiagramExportMenus();
+        this.downloadDiagram(Number(button.dataset.diagramIndex));
+      });
+    }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-print-diagram")) {
+      button.addEventListener("click", () => {
+        this.closeDiagramExportMenus();
+        this.printDiagram(Number(button.dataset.diagramIndex));
+      });
+    }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-zoom-in, .docdiagram-zoom-out")) {
       button.addEventListener("click", () => {
         const diagramIndex = Number(button.dataset.diagramIndex);
@@ -672,6 +707,115 @@ export class BrowserRuntime {
     }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-create-node")) {
       button.addEventListener("click", () => this.createNewNode(Number(button.dataset.diagramIndex)));
+    }
+  }
+
+  private getStandaloneDiagramSvg(diagramIndex: number): SVGSVGElement | null {
+    const svg = this.outputElement?.querySelector<SVGSVGElement>(
+      `.docdiagram[data-diagram-index="${diagramIndex}"] svg`
+    );
+    if (!svg) {
+      return null;
+    }
+    const copy = svg.cloneNode(true) as SVGSVGElement;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.removeAttribute("style");
+    copy.querySelectorAll(
+      ".docdiagram-inline-editor-host, .docdiagram-resize-handle, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-connection-preview"
+    ).forEach((element) => element.remove());
+    copy.querySelectorAll(".docdiagram-node-selected, .docdiagram-edge-selected").forEach((element) => {
+      element.classList.remove("docdiagram-node-selected", "docdiagram-edge-selected");
+    });
+    const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    style.textContent = [
+      ".docdiagram-edge,.docdiagram-edge-hit{fill:none}",
+      ".docdiagram-edge-label{font-size:15px}",
+      ".docdiagram-node-label{font-size:16px;font-weight:650}",
+      ".docdiagram-node-subtitle{font-size:13px}"
+    ].join("");
+    copy.insertBefore(style, copy.firstChild);
+    return copy;
+  }
+
+  private getDiagramExportUrl(diagramIndex: number, type: string): string | null {
+    const svg = this.getStandaloneDiagramSvg(diagramIndex);
+    if (!svg) {
+      globalThis.alert("The diagram is no longer available to export.");
+      return null;
+    }
+    return URL.createObjectURL(new Blob([
+      new XMLSerializer().serializeToString(svg)
+    ], { type }));
+  }
+
+  private getDiagramExportName(diagramIndex: number): string {
+    const title = document.title.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
+    return `${title || "diagram"}-${diagramIndex + 1}`;
+  }
+
+  private openDiagram(diagramIndex: number): void {
+    const url = this.getDiagramExportUrl(diagramIndex, "image/svg+xml;charset=utf-8");
+    if (!url) {
+      return;
+    }
+    const diagramWindow = globalThis.open(url, "_blank");
+    if (!diagramWindow) {
+      URL.revokeObjectURL(url);
+      globalThis.alert("Your browser blocked the new diagram tab. Allow pop-ups and try again.");
+      return;
+    }
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  private downloadDiagram(diagramIndex: number): void {
+    const url = this.getDiagramExportUrl(diagramIndex, "image/svg+xml;charset=utf-8");
+    if (!url) {
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${this.getDiagramExportName(diagramIndex)}.svg`;
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 200);
+  }
+
+  private printDiagram(diagramIndex: number): void {
+    const svg = this.getStandaloneDiagramSvg(diagramIndex);
+    if (!svg) {
+      globalThis.alert("The diagram is no longer available to print.");
+      return;
+    }
+    const documentHtml = [
+      "<!doctype html><html><head><meta charset=\"utf-8\"><title>Diagram</title>",
+      "<style>html,body{height:100%;margin:0}body{display:grid;place-items:center}svg{height:auto;max-height:100vh;max-width:100vw;width:auto}@page{margin:0}</style>",
+      "</head><body>",
+      new XMLSerializer().serializeToString(svg),
+      "</body></html>"
+    ].join("");
+    const printWindow = globalThis.open("", "_blank");
+    if (!printWindow) {
+      globalThis.alert("Your browser blocked the print window. Allow pop-ups and try again.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(documentHtml);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }
+
+  private closeDiagramExportMenus(): void {
+    if (!this.outputElement) {
+      return;
+    }
+    for (const menu of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram-diagram-export-menu")) {
+      menu.hidden = true;
+    }
+    for (const toggle of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-export-toggle")) {
+      toggle.setAttribute("aria-expanded", "false");
     }
   }
 
