@@ -48,15 +48,14 @@ type SequenceInspectable = SequenceParticipant | SequenceNote | SequenceMessage;
 function paletteMarkup(colourScheme: string, theme: string, selectedPalette: string, name: string): string {
   const palette = colourSchemes[colourScheme]?.[theme === "dark" ? "dark" : "light"];
   return [
-    ["Structure", paletteRoles.slice(0, 5)],
-    ["Accent", paletteRoles.slice(5, 8)],
-    ["Status", paletteRoles.slice(8, 13)],
-    ["Style", paletteRoles.slice(13)]
-  ].map(([group, roles]) =>
-    `<fieldset class="docdiagram-palette-group"><legend>${group}</legend>${(roles as readonly string[]).map((role) => {
+    [...paletteRoles.slice(0, 5), "none"],
+    paletteRoles.slice(5, 8),
+    paletteRoles.slice(8, 13)
+  ].map((roles) =>
+    `<div class="docdiagram-palette-group">${roles.map((role) => {
       const preset = palette?.[role as keyof typeof palette];
       return `<label class="docdiagram-palette-swatch"><input type="radio" name="${name}" value="${role}"${role === selectedPalette ? " checked" : ""}><span style="--docdiagram-swatch-fill:${preset?.fill};--docdiagram-swatch-stroke:${preset?.stroke};--docdiagram-swatch-text:${preset?.text}">${preset?.label || role}</span></label>`;
-    }).join("")}</fieldset>`
+    }).join("")}</div>`
   ).join("");
 }
 
@@ -83,7 +82,7 @@ export function buildNodeInspectorFields(
     `<label class="docdiagram-field">Shape<select class="docdiagram-inspector-shape">${nodeShapes.map(
       (shape) => `<option value="${shape}"${shape === node.shape ? " selected" : ""}>${shape}</option>`
     ).join("")}</select></label>`,
-    `<div class="docdiagram-inspector-row"><label class="docdiagram-field">Fill<input type="color" class="docdiagram-inspector-fill" value="${escapeHtml(style.fill || "")}"></label><label class="docdiagram-field">Stroke<input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}"></label><label class="docdiagram-field docdiagram-field-compact"><span class="docdiagram-visually-hidden">Stroke width</span><input type="number" aria-label="Stroke width" class="docdiagram-inspector-stroke-width" value="${Number(style.strokeWidth) || 2}" min="1" step="1"></label></div>`,
+    `<div class="docdiagram-inspector-row docdiagram-inspector-colour-row"><span>Fill</span><input type="color" class="docdiagram-inspector-fill" value="${escapeHtml(style.fill || "")}"><span>Stroke</span><input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-stroke-width">Stroke width</label><input id="docdiagram-inspector-stroke-width" type="number" aria-label="Stroke width" class="docdiagram-inspector-stroke-width" value="${Number(style.strokeWidth) || 2}" min="1" step="1"></div>`,
     `<label class="docdiagram-field">Text<input type="color" class="docdiagram-inspector-text" value="${escapeHtml(style.text || "")}"></label>`,
     `<div class="docdiagram-inspector-row"><span>Align</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-v-align">Vertical alignment</label><select id="docdiagram-inspector-text-v-align" class="docdiagram-inspector-text-v-align" aria-label="Vertical alignment"><option value="top"${node.textVAlign === "top" ? " selected" : ""}>Top</option><option value="center"${node.textVAlign !== "top" ? " selected" : ""}>Middle</option></select><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-h-align">Horizontal alignment</label><select id="docdiagram-inspector-text-h-align" class="docdiagram-inspector-text-h-align" aria-label="Horizontal alignment"><option value="left"${node.textHAlign === "left" ? " selected" : ""}>Left</option><option value="center"${node.textHAlign !== "left" && node.textHAlign !== "right" ? " selected" : ""}>Center</option><option value="right"${node.textHAlign === "right" ? " selected" : ""}>Right</option></select></div>`,
     `<div class="docdiagram-inspector-row"><span>Size</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-width">Width</label><input id="docdiagram-inspector-width" type="number" aria-label="Width" class="docdiagram-inspector-width" value="${width}" min="${widthMinimum}" step="${step}"><span>×</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-height">Height</label><input id="docdiagram-inspector-height" type="number" aria-label="Height" class="docdiagram-inspector-height" value="${height}" min="${heightMinimum}" step="${step}"></div>`,

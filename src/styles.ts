@@ -419,13 +419,11 @@ export function injectStyles(): void {
       display: grid;
       gap: .4rem;
       grid-template-columns: repeat(3, minmax(4.8rem, 1fr));
-      margin: .35rem 0;
+      margin: 0;
       padding: 0;
     }
-    .docdiagram-palette-group legend {
-      font-size: .8em;
-      font-weight: 700;
-      width: 100%;
+    .docdiagram-palette-group + .docdiagram-palette-group {
+      margin-top: .55rem;
     }
     .docdiagram-palette-swatch {
       cursor: pointer;
@@ -498,6 +496,9 @@ export function injectStyles(): void {
       width: 100%;
     }
     .docdiagram-field-wide {
+      align-items: stretch;
+      flex-direction: column;
+      gap: .35rem;
       width: 100%;
     }
     .docdiagram-field input,
@@ -546,6 +547,24 @@ export function injectStyles(): void {
     }
     .docdiagram-inspector-row select {
       width: auto;
+    }
+    .docdiagram-inspector-colour-row {
+      display: grid;
+      grid-template-columns: 2.8rem 2.6rem 1fr auto 3.2rem;
+      width: 100%;
+    }
+    .docdiagram-inspector-colour-row > span:nth-of-type(2) {
+      justify-self: end;
+    }
+    .docdiagram-inspector-colour-row input[type="color"] {
+      height: 1.9rem;
+      padding: 2px;
+      width: 2.6rem;
+    }
+    .docdiagram-inspector-colour-row .docdiagram-inspector-stroke-width {
+      box-sizing: border-box;
+      min-width: 0;
+      width: 3.2rem;
     }
     .docdiagram-inspector-actions {
       display: flex;
