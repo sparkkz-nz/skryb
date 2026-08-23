@@ -4,8 +4,25 @@ import { getSequenceElementEffectiveStyle, getTheme } from "../core/diagrams/sty
 import type { SequenceDiagram, SequenceNote } from "../core/diagrams/schema";
 import type { DiagramRenderState, DiagramToolbarRenderer } from "./types";
 
-type MessageRow = { from: string; to: string; label?: string; style?: string; index: number; y: number };
-type NoteLayout = SequenceNote & { lines: string[]; x: number; y: number; width: number; height: number };
+type MessageRow = {
+  from: string;
+  to: string;
+  label?: string;
+  style?: string;
+  index: number;
+  y: number;
+  lines: string[];
+  labelTop: number;
+};
+type NoteLayout = SequenceNote & {
+  lines: string[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceIndex: number;
+};
+type GroupLayout = { label?: string; from: number; to: number; startY: number; endY: number; depth: number };
 
 export function renderSequenceDiagram(
   diagram: SequenceDiagram,
@@ -35,8 +52,14 @@ export function renderSequenceDiagram(
       .map((participant) => splitTextLines(participant.label || "").length - 1)
   ) * participantLabelLineHeight;
   const noteBaseHeight = 48;
-  const noteGap = 18;
-  const messageSpacing = 56;
+  const noteGap = 16;
+  const noteLineHeight = 16;
+  const messageLineHeight = 15;
+  const labelArrowGap = 12;
+  const messageGap = 26;
+  const selfLoopHeight = 28;
+  const groupHeaderSpace = 40;
+  const groupFooterSpace = 22;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
   const viewportStyle = viewportHeight ? ` style="box-sizing: border-box; height: ${viewportHeight}px"` : "";
   const sequenceMarkerId = `docdiagram-sequence-arrow-${diagramIndex}`;
@@ -61,29 +84,90 @@ export function renderSequenceDiagram(
   });
 
   const messageStartY = lifelineTop + 40;
-  const messageRows: MessageRow[] = messages.map((message, index) => ({
-    ...message,
-    index,
-    y: messageStartY + index * messageSpacing
-  }));
-  const noteLayouts: NoteLayout[] = notes.map((note) => {
-    const lines = splitTextLines(note.label || "");
-    const height = Math.max(noteBaseHeight, lines.length * 16 + 22, Number(note.size?.height) || 0);
-    const afterRow = note.after ? messageRows[Number(note.after) - 1] : null;
-    const y = (afterRow?.y || lifelineTop) + noteGap;
-    const centerX = positions.get(note.at || "") || width / 2;
-    const noteWidth = Math.max(160, Number(note.size?.width) || 0);
-    const constrainedCenterX = Math.min(width - noteWidth / 2 - 24, Math.max(noteWidth / 2 + 24, centerX));
+  const messageRows: MessageRow[] = [];
+  const noteLayouts: NoteLayout[] = [];
+  const groupLayouts: GroupLayout[] = [];
+  const openGroups: GroupLayout[] = [];
+  const leadingNotes: { note: SequenceNote; sourceIndex: number }[] = [];
+  const notesByMessage = new Map<number, { note: SequenceNote; sourceIndex: number }[]>();
 
-    return { ...note, lines, x: constrainedCenterX - noteWidth / 2, y, width: noteWidth, height };
+  notes.forEach((note, sourceIndex) => {
+    const after = Number(note.after);
+    if (!Number.isFinite(after) || after < 1) {
+      leadingNotes.push({ note, sourceIndex });
+      return;
+    }
+    const bucket = notesByMessage.get(after) || [];
+    bucket.push({ note, sourceIndex });
+    notesByMessage.set(after, bucket);
   });
 
-  const groupBottoms = groups.map((group) => messageRows[group.to - 1]?.y + 34 || messageStartY);
+  let cursor = lifelineTop + 24;
+
+  const layoutNote = (note: SequenceNote, sourceIndex: number): NoteLayout => {
+    const lines = splitTextLines(note.label || "");
+    const longestLine = Math.max(0, ...lines.map((line) => line.length));
+    const noteWidth = Math.max(160, Number(note.size?.width) || 0, longestLine * 7.2 + 32);
+    const height = Math.max(noteBaseHeight, lines.length * noteLineHeight + 24, Number(note.size?.height) || 0);
+    const centerX = positions.get(note.at || "") || width / 2;
+    const constrainedCenterX = Math.min(width - noteWidth / 2 - 24, Math.max(noteWidth / 2 + 24, centerX));
+    const y = cursor;
+    cursor = y + height + noteGap;
+
+    return { ...note, lines, x: constrainedCenterX - noteWidth / 2, y, width: noteWidth, height, sourceIndex };
+  };
+
+  leadingNotes.forEach((entry) => noteLayouts.push(layoutNote(entry.note, entry.sourceIndex)));
+
+  messages.forEach((message, index) => {
+    const messageNumber = index + 1;
+    groups
+      .filter((group) => Number(group.from) === messageNumber)
+      .forEach((group) => {
+        const layout: GroupLayout = {
+          label: group.label,
+          from: Number(group.from),
+          to: Number(group.to),
+          startY: cursor,
+          endY: cursor,
+          depth: openGroups.length
+        };
+        cursor = layout.startY + groupHeaderSpace;
+        openGroups.push(layout);
+        groupLayouts.push(layout);
+      });
+
+    const lines = splitTextLines(message.label || "");
+    const labelTop = cursor;
+    const labelHeight = Math.max(1, lines.length) * messageLineHeight;
+    const y = labelTop + labelHeight + labelArrowGap;
+    messageRows.push({ ...message, index, y, lines, labelTop });
+    cursor = y + messageGap + (message.from === message.to ? selfLoopHeight : 0);
+
+    (notesByMessage.get(messageNumber) || []).forEach((entry) => {
+      noteLayouts.push(layoutNote(entry.note, entry.sourceIndex));
+    });
+
+    for (let openIndex = openGroups.length - 1; openIndex >= 0; openIndex -= 1) {
+      if (openGroups[openIndex].to > messageNumber) {
+        continue;
+      }
+      openGroups[openIndex].endY = cursor;
+      cursor += groupFooterSpace;
+      openGroups.splice(openIndex, 1);
+    }
+  });
+
+  openGroups.forEach((group) => {
+    group.endY = cursor;
+  });
+
   const contentBottom = Math.max(
     lifelineTop + 140,
+    cursor + 8,
     noteLayouts.length ? noteLayouts[noteLayouts.length - 1].y + noteLayouts[noteLayouts.length - 1].height : 0,
     messageRows.length ? messageRows[messageRows.length - 1].y + 44 : messageStartY,
-    ...groupBottoms
+    ...groupLayouts.map((group) => group.endY + 12)
   );
   const height = Math.max(baseHeight, contentBottom + 56);
   const lifelineBottom = height - 36;
@@ -147,25 +231,30 @@ export function renderSequenceDiagram(
 
   const lifelineMarkup = participants.map((participant) => {
     const centerX = positions.get(participant.id) || 0;
-    return `<path class="docdiagram-sequence-lifeline" d="M ${centerX} ${lifelineTop} L ${centerX} ${lifelineBottom}" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="2" stroke-dasharray="8 6"/>`;
+    return `<path class="docdiagram-sequence-lifeline" d="M ${centerX} ${lifelineTop} L ${centerX} ${lifelineBottom}" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="1.5" stroke-dasharray="8 6" opacity="0.35"/>`;
   }).join("");
 
-  const groupMarkup = groups.map((group) => {
-    const startY = (messageRows[group.from - 1]?.y || messageStartY) - 24;
-    const endY = (messageRows[group.to - 1]?.y || messageStartY) + 30;
-    const labelWidth = Math.min(220, Math.max(110, String(group.label).length * 8 + 28));
-    return [
-      `<g class="docdiagram-sequence-group">`,
-      `<rect x="42" y="${startY}" width="${width - 84}" height="${endY - startY}" rx="12" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="2" stroke-dasharray="10 6" opacity="0.8"/>`,
-      `<rect x="54" y="${startY - 16}" width="${labelWidth}" height="24" rx="6" fill="${escapeHtml(theme.node.fill)}" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="1.5"/>`,
-      `<text x="${54 + labelWidth / 2}" y="${startY + 1}" text-anchor="middle" class="docdiagram-edge-label" fill="${escapeHtml(theme.edge.text)}">${escapeHtml(group.label || "")}</text>`,
-      `</g>`
-    ].join("");
-  }).join("");
+  const groupGeometry = groupLayouts.map((group) => {
+    const inset = 42 + group.depth * 14;
+    const labelWidth = Math.min(260, Math.max(110, String(group.label || "").length * 8 + 28));
+    return { group, inset, labelWidth };
+  });
 
-  const noteMarkup = noteLayouts.map((note, noteIndex) => {
-    const lineHeight = 16;
-    const startY = note.y + 18;
+  const groupFrameMarkup = groupGeometry.map(({ group, inset }) => [
+    `<g class="docdiagram-sequence-group">`,
+    `<rect x="${inset}" y="${group.startY}" width="${Math.max(60, width - inset * 2)}" height="${Math.max(40, group.endY - group.startY)}" rx="12" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="1.5" stroke-dasharray="10 6" opacity="0.45"/>`,
+    `</g>`
+  ].join("")).join("");
+
+  const groupLabelMarkup = groupGeometry.map(({ group, inset, labelWidth }) => [
+    `<g class="docdiagram-sequence-group-label">`,
+    `<rect x="${inset + 12}" y="${group.startY - 12}" width="${labelWidth}" height="24" rx="6" fill="${escapeHtml(theme.node.fill)}" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="1.5"/>`,
+    `<text x="${inset + 12 + labelWidth / 2}" y="${group.startY + 5}" text-anchor="middle" class="docdiagram-edge-label" fill="${escapeHtml(theme.edge.text)}">${escapeHtml(group.label || "")}</text>`,
+    `</g>`
+  ].join("")).join("");
+
+  const noteMarkup = noteLayouts.map((note) => {
+    const startY = note.y + 20;
     const style = getSequenceElementEffectiveStyle(
       diagram,
       note,
@@ -173,9 +262,9 @@ export function renderSequenceDiagram(
       state.documentColorScheme
     );
     return [
-      `<g class="docdiagram-sequence-note" data-diagram-index="${diagramIndex}" data-note-index="${noteIndex}">`,
+      `<g class="docdiagram-sequence-note" data-diagram-index="${diagramIndex}" data-note-index="${note.sourceIndex}">`,
       `<rect x="${note.x}" y="${note.y}" width="${note.width}" height="${note.height}" rx="10" fill="${escapeHtml(style.fill || "")}" stroke="${escapeHtml(style.stroke || "")}" stroke-width="${Number(style.strokeWidth) || 2}"/>`,
-      renderTextBlock(note.x + note.width / 2, startY, note.lines, lineHeight, "docdiagram-node-subtitle", style.text || ""),
+      renderTextBlock(note.x + note.width / 2, startY, note.lines, noteLineHeight, "docdiagram-node-subtitle", style.text || ""),
       `</g>`
     ].join("");
   }).join("");
@@ -201,18 +290,17 @@ export function renderSequenceDiagram(
     const sourceX = positions.get(message.from) || 0;
     const targetX = positions.get(message.to) || 0;
     const dashed = message.style === "dashed";
-    const labelLines = splitTextLines(message.label || "");
-    const labelHeight = labelLines.length * 15;
-    const labelStartY = message.y - 12 - labelHeight / 2 + 11;
+    const labelLines = message.lines;
+    const labelStartY = message.labelTop + 12;
     const markerAttribute = ` marker-end="url(#${sequenceMarkerId})"`;
 
     if (message.from === message.to) {
       const loopWidth = 48;
-      const loopHeight = 28;
+      const loopHeight = selfLoopHeight;
       return [
         `<g class="docdiagram-sequence-message" data-diagram-index="${diagramIndex}" data-message-index="${message.index}">`,
         `<path d="M ${sourceX} ${message.y} L ${sourceX + loopWidth} ${message.y} L ${sourceX + loopWidth} ${message.y + loopHeight} L ${sourceX} ${message.y + loopHeight}" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="2"${markerAttribute}${dashed ? ' stroke-dasharray="8 5"' : ""}/>`,
-        renderTextBlock(sourceX + loopWidth / 2, labelStartY, labelLines, 15, "docdiagram-edge-label", theme.edge.text),
+        renderTextBlock(sourceX + loopWidth / 2, labelStartY, labelLines, messageLineHeight, "docdiagram-edge-label", theme.edge.text),
         `</g>`
       ].join("");
     }
@@ -220,7 +308,7 @@ export function renderSequenceDiagram(
     return [
       `<g class="docdiagram-sequence-message" data-diagram-index="${diagramIndex}" data-message-index="${message.index}">`,
       `<path d="M ${sourceX} ${message.y} L ${targetX} ${message.y}" fill="none" stroke="${escapeHtml(theme.edge.stroke)}" stroke-width="2"${markerAttribute}${dashed ? ' stroke-dasharray="8 5"' : ""}/>`,
-      renderTextBlock((sourceX + targetX) / 2, labelStartY, labelLines, 15, "docdiagram-edge-label", theme.edge.text),
+      renderTextBlock((sourceX + targetX) / 2, labelStartY, labelLines, messageLineHeight, "docdiagram-edge-label", theme.edge.text),
       `</g>`
     ].join("");
   }).join("");
@@ -230,12 +318,13 @@ export function renderSequenceDiagram(
     renderToolbar(diagramIndex, "sequence", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Sequence diagram" data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
     `<defs>${buildEdgeMarkerDef(sequenceMarkerId, "arrow", "end", theme.edge.stroke, 2)}</defs>`,
-    groupMarkup,
-    participantMarkup,
+    groupFrameMarkup,
     lifelineMarkup,
+    participantMarkup,
     activationMarkup,
     noteMarkup,
     messageMarkup,
+    groupLabelMarkup,
     `</svg>`,
     `</figure>`
   ].join("");
