@@ -84,7 +84,10 @@ Everything happens inside the open document; there is no separate application.
   a menu change becomes canonical frontmatter when the document is saved.
 - **Layout and zoom** switch the reading view between centred and full-width,
   and zoom, fit, or pan a diagram inside its frame. These are view controls:
-  panning and zooming never alter stored coordinates.
+  panning and zooming never alter stored coordinates. A diagram frame sizes
+  itself to the drawn shapes on first render, so short diagrams leave no empty
+  band; drag the frame's bottom edge to resize it, or press **Zoom to fit** to
+  return to the automatic height.
 
 ## Runtime URLs
 

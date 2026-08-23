@@ -217,7 +217,9 @@ export function renderFlowchartDiagram(
   const width = Number(diagram.canvas.width) || 1000;
   const height = Number(diagram.canvas.height) || 560;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
-  const viewportStyle = viewportHeight ? ` style="box-sizing: border-box; height: ${viewportHeight}px"` : "";
+  const viewportStyle = viewportHeight
+    ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
+    : "";
   const cameraOffset = diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
 
