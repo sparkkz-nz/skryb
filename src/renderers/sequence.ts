@@ -61,7 +61,9 @@ export function renderSequenceDiagram(
   const groupHeaderSpace = 40;
   const groupFooterSpace = 22;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
-  const viewportStyle = viewportHeight ? ` style="box-sizing: border-box; height: ${viewportHeight}px"` : "";
+  const viewportStyle = viewportHeight
+    ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
+    : "";
   const sequenceMarkerId = `docdiagram-sequence-arrow-${diagramIndex}`;
   const lifelineTop = headerTop + actorHeaderHeight + 12;
   const firstParticipant = participants[0];

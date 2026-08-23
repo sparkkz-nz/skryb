@@ -162,7 +162,45 @@ function update(host: InspectorHost, mutate: () => void): void {
   host.renderDocument();
 }
 
+function persist(host: InspectorHost, mutate: () => void): void {
+  mutate();
+  host.persistDiagramModels();
+}
+
+function wireLiveTextInput(
+  controlElement: HTMLTextAreaElement | null,
+  selector: string,
+  mutate: (value: string) => void,
+  scheduleRender: (controlElement: HTMLTextAreaElement, restoreFocus: () => void) => void
+): void {
+  if (!controlElement) {
+    return;
+  }
+  controlElement.addEventListener("input", () => {
+    mutate(controlElement.value);
+    const selectionStart = controlElement.selectionStart;
+    const selectionEnd = controlElement.selectionEnd;
+    scheduleRender(controlElement, () => {
+      const replacement = document.querySelector<HTMLTextAreaElement>(selector);
+      replacement?.focus();
+      replacement?.setSelectionRange(selectionStart, selectionEnd);
+    });
+  });
+}
+
 export function wireNodeInspector(host: InspectorHost, container: ParentNode, diagramIndex: number, nodeId: string): void {
+  let liveTextRenderTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleLiveTextRender = (controlElement: HTMLTextAreaElement, restoreFocus: () => void) => {
+    globalThis.clearTimeout(liveTextRenderTimer ?? undefined);
+    liveTextRenderTimer = globalThis.setTimeout(() => {
+      liveTextRenderTimer = null;
+      const shouldRestoreFocus = document.activeElement === controlElement;
+      host.renderDocument();
+      if (shouldRestoreFocus) {
+        restoreFocus();
+      }
+    }, 250);
+  };
   const withNode = (mutate: (diagram: FlowchartDiagram, node: FlowchartNode) => void) => {
     const diagram = host.state.diagramModels[diagramIndex];
     if (!diagram || diagram.type !== "flowchart") {
@@ -174,9 +212,30 @@ export function wireNodeInspector(host: InspectorHost, container: ParentNode, di
     }
     update(host, () => mutate(diagram, node));
   };
+  const persistNode = (mutate: (diagram: FlowchartDiagram, node: FlowchartNode) => void) => {
+    const diagram = host.state.diagramModels[diagramIndex];
+    if (!diagram || diagram.type !== "flowchart") {
+      return;
+    }
+    const node = findFlowchartNode(diagram, nodeId)?.node;
+    if (!node) {
+      return;
+    }
+    persist(host, () => mutate(diagram, node));
+  };
 
-  change(container, ".docdiagram-inspector-label", (value) => withNode((_, node) => setNodeLabel(node, value)));
-  change(container, ".docdiagram-inspector-subtitle", (value) => withNode((_, node) => setNodeSubtitle(node, value)));
+  wireLiveTextInput(
+    container.querySelector<HTMLTextAreaElement>(".docdiagram-inspector-label"),
+    ".docdiagram-inspector-label",
+    (value) => persistNode((_, node) => setNodeLabel(node, value)),
+    scheduleLiveTextRender
+  );
+  wireLiveTextInput(
+    container.querySelector<HTMLTextAreaElement>(".docdiagram-inspector-subtitle"),
+    ".docdiagram-inspector-subtitle",
+    (value) => persistNode((_, node) => setNodeSubtitle(node, value)),
+    scheduleLiveTextRender
+  );
   for (const palette of container.querySelectorAll<HTMLInputElement>(".docdiagram-inspector-palette input")) {
     palette.addEventListener("change", () => withNode((_, node) => setNodeColorPalette(node, palette.value, host.state.documentColorScheme)));
   }

@@ -48,10 +48,17 @@ export function injectStyles(): void {
       overflow: auto;
       padding: 1rem;
     }
+    #rendered-document code,
+    #rendered-document kbd,
+    #rendered-document pre,
+    #rendered-document samp {
+      font-family: var(--docdiagram-code-font, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace);
+      font-size: 1em;
+    }
     #rendered-document :not(pre) > code {
       background: var(--docdiagram-code-background);
       border-radius: 4px;
-      font-size: .9em;
+      font-size: .95em;
       padding: .12em .3em;
     }
     #rendered-document blockquote {

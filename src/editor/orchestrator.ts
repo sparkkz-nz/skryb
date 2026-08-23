@@ -104,8 +104,44 @@ function isEditableElement(element: EventTarget | null): boolean {
   return element instanceof Element && element.matches("input, textarea, select, [contenteditable]");
 }
 
+/**
+ * Measures the rendered height a diagram frame needs to show the drawn shapes
+ * (rather than the whole canvas) at the current fit-to-width scale. Returns
+ * null when the browser cannot report geometry, and never exceeds the frame's
+ * current height so tall diagrams keep their scrollable viewport.
+ */
+function measureDiagramContentHeight(figure: HTMLElement): number | null {
+  const svg = figure.querySelector<SVGSVGElement>("svg");
+  if (!svg || typeof svg.getBBox !== "function") {
+    return null;
+  }
+  let contentBounds: { y: number; height: number };
+  try {
+    contentBounds = svg.getBBox();
+  } catch {
+    return null;
+  }
+  const canvasHeight = svg.viewBox?.baseVal?.height || 0;
+  const svgBounds = svg.getBoundingClientRect();
+  if (!canvasHeight || !svgBounds.height || !contentBounds.height) {
+    return null;
+  }
+  const scale = svgBounds.height / canvasHeight;
+  const frameStyles = getComputedStyle(figure);
+  const chromeAbove = svgBounds.top - figure.getBoundingClientRect().top + figure.scrollTop;
+  const chromeBelow = (parseFloat(frameStyles.paddingBottom) || 0) + (parseFloat(frameStyles.borderBottomWidth) || 0);
+  const trailingMargin = Math.min(Math.max(contentBounds.y, 0), 40) * scale;
+  const fittedHeight = Math.ceil(
+    chromeAbove + (contentBounds.y + contentBounds.height) * scale + trailingMargin + chromeBelow
+  );
+  return Math.min(fittedHeight, figure.offsetHeight);
+}
+
 export class BrowserRuntime {
   public readonly state: EditorState = createEditorState();
+  private readonly pendingViewportFits = new Set<number>();
+  private readonly autoFittedDiagrams = new Map<number, number>();
+  private viewportRefitTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly sourceEditor: SourceEditor | null;
   private readonly diagramEditor: DiagramEditor | null;
 
@@ -207,7 +243,12 @@ export class BrowserRuntime {
       return false;
     }
     for (const diagram of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
-      this.state.diagramViewportHeights.set(Number(diagram.dataset.diagramIndex), diagram.offsetHeight);
+      const diagramIndex = Number(diagram.dataset.diagramIndex);
+      if (this.pendingViewportFits.has(diagramIndex)) {
+        this.state.diagramViewportHeights.delete(diagramIndex);
+        continue;
+      }
+      this.state.diagramViewportHeights.set(diagramIndex, diagram.offsetHeight);
     }
     const pageScroll = { x: globalThis.scrollX || 0, y: globalThis.scrollY || 0 };
     const previousModels = [...this.state.diagramModels];
@@ -258,12 +299,66 @@ export class BrowserRuntime {
     }
     this.diagramEditor?.enableCanvasPanning();
     this.diagramEditor?.enableSequenceSelection();
+    this.fitDiagramViewports();
     if (this.state.editingDiagramIndex !== null) {
       this.diagramEditor?.enableEditing();
     }
 
     globalThis.scrollTo?.(pageScroll.x, pageScroll.y);
     return true;
+  }
+
+  /**
+   * Sizes each diagram frame to its drawn content the first time it renders, so
+   * short diagrams do not leave a band of empty canvas. Once a height is known
+   * it is reused, which preserves any manual resize the reader makes later.
+   */
+  private fitDiagramViewports(): void {
+    if (!this.outputElement) {
+      return;
+    }
+    for (const figure of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
+      const diagramIndex = Number(figure.dataset.diagramIndex);
+      if (this.state.diagramViewportHeights.has(diagramIndex)) {
+        continue;
+      }
+      const fittedHeight = measureDiagramContentHeight(figure);
+      if (!fittedHeight) {
+        continue;
+      }
+      this.state.diagramViewportHeights.set(diagramIndex, fittedHeight);
+      this.autoFittedDiagrams.set(diagramIndex, fittedHeight);
+      figure.style.boxSizing = "border-box";
+      figure.style.minHeight = "0";
+      figure.style.height = `${fittedHeight}px`;
+    }
+    this.pendingViewportFits.clear();
+  }
+
+  /**
+   * Re-fits auto-sized frames when the page width changes, because the diagram
+   * scales with the frame width and a stale height would clip or waste space.
+   * Frames the reader has resized by hand are left untouched.
+   */
+  private refitDiagramViewports(): void {
+    if (!this.outputElement) {
+      return;
+    }
+    for (const figure of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
+      const diagramIndex = Number(figure.dataset.diagramIndex);
+      const autoFittedHeight = this.autoFittedDiagrams.get(diagramIndex);
+      if (autoFittedHeight === undefined) {
+        continue;
+      }
+      if (figure.offsetHeight !== autoFittedHeight) {
+        this.autoFittedDiagrams.delete(diagramIndex);
+        continue;
+      }
+      figure.style.removeProperty("height");
+      figure.style.removeProperty("min-height");
+      this.state.diagramViewportHeights.delete(diagramIndex);
+    }
+    this.fitDiagramViewports();
   }
 
   public closeDocumentMenu(): void {
@@ -360,6 +455,15 @@ export class BrowserRuntime {
       if (this.state.documentThemeSetting === "auto") {
         this.renderDocument();
       }
+    });
+    globalThis.addEventListener("resize", () => {
+      if (this.viewportRefitTimer !== null) {
+        clearTimeout(this.viewportRefitTimer);
+      }
+      this.viewportRefitTimer = setTimeout(() => {
+        this.viewportRefitTimer = null;
+        this.refitDiagramViewports();
+      }, 150);
     });
     globalThis.addEventListener("beforeunload", (event) => {
       if (this.getSource() === this.state.savedSource && !this.sourceEditor?.hasUnsavedDraft) {
@@ -697,6 +801,7 @@ export class BrowserRuntime {
         const diagramIndex = Number(button.dataset.diagramIndex);
         this.state.diagramZooms.set(diagramIndex, 100);
         this.state.diagramCameraOffsets.delete(diagramIndex);
+        this.pendingViewportFits.add(diagramIndex);
         this.renderDocument();
       });
     }
