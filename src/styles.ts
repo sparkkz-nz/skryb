@@ -130,8 +130,7 @@ export function injectStyles(): void {
       color: inherit;
     }
     #rendered-document .docdiagram-component :not(pre) > code {
-      background: transparent;
-      border: 1px solid currentColor;
+      background: color-mix(in srgb, currentColor 12%, transparent);
     }
     #rendered-document .docdiagram-component pre,
     #rendered-document .docdiagram-component th {
