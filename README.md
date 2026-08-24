@@ -161,3 +161,21 @@ npm test
 
 `npm test` builds and tests the minified browser artifact. Use `npm run check`
 to type-check the TypeScript build entry independently.
+
+## Licence
+
+Skryb is licensed under the [Apache License 2.0](LICENSE).
+
+The built runtime carries a short attribution banner at the top of
+`dist/skryb-runtime.js`. Because **Save As** inlines the runtime into the
+document it produces, that banner travels with every saved document.
+
+To keep single-file documents practical, the copyright holder grants an
+additional permission: **retaining the banner comment in an inlined or
+otherwise redistributed copy of the runtime satisfies the attribution and
+licence-notice requirements of section 4 of the Apache License for that copy.**
+Do not strip the banner. Redistributing Skryb's *source* remains subject to the
+licence in full.
+
+Documents you write with Skryb are yours. The licence covers Skryb itself, not
+the content you author with it.

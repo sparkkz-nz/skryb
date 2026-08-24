@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "Skryb portable HTML document runtime",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:docs": "node scripts/build-reference.mjs",
