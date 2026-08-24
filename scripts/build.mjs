@@ -3,10 +3,15 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 
 const entryPoint = process.env.RENDER_RUNTIME_ENTRY ?? "src/index.ts";
 
+// Kept in the bundle so offline "Save As" copies carry attribution with them.
+const licenseBanner =
+  "/*! Skryb runtime | Copyright 2026 Stuart Parkinson | Apache-2.0 | https://github.com/sparkkz-nz/skryb */";
+
 await rm("dist/render-runtime.js", { force: true });
 await mkdir("dist", { recursive: true });
 
 const result = await build({
+  banner: { js: licenseBanner },
   bundle: true,
   entryPoints: [entryPoint],
   format: "iife",
