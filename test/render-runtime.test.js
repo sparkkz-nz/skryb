@@ -2990,3 +2990,21 @@ test("expanding the canvas moves absolute waypoints and callout targets with the
   assert.equal(JSON.stringify(diagram.nodes[0].arrow), JSON.stringify({ x: 260, y: 260 }));
   assert.equal(JSON.stringify(diagram.edges[0].waypoint), JSON.stringify({ x: 400, y: 260 }));
 });
+
+test("a live inspector text field keeps the text being typed across its debounced re-render", () => {
+  const inspector = fs.readFileSync(path.resolve(__dirname, "..", "src", "editor", "inspector.ts"), "utf8");
+  const wiring = inspector.slice(
+    inspector.indexOf("function wireLiveTextInput"),
+    inspector.indexOf("export function wireNodeInspector")
+  );
+
+  // setNodeLabel/setNodeSubtitle trim, so re-rendering the field straight from the model would
+  // swallow a just-typed trailing space or newline instead of leaving it under the cursor.
+  assert.match(wiring, /const draft = controlElement\.value;/);
+  assert.match(wiring, /replacement\.value !== draft/);
+  assert.match(wiring, /replacement\.value = draft;/);
+  assert.ok(
+    wiring.indexOf("replacement.value = draft;") < wiring.indexOf("setSelectionRange"),
+    "the draft is restored before the caret, so the caret lands in the restored text"
+  );
+});

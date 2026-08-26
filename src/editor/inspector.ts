@@ -171,6 +171,10 @@ function persist(host: InspectorHost, mutate: () => void): void {
   host.persistDiagramModels();
 }
 
+// The model trims labels, but the re-render that follows each keystroke rebuilds this textarea
+// from that trimmed value. Restoring focus alone would drop a just-typed trailing space or
+// newline out from under the cursor, so the in-progress text is carried across the re-render and
+// trimming only takes effect once editing moves on.
 function wireLiveTextInput(
   controlElement: HTMLTextAreaElement | null,
   selector: string,
@@ -182,10 +186,14 @@ function wireLiveTextInput(
   }
   controlElement.addEventListener("input", () => {
     mutate(controlElement.value);
+    const draft = controlElement.value;
     const selectionStart = controlElement.selectionStart;
     const selectionEnd = controlElement.selectionEnd;
     scheduleRender(controlElement, () => {
       const replacement = document.querySelector<HTMLTextAreaElement>(selector);
+      if (replacement && replacement.value !== draft) {
+        replacement.value = draft;
+      }
       replacement?.focus();
       replacement?.setSelectionRange(selectionStart, selectionEnd);
     });
