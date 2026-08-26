@@ -43,6 +43,7 @@ export interface FlowchartNode {
   subtitle?: string;
   textVAlign?: "top" | "center";
   textHAlign?: "left" | "center" | "right";
+  arrow?: Position;
   children?: FlowchartNode[];
 }
 

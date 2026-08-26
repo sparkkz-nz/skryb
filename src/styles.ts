@@ -629,6 +629,9 @@ export function injectStyles(): void {
       font: inherit;
       padding: .35rem .55rem;
     }
+    .docdiagram-inspector-paired-controls .docdiagram-inspector-callout {
+      grid-column: span 2;
+    }
     .docdiagram-inspector-paired-controls .docdiagram-inspector-delete {
       color: #b42318;
     }
@@ -793,7 +796,8 @@ export function injectStyles(): void {
     }
     .docdiagram-connection-port,
     .docdiagram-edge-endpoint,
-    .docdiagram-edge-waypoint {
+    .docdiagram-edge-waypoint,
+    .docdiagram-callout-handle {
       cursor: crosshair;
       fill: #ffffff;
       stroke: #3574c7;
@@ -802,7 +806,8 @@ export function injectStyles(): void {
     .docdiagram-connection-target-port {
       fill: #eaf2ff;
     }
-    .docdiagram-edge-waypoint {
+    .docdiagram-edge-waypoint,
+    .docdiagram-callout-handle {
       cursor: move;
       fill: #eaf2ff;
     }

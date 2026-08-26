@@ -116,9 +116,31 @@ diagram compact and include adjacent prose that explains the flow. Sequence
 diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
+Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
+nodes on multiples of that grid. Shared coordinates are what make a diagram look
+deliberate: node edges line up, rows and columns align, and connectors meet
+anchors squarely instead of missing by a pixel or two. It also makes later
+graphical edits snap into the same alignment rather than drifting out of it.
+(This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
+directive.)
+
+Prefer `orthogonal` routes for most flows. Reach for `curved` when an orthogonal
+route would be hard to follow - a long edge doubling back, several edges
+converging on one anchor, or an edge that would otherwise run along or across an
+unrelated node. A curve separates from its neighbours and reads as one
+continuous line, so it can resolve a crowded layout that would otherwise need
+another right-angled detour.
+
 An edge may include one optional `waypoint: { x: number, y: number }` in canvas
-coordinates. The graphical flowchart editor can drag this waypoint; use it only
-when the default route does not communicate the relationship clearly.
+coordinates, which every route honours: orthogonal legs, a two-segment polyline
+for `straight`, and a smooth curve through the point for `curved`. The graphical
+flowchart editor can drag this waypoint; use it only when the default route does
+not communicate the relationship clearly.
+
+A node may include one optional `arrow: { x: number, y: number }` in canvas
+coordinates, which draws a callout pointer from the node centre out to that
+point in the node's own colours. Use it to tie an annotation - most often a
+`text` shape - to the thing it describes.
 
 For large or detailed diagrams, strongly prefer a `:::diagram { id=... }`
 reference at the intended reading position and place the matching fenced
@@ -131,7 +153,7 @@ Use **Edit source** for canonical Markdown, document structure, and sequence
 diagram changes. The source tray's menu can insert valid flowchart, sequence,
 diagram-reference, panel, and grid templates, and **Help** opens the published
 reference. Flowchart edit mode supports node and connector presentation,
-endpoints, and an optional edge waypoint.
+endpoints, an optional edge waypoint, and an optional node callout pointer.
 
 **Save As** keeps a hosted runtime URL in the downloaded portable document.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
@@ -149,8 +171,10 @@ Before returning a document, verify:
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
 - Every diagram declares its supported type. Every flowchart has explicit shapes
-  and edge anchors and uses only supported palette, route, marker, waypoint, and style
-  values.
+  and edge anchors and uses only supported palette, route, marker, waypoint,
+  callout pointer, and style values.
+- Flowcharts set `canvas.grid` (normally `5`) and their node positions and sizes
+  are multiples of it.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

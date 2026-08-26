@@ -10,7 +10,7 @@ import {
 import { escapeHtml } from "../core/diagrams/parser";
 import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
 import { getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
-import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef } from "../core/diagrams/geometry";
+import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramRenderState, DiagramToolbarRenderer } from "./types";
 
@@ -139,7 +139,7 @@ export function renderFlowchartDiagram(
       edgeEndpointMarkup.push(
         `<circle class="docdiagram-edge-endpoint" data-diagram-index="${diagramIndex}" data-edge-index="${edgeIndex}" data-endpoint="source" cx="${sourceAnchor.x}" cy="${sourceAnchor.y}" r="7"/>`,
         `<circle class="docdiagram-edge-endpoint" data-diagram-index="${diagramIndex}" data-edge-index="${edgeIndex}" data-endpoint="target" cx="${targetAnchor.x}" cy="${targetAnchor.y}" r="7"/>`,
-        `<circle class="docdiagram-edge-waypoint" data-diagram-index="${diagramIndex}" data-edge-index="${edgeIndex}" cx="${edge.waypoint?.x ?? edgePath.midpoint.x}" cy="${edge.waypoint?.y ?? edgePath.midpoint.y}" r="8" aria-label="Edge waypoint"/>`
+        renderEdgeWaypointHandle(diagramIndex, edgeIndex, edge.waypoint ?? edgePath.midpoint, Boolean(edge.waypoint))
       );
     }
 
@@ -161,7 +161,8 @@ export function renderFlowchartDiagram(
     ].join("");
   }).join("");
 
-  const nodeMarkup = nodeEntries.map(({ node, position }) => {
+  const nodeDefs: string[] = [];
+  const nodeMarkup = nodeEntries.map(({ node, position }, nodeIndex) => {
     const x = position.x;
     const y = position.y;
     const nodeWidth = Number(node.size?.width) || 190;
@@ -173,8 +174,25 @@ export function renderFlowchartDiagram(
       state.documentColorScheme
     );
     const paletteRole = node.palette;
-    const style = paletteRole && palette?.[paletteRole]?.gradient
-      ? { ...effectiveStyle, fill: `url(#docdiagram-${state.documentColorScheme}-${diagramIndex}-${paletteRole})` }
+    const gradientEntry = paletteRole ? palette?.[paletteRole] : undefined;
+    const calloutPointer = node.arrow
+      ? buildNodeCalloutPointer({ x, y, width: nodeWidth, height: nodeHeight }, node.arrow)
+      : null;
+    // An object-bounding-box gradient would restart across the pointer's own box and break the
+    // join, so a callout node switches to a user-space gradient spanning the node instead.
+    const calloutGradientId = calloutPointer && gradientEntry?.gradient
+      ? `docdiagram-${state.documentColorScheme}-${diagramIndex}-${paletteRole}-callout-${nodeIndex}`
+      : "";
+    if (calloutGradientId && gradientEntry) {
+      nodeDefs.push(`<linearGradient id="${calloutGradientId}" gradientUnits="userSpaceOnUse" x1="${x}" y1="${y}" x2="${x}" y2="${y + nodeHeight}"><stop offset="0" stop-color="${escapeHtml(gradientEntry.gradient || gradientEntry.fill)}"/><stop offset="1" stop-color="${escapeHtml(gradientEntry.fill)}"/></linearGradient>`);
+    }
+    const style = gradientEntry?.gradient
+      ? {
+        ...effectiveStyle,
+        fill: calloutGradientId
+          ? `url(#${calloutGradientId})`
+          : `url(#docdiagram-${state.documentColorScheme}-${diagramIndex}-${paletteRole})`
+      }
       : effectiveStyle;
     const isSelected = selectedNode?.diagramIndex === diagramIndex && selectedNode.nodeId === node.id;
     const isEditing = isSelected && editingNode?.diagramIndex === diagramIndex && editingNode.nodeId === node.id;
@@ -186,6 +204,15 @@ export function renderFlowchartDiagram(
     return [
       `<g class="docdiagram-node${isSelected ? " docdiagram-node-selected" : ""}" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}">`,
       renderNodeBody(geometry, style, strokeWidth),
+      calloutPointer
+        ? renderNodeCalloutPointer(
+          calloutPointer,
+          geometry.bodyMarkup,
+          style,
+          strokeWidth,
+          `docdiagram-callout-mask-${diagramIndex}-${nodeIndex}`
+        )
+        : "",
       isEditing
         ? `<foreignObject class="docdiagram-inline-editor-host" x="${geometry.textBounds.x}" y="${geometry.textBounds.y}" width="${geometry.textBounds.width}" height="${geometry.textBounds.height}"><textarea class="docdiagram-inline-editor docdiagram-inline-editor-node" aria-label="Edit node label. Press Enter for a new line. Press Control or Command plus Enter to save. Press Escape to cancel.">${escapeHtml(node.label)}</textarea></foreignObject>`
         : isTextShape
@@ -210,6 +237,9 @@ export function renderFlowchartDiagram(
           return `<circle class="docdiagram-connection-port" data-anchor="${anchor}" cx="${point.x}" cy="${point.y}" r="7" aria-label="${anchor} connection port"/>`;
         }).join("")
         : "",
+      isSelected && isDiagramEditing && !isEditing && node.arrow
+        ? `<circle class="docdiagram-callout-handle" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}" cx="${node.arrow.x}" cy="${node.arrow.y}" r="7" aria-label="Callout pointer target"/>`
+        : "",
       `</g>`
     ].join("");
   }).join("");
@@ -227,7 +257,7 @@ export function renderFlowchartDiagram(
     `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "flowchart", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Architecture diagram" data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
-    `<defs>${paletteDefs}${edgeMarkerDefs.join("")}</defs>`,
+    `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,
     nodeMarkup,
     edgeMarkup,
     connectionDrag?.diagramIndex === diagramIndex

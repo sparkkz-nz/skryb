@@ -77,7 +77,12 @@ const {
   getNodeGeometry,
   renderNodeBody,
   buildEdgePath,
+  buildNodeCalloutPointer,
+  renderEdgeWaypointHandle,
   buildEdgeInspectorFields,
+  buildNodeInspectorFields,
+  clearEdgeWaypoint,
+  toggleNodeCalloutPointer,
   clampZoom,
   paletteRoles,
   desugarBlockScalars,
@@ -2743,4 +2748,292 @@ test("validateDocumentSource ignores diagrams nested inside a longer fence", () 
   ].join("\n");
 
   assert.doesNotThrow(() => validateDocumentSource(source));
+});
+
+test("a waypointed edge follows its declared route instead of always bending orthogonally", () => {
+  const source = { x: 190, y: 40 };
+  const target = { x: 400, y: 200 };
+  const waypoint = { x: 300, y: 300 };
+  const orthogonal = buildEdgePath(source, target, "right", "left", "orthogonal", waypoint);
+  const straight = buildEdgePath(source, target, "right", "left", "straight", waypoint);
+  const curved = buildEdgePath(source, target, "right", "left", "curved", waypoint);
+
+  assert.match(orthogonal.path, /^M 190 40 L 300 40 L 300 300/);
+  assert.equal(straight.path, "M 190 40 L 300 300 L 400 200");
+  assert.match(curved.path, /^M 190 40 C .* 300 300 C .* 400 200$/);
+  assert.equal(curved.path.match(/C/g).length, 2, "a curved waypoint route is two joined cubics");
+});
+
+test("a curved waypoint route leaves and enters its anchors along the anchor direction and passes smoothly through the waypoint", () => {
+  const path = buildEdgePath({ x: 190, y: 40 }, { x: 400, y: 200 }, "right", "left", "curved", { x: 300, y: 300 });
+  const [, sourceControl, waypointEntry, , waypointExit, targetControl] = path.path
+    .match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)? -?\d+(?:\.\d+)?(?:e[-+]?\d+)?/g)
+    .map((pair) => {
+      const [x, y] = pair.split(" ").map(Number);
+      return { x, y };
+    });
+
+  assert.equal(sourceControl.y, 40, "the source control shares the source's row so the curve leaves rightwards");
+  assert.ok(sourceControl.x > 190, "the source control sits along the right anchor direction");
+  assert.equal(targetControl.y, 200, "the target control shares the target's row so the curve enters leftwards");
+  assert.ok(targetControl.x < 400, "the target control sits along the left anchor direction");
+
+  const entryDirection = { x: 300 - waypointEntry.x, y: 300 - waypointEntry.y };
+  const exitDirection = { x: waypointExit.x - 300, y: waypointExit.y - 300 };
+  const entryLength = Math.hypot(entryDirection.x, entryDirection.y);
+  const exitLength = Math.hypot(exitDirection.x, exitDirection.y);
+
+  assert.ok(
+    Math.abs(entryDirection.x / entryLength - exitDirection.x / exitLength) < 1e-9 &&
+    Math.abs(entryDirection.y / entryLength - exitDirection.y / exitLength) < 1e-9,
+    "both control points at the waypoint are colinear, so the two segments meet without a kink"
+  );
+  assert.equal(JSON.stringify(path.midpoint), JSON.stringify({ x: 300, y: 300 }));
+});
+
+test("the edge waypoint handle is a circle until a waypoint is anchored, then a diamond", () => {
+  const unanchored = renderEdgeWaypointHandle(0, 1, { x: 300, y: 80 }, false);
+  const anchored = renderEdgeWaypointHandle(0, 1, { x: 300, y: 80 }, true);
+
+  assert.match(unanchored, /data-anchored="false"/);
+  assert.match(unanchored, /rx="7.5"/, "an unanchored handle is a circle");
+  assert.doesNotMatch(unanchored, /transform=/);
+  assert.match(anchored, /data-anchored="true"/);
+  assert.match(anchored, /transform="rotate\(45 300 80\)"/, "an anchored handle is a diamond");
+  assert.doesNotMatch(anchored, /rx="7.5"/);
+  for (const handle of [unanchored, anchored]) {
+    assert.match(handle, /class="docdiagram-edge-waypoint" data-diagram-index="0" data-edge-index="1"/);
+  }
+});
+
+test("clearEdgeWaypoint removes the key so the canonical source drops the waypoint entirely", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 300",
+    "nodes:",
+    "  - id: source",
+    "    label: Source",
+    "    shape: rounded-rectangle",
+    "  - id: target",
+    "    label: Target",
+    "    shape: rounded-rectangle",
+    "    position: { x: 400, y: 160 }",
+    "edges:",
+    "  - source: source",
+    "    target: target",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    waypoint: { x: 300, y: 80 }"
+  ].join("\n")));
+
+  clearEdgeWaypoint(diagram.edges[0]);
+  const serialized = serializeDiagram(diagram);
+
+  assert.equal("waypoint" in diagram.edges[0], false);
+  assert.doesNotMatch(serialized, /waypoint/);
+  assert.doesNotThrow(() => parseDiagram(serialized));
+});
+
+test("the edge inspector only offers Remove waypoint once a waypoint is anchored", () => {
+  const diagram = { theme: "light" };
+  const plain = buildEdgeInspectorFields(diagram, { source: "a", target: "b" });
+  const anchored = buildEdgeInspectorFields(diagram, { source: "a", target: "b", waypoint: { x: 10, y: 20 } });
+
+  assert.doesNotMatch(plain, /docdiagram-inspector-clear-waypoint/);
+  assert.match(anchored, /class="docdiagram-inspector-clear-waypoint">Remove waypoint</);
+});
+
+test("a node callout pointer parses, renders in the node's own colours, and round-trips", () => {
+  const source = flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 400",
+    "nodes:",
+    "  - id: note",
+    "    label: Note",
+    "    shape: rounded-rectangle",
+    "    position: { x: 100, y: 100 }",
+    "    size: { width: 200, height: 80 }",
+    "    arrow: { x: 320, y: 320 }",
+    "edges: []"
+  ].join("\n"));
+  const diagram = parseDiagram(source);
+  const markup = renderDiagram(source, 0);
+  const style = getNodeEffectiveStyle(diagram, diagram.nodes[0]);
+
+  assert.equal(JSON.stringify(diagram.nodes[0].arrow), JSON.stringify({ x: 320, y: 320 }));
+  assert.equal(JSON.stringify(parseDiagram(serializeDiagram(diagram))), JSON.stringify(diagram));
+  assert.match(markup, /<polygon class="docdiagram-node-callout"[^>]*320,320/);
+  assert.match(markup, new RegExp(`<polygon class="docdiagram-node-callout"[^>]*fill="${style.fill}"`));
+  assert.match(markup, new RegExp(`<polygon class="docdiagram-node-callout-outline"[^>]*stroke="${style.stroke}"`));
+  assert.match(markup, /<mask id="docdiagram-callout-mask-0-0" maskUnits="userSpaceOnUse" x="88" y="88" width="244" height="244"/);
+  assert.match(markup, /<rect class="docdiagram-node-callout-mask-region" x="88" y="88" width="244" height="244" fill="#ffffff"\/>/);
+  assert.match(markup, /class="docdiagram-node-callout-outline"[^>]*mask="url\(#docdiagram-callout-mask-0-0\)"/);
+  assert.throws(
+    () => parseDiagram(source.replace("{ x: 320, y: 320 }", "{ x: 320 }")),
+    /arrow requires finite x and y coordinates/
+  );
+  assert.throws(
+    () => parseDiagram(source.replace("arrow: { x: 320, y: 320 }", "arrow: { x: 320, y: 320, z: 1 }")),
+    /Unsupported node "note" arrow field: z/
+  );
+});
+
+test("a callout pointer runs from the node centre out to the target, tapering to a tip", () => {
+  const pointer = buildNodeCalloutPointer({ x: 100, y: 100, width: 200, height: 80 }, { x: 200, y: 400 });
+
+  assert.equal(JSON.stringify(pointer.points[1]), JSON.stringify({ x: 200, y: 400 }));
+  assert.equal(pointer.points[0].y, 140, "the base sits on the node centre line");
+  assert.equal(pointer.points[2].y, 140);
+  assert.ok(pointer.points[0].x < 200 && pointer.points[2].x > 200, "the base straddles the node centre");
+  assert.equal(pointer.bounds.y + pointer.bounds.height, 400, "the pointer bounds reach the callout target");
+  assert.equal(buildNodeCalloutPointer({ x: 100, y: 100, width: 200, height: 80 }, { x: 200, y: 140 }), null);
+});
+
+test("a callout pointer on a fill-less node is masked to the node outline so it cannot cover the text", () => {
+  const source = flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 400",
+    "nodes:",
+    "  - id: note",
+    "    label: Note",
+    "    shape: text",
+    "    position: { x: 100, y: 100 }",
+    "    size: { width: 200, height: 80 }",
+    "    arrow: { x: 320, y: 320 }",
+    "edges: []"
+  ].join("\n"));
+  const markup = renderDiagram(source, 0);
+
+  assert.match(markup, /<polygon class="docdiagram-node-callout"[^>]*mask="url\(#docdiagram-callout-mask-0-0\)"/);
+  assert.match(markup, /<polygon class="docdiagram-node-callout"[^>]*fill="#17202A"/);
+});
+
+test("a gradient palette callout switches the node to a user-space gradient so the join stays seamless", () => {
+  const source = flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 400",
+    "nodes:",
+    "  - id: note",
+    "    label: Note",
+    "    shape: rounded-rectangle",
+    "    palette: accent-strong",
+    "    position: { x: 100, y: 100 }",
+    "    size: { width: 200, height: 80 }",
+    "    arrow: { x: 320, y: 320 }",
+    "edges: []"
+  ].join("\n"));
+  const markup = renderDiagram(source, 0);
+  const gradientId = "docdiagram-classic-0-accent-strong-callout-0";
+
+  assert.match(markup, new RegExp(`<linearGradient id="${gradientId}" gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="180"`));
+  assert.match(markup, new RegExp(`class="docdiagram-node-body"[^>]*fill="url\\(#${gradientId}\\)"`));
+  assert.match(markup, new RegExp(`class="docdiagram-node-callout"[^>]*fill="url\\(#${gradientId}\\)"`));
+});
+
+test("the node inspector toggles a callout pointer and seeds it below the node", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 400",
+    "  grid: 10",
+    "nodes:",
+    "  - id: note",
+    "    label: Note",
+    "    shape: rounded-rectangle",
+    "    position: { x: 100, y: 100 }",
+    "    size: { width: 200, height: 80 }",
+    "edges: []"
+  ].join("\n")));
+  const node = diagram.nodes[0];
+
+  assert.match(buildNodeInspectorFields(diagram, node), /class="docdiagram-inspector-callout">Add pointer</);
+  toggleNodeCalloutPointer(diagram, node);
+  assert.equal(JSON.stringify(node.arrow), JSON.stringify({ x: 200, y: 240 }));
+  assert.match(buildNodeInspectorFields(diagram, node), /class="docdiagram-inspector-callout">Remove pointer</);
+  assert.ok(Number(diagram.canvas.height) >= 280, "the canvas grows to keep the callout target visible");
+
+  toggleNodeCalloutPointer(diagram, node);
+  assert.equal("arrow" in node, false);
+});
+
+test("expanding the canvas moves absolute waypoints and callout targets with the nodes", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "  width: 600",
+    "  height: 400",
+    "nodes:",
+    "  - id: source",
+    "    label: Source",
+    "    shape: rounded-rectangle",
+    "    position: { x: 100, y: 100 }",
+    "    arrow: { x: 160, y: 260 }",
+    "  - id: target",
+    "    label: Target",
+    "    shape: rounded-rectangle",
+    "    position: { x: 400, y: 100 }",
+    "edges:",
+    "  - source: source",
+    "    target: target",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    waypoint: { x: 300, y: 260 }"
+  ].join("\n")));
+
+  diagram.nodes[0].position = { x: -60, y: 100 };
+  expandCanvasForNode(diagram, diagram.nodes[0]);
+
+  assert.equal(diagram.nodes[0].position.x, 40, "the shifted node lands a padding inside the canvas");
+  assert.equal(JSON.stringify(diagram.nodes[0].arrow), JSON.stringify({ x: 260, y: 260 }));
+  assert.equal(JSON.stringify(diagram.edges[0].waypoint), JSON.stringify({ x: 400, y: 260 }));
+});
+
+test("a live inspector text field keeps the text being typed across its debounced re-render", () => {
+  const inspector = fs.readFileSync(path.resolve(__dirname, "..", "src", "editor", "inspector.ts"), "utf8");
+  const wiring = inspector.slice(
+    inspector.indexOf("function wireLiveTextInput"),
+    inspector.indexOf("export function wireNodeInspector")
+  );
+
+  // setNodeLabel/setNodeSubtitle trim, so re-rendering the field straight from the model would
+  // swallow a just-typed trailing space or newline instead of leaving it under the cursor.
+  assert.match(wiring, /const draft = controlElement\.value;/);
+  assert.match(wiring, /replacement\.value !== draft/);
+  assert.match(wiring, /replacement\.value = draft;/);
+  assert.ok(
+    wiring.indexOf("replacement.value = draft;") < wiring.indexOf("setSelectionRange"),
+    "the draft is restored before the caret, so the caret lands in the restored text"
+  );
+});
+
+test("the shipped flowchart starting points set a snapping grid and sit on it", () => {
+  const templates = [
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-document-template.html")),
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "docs", "quickstart.html"))
+  ];
+
+  // The docs tell authors to set canvas.grid (normally 5) and place nodes on it, so the templates
+  // they copy from have to demonstrate that rather than contradict it.
+  assert.match(runtime, /"  grid: 5",/, "the source tray's flowchart template sets a grid");
+
+  for (const template of templates) {
+    for (const source of readDiagramSources(template)) {
+      const diagram = parseDiagram(source);
+      if (diagram.type !== "flowchart") {
+        continue;
+      }
+
+      assert.equal(getGridSize(diagram), 5);
+      for (const { node } of flattenFlowchartNodes(diagram)) {
+        for (const value of [node.position?.x, node.position?.y, node.size?.width, node.size?.height]) {
+          if (value !== undefined) {
+            assert.equal(value % 5, 0, `expected ${value} to sit on the grid`);
+          }
+        }
+      }
+    }
+  }
 });

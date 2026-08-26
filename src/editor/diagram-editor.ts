@@ -5,7 +5,7 @@ import {
   type FlowchartNode,
   type Position
 } from "../core/diagrams/schema";
-import { buildEdgePath, computeNodeTextLayout, getNodeGeometry, renderNodeBody } from "../core/diagrams/geometry";
+import { buildEdgePath, buildNodeCalloutPointer, computeNodeTextLayout, getEdgeWaypointHandleGeometry, getNodeCalloutMaskRegion, getNodeGeometry, renderNodeBody, renderNodeCalloutMaskBody } from "../core/diagrams/geometry";
 import {
   createConnector,
   deleteConnector,
@@ -16,6 +16,7 @@ import {
   reconnectConnector,
   resizeFlowchartNode,
   setEdgeLabel,
+  setNodeCalloutPointer,
   setNodeLabel
 } from "../core/diagrams/mutations";
 import { getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
@@ -48,6 +49,12 @@ function isViewportResizePointer(frame: HTMLElement, event: PointerEvent): boole
   const rect = frame.getBoundingClientRect();
   const resizeHandleSize = 18;
   return event.clientX >= rect.right - resizeHandleSize && event.clientY >= rect.bottom - resizeHandleSize;
+}
+
+// A selected node is drawn with a thicker border, and live markup updates always run on the
+// selected node, so the callout mask has to be sized for that same width.
+function getSelectedNodeStrokeWidth(diagram: FlowchartDiagram, node: FlowchartNode): number {
+  return (Number(getNodeEffectiveStyle(diagram, node).strokeWidth) || 2) + 2;
 }
 
 export class DiagramEditor {
@@ -201,6 +208,12 @@ export class DiagramEditor {
       return;
     }
 
+    const calloutHandle = closest(event, ".docdiagram-callout-handle");
+    if (calloutHandle) {
+      this.moveNodeCalloutPointer(svg, event, calloutHandle);
+      return;
+    }
+
     const port = closest(event, ".docdiagram-connection-port");
     if (port) {
       const group = port.closest(".docdiagram-node");
@@ -294,6 +307,17 @@ export class DiagramEditor {
       const y = snapToGrid(origin.y + point.y - start.y, grid);
       moved = moved || x !== origin.x || y !== origin.y;
       group.setAttribute("transform", `translate(${x - origin.x} ${y - origin.y})`);
+      // The callout target is a fixed canvas point, but it lives inside the translated group, so
+      // it is re-expressed in the group's untranslated space to stay put while the node moves.
+      if (node.arrow) {
+        this.updateNodeCalloutMarkup(
+          group,
+          origin,
+          { x: node.arrow.x - (x - origin.x), y: node.arrow.y - (y - origin.y) },
+          getNodeGeometry(node, origin.x, origin.y, origin.width, origin.height).bodyMarkup,
+          getSelectedNodeStrokeWidth(diagram, node)
+        );
+      }
       const entry = findFlowchartNode(diagram, nodeId);
       node.position = {
         ...node.position,
@@ -528,6 +552,13 @@ export class DiagramEditor {
       handle.setAttribute("x", String(corner?.endsWith("left") ? x - 7 : x + width - 7));
       handle.setAttribute("y", String(corner?.startsWith("top") ? y - 7 : y + height - 7));
     }
+    this.updateNodeCalloutMarkup(
+      group,
+      { x, y, width, height },
+      node.arrow,
+      geometry.bodyMarkup,
+      getSelectedNodeStrokeWidth(diagram, node)
+    );
   }
 
   private getNodePortPoint(node: FlowchartNode, anchor: string): Position {
@@ -697,8 +728,14 @@ export class DiagramEditor {
         edge.route || "orthogonal",
         edge.waypoint
       );
-      handle.setAttribute("cx", String(edge.waypoint.x));
-      handle.setAttribute("cy", String(edge.waypoint.y));
+      const waypointHandle = getEdgeWaypointHandleGeometry(edge.waypoint, true);
+      handle.setAttribute("x", String(waypointHandle.x));
+      handle.setAttribute("y", String(waypointHandle.y));
+      handle.setAttribute("width", String(waypointHandle.size));
+      handle.setAttribute("height", String(waypointHandle.size));
+      handle.setAttribute("rx", String(waypointHandle.radius));
+      handle.setAttribute("transform", waypointHandle.transform);
+      handle.setAttribute("data-anchored", "true");
       const group = svg.querySelector(
         `.docdiagram-edge-group[data-diagram-index="${diagramIndex}"][data-edge-index="${edgeIndex}"]`
       );
@@ -716,6 +753,73 @@ export class DiagramEditor {
     svg.addEventListener("pointermove", move);
     svg.addEventListener("pointerup", finish);
     svg.addEventListener("pointercancel", finish);
+  }
+
+  private moveNodeCalloutPointer(svg: SVGSVGElement, event: PointerEvent, handle: Element): void {
+    const diagramIndex = pointerNumber(handle.getAttribute("data-diagram-index") || undefined);
+    const nodeId = handle.getAttribute("data-node-id") || "";
+    const diagram = diagramAt(this.host.state, diagramIndex);
+    const node = diagram ? findFlowchartNode(diagram, nodeId)?.node : null;
+    const group = handle.closest(".docdiagram-node");
+    if (!diagram || !node || !group) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.capturePointer(svg, event);
+    const grid = getGridSize(diagram);
+    const bounds = getFlowchartNodeBounds(diagram, node);
+    const geometry = getNodeGeometry(node, bounds.x, bounds.y, bounds.width, bounds.height);
+    const strokeWidth = getSelectedNodeStrokeWidth(diagram, node);
+    const move = (moveEvent: PointerEvent) => {
+      const point = this.svgPoint(svg, moveEvent);
+      const arrow = { x: snapToGrid(point.x, grid), y: snapToGrid(point.y, grid) };
+      setNodeCalloutPointer(node, arrow);
+      this.updateNodeCalloutMarkup(group, bounds, arrow, geometry.bodyMarkup, strokeWidth);
+    };
+    const finish = (finishEvent: PointerEvent) => {
+      this.releasePointer(svg, finishEvent);
+      svg.removeEventListener("pointermove", move);
+      svg.removeEventListener("pointerup", finish);
+      svg.removeEventListener("pointercancel", finish);
+      expandCanvasForNode(diagram, node);
+      this.host.persistDiagramModels();
+      this.host.renderDocument();
+    };
+    svg.addEventListener("pointermove", move);
+    svg.addEventListener("pointerup", finish);
+    svg.addEventListener("pointercancel", finish);
+  }
+
+  private updateNodeCalloutMarkup(
+    group: Element,
+    bounds: { x: number; y: number; width: number; height: number },
+    arrow: Position | undefined,
+    bodyMarkup: string,
+    strokeWidth: number
+  ): void {
+    const pointer = arrow ? buildNodeCalloutPointer(bounds, arrow) : null;
+    if (!pointer) {
+      return;
+    }
+    for (const polygon of group.querySelectorAll(".docdiagram-node-callout, .docdiagram-node-callout-outline")) {
+      polygon.setAttribute("points", pointer.polygonPoints);
+    }
+    const maskBody = group.querySelector(".docdiagram-node-callout-mask-body");
+    if (maskBody) {
+      maskBody.outerHTML = renderNodeCalloutMaskBody(bodyMarkup);
+    }
+    // The mask clips to its own region, so it has to keep pace with the pointer or the outline is
+    // cut off as soon as the target moves beyond the originally rendered bounds.
+    const region = getNodeCalloutMaskRegion(pointer, strokeWidth);
+    for (const element of [group.querySelector("mask"), group.querySelector(".docdiagram-node-callout-mask-region")]) {
+      for (const [name, value] of Object.entries(region)) {
+        element?.setAttribute(name, String(value));
+      }
+    }
+    const handle = group.querySelector(".docdiagram-callout-handle");
+    handle?.setAttribute("cx", String(arrow?.x ?? 0));
+    handle?.setAttribute("cy", String(arrow?.y ?? 0));
   }
 
   private svgPoint(svg: SVGSVGElement, event: PointerEvent): Position {

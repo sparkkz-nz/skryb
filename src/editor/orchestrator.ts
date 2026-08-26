@@ -44,7 +44,11 @@ import {
   setEdgeStyleOverride,
   setStyleStrokeWidth,
   setEdgeMarkerStart,
-  setEdgeMarkerEnd
+  setEdgeMarkerEnd,
+  clearEdgeWaypoint,
+  setNodeCalloutPointer,
+  clearNodeCalloutPointer,
+  toggleNodeCalloutPointer
 } from "../core/diagrams/mutations";
 import {
   clampNodeSize,
@@ -59,7 +63,9 @@ import {
 import {
   buildEdgeMarkerDef,
   buildEdgePath,
+  buildNodeCalloutPointer,
   computeNodeTextLayout,
+  renderEdgeWaypointHandle,
   getEdgeMarkerDimensions,
   getNodeGeometry,
   renderNodeBody,
@@ -505,7 +511,7 @@ export class BrowserRuntime {
         this.closeDiagramExportMenus();
       }
       if (!(event.target instanceof Element) || event.target.closest(
-        ".docdiagram-toolbar, .docdiagram-node, .docdiagram-edge-group, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-inline-editor, .docdiagram-sequence-participant, .docdiagram-sequence-note, .docdiagram-sequence-message"
+        ".docdiagram-toolbar, .docdiagram-node, .docdiagram-edge-group, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-callout-handle, .docdiagram-inline-editor, .docdiagram-sequence-participant, .docdiagram-sequence-note, .docdiagram-sequence-message"
       ) || (!this.state.selectedNode && !this.state.selectedEdge && !this.state.selectedSequenceElement)) {
         return;
       }
@@ -580,6 +586,10 @@ export class BrowserRuntime {
       setNodeSize,
       setEdgeLabel,
       setEdgeRoute,
+      clearEdgeWaypoint,
+      setNodeCalloutPointer,
+      clearNodeCalloutPointer,
+      toggleNodeCalloutPointer,
       setEdgeAnchor,
       setEdgeStyleOverride,
       setStyleStrokeWidth,
@@ -597,7 +607,10 @@ export class BrowserRuntime {
       getNodeGeometry,
       renderNodeBody,
       buildEdgePath,
+      buildNodeCalloutPointer,
+      renderEdgeWaypointHandle,
       buildEdgeInspectorFields,
+      buildNodeInspectorFields,
       clampZoom,
       renderTextShapeContent,
       parseTextShapeInlineRuns,
@@ -842,7 +855,7 @@ export class BrowserRuntime {
     copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     copy.removeAttribute("style");
     copy.querySelectorAll(
-      ".docdiagram-inline-editor-host, .docdiagram-resize-handle, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-connection-preview"
+      ".docdiagram-inline-editor-host, .docdiagram-resize-handle, .docdiagram-connection-port, .docdiagram-edge-endpoint, .docdiagram-edge-waypoint, .docdiagram-callout-handle, .docdiagram-connection-preview"
     ).forEach((element) => element.remove());
     copy.querySelectorAll(".docdiagram-node-selected, .docdiagram-edge-selected").forEach((element) => {
       element.classList.remove("docdiagram-node-selected", "docdiagram-edge-selected");

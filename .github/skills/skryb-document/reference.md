@@ -253,6 +253,13 @@ review, while the reference preserves the diagram's intended rendered position.
 numeric `canvas.grid` enables snapping while moving or resizing; omit it or use
 `0` to disable snapping.
 
+Set `grid: 5` on a flowchart unless there is a reason not to. Snapping keeps
+dragged nodes, resized nodes, waypoints, and callout targets on shared
+coordinates, so edges meet anchors squarely and node edges line up instead of
+missing each other by a pixel or two. A grid of `5` is fine enough to place
+anything precisely while still doing the alignment work for you; larger values
+align more aggressively but make small adjustments coarse.
+
 ### Nodes
 
 Every node requires `id` and `shape`; `label` must be present but may be empty.
@@ -288,6 +295,7 @@ child nodes at any depth:
 | `size` | `{ width: number, height: number }`. Nodes have a minimum size; circles remain square. |
 | `palette` | Optional semantic palette role; selects the scheme-aware node treatment and clears explicit node colour overrides. |
 | `style` | Optional overrides: `fill`, `stroke`, `text`, and `strokeWidth`. `style.width` is rejected. |
+| `arrow` | Optional `{ x: number, y: number }` canvas coordinate. Draws a callout pointer from the node centre out to that point, in the node's own fill and stroke, so the node and pointer read as one speech bubble. Works on any shape. A node with no fill and no stroke (a plain `text` shape) draws the pointer in its text colour, starting at the node outline. |
 | `children` | Optional list of child nodes. Any shape can contain children, nesting has no depth limit, and child positions are relative to their parent. |
 
 Palette roles are `background`, `pale`, `light`, `neutral`, `dark`,
@@ -357,13 +365,20 @@ Every edge requires both explicit endpoint anchors:
 | `sourceAnchor`, `targetAnchor` | **Required.** `top`, `right`, `bottom`, or `left`. |
 | `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
-| `waypoint` | Optional `{ x: number, y: number }` canvas coordinate. The flowchart editor exposes one draggable waypoint for a selected edge; it splits the route into two segments via that point. |
+| `waypoint` | Optional `{ x: number, y: number }` canvas coordinate. The flowchart editor exposes one draggable waypoint for a selected edge; it splits the route into two segments via that point, honouring the edge's `route`: orthogonal legs, a two-segment polyline for `straight`, and two smoothly joined cubic curves for `curved`. |
 | `start`, `end` | `none`, `arrow`, or `circle`. Omit `start` for `none`; omit `end` for `arrow`. |
 | `style` | Optional `stroke`, `strokeWidth`, and `text` overrides. `style.width` is rejected. |
 
 Anchors resolve on the rendered shape perimeter. Endpoint markers follow the
 edge stroke colour and maintain their own definitions, so one edge's styling
 does not affect another.
+
+`orthogonal` suits most flows and reads as a conventional box-and-line diagram.
+`curved` is worth reaching for when an orthogonal route would be hard to
+follow: a long edge that doubles back, several edges converging on one anchor,
+or an edge that would otherwise run along or across an unrelated node. A curve
+separates from its neighbours and reads as one continuous line, which is often
+clearer than adding another right-angled detour.
 
 ### Sequence diagrams
 
@@ -435,7 +450,12 @@ The runtime provides per-diagram zoom, fit, pan, and edit controls. Panning can
 move the canvas beyond its visible bounds, and does not change diagram
 coordinates. In edit mode, authors can select nodes and edges, edit supported
 properties, drag nodes, resize nodes, duplicate or delete nodes, change
-connector endpoints, and drag an edge's optional waypoint. Node and edge label
+connector endpoints, and drag an edge's optional waypoint. A selected edge's
+waypoint handle is a circle while the edge has no stored waypoint and a diamond
+once one is anchored; the edge inspector's **Remove waypoint** button appears
+only for an anchored waypoint and deletes it. The node inspector's **Add
+pointer** / **Remove pointer** button toggles a callout pointer, whose target is
+then draggable from the node's callout handle. Node and edge label
 editing supports multiple lines: **Enter** adds a line, **Ctrl/Cmd+Enter**
 commits, and **Escape** cancels.
 

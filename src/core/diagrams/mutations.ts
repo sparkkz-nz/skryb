@@ -33,7 +33,18 @@ export function expandCanvasForNode(diagram: FlowchartDiagram, node: FlowchartNo
   const boundsFor = (candidate: FlowchartNode) => knownNodes.has(candidate)
     ? getFlowchartNodeBounds(diagram, candidate)
     : getNodeBounds(candidate);
-  const bounds = nodes.map(boundsFor);
+  // Callout targets are canvas coordinates outside the node box, so they have to be covered too or
+  // the pointer tip falls outside the viewBox.
+  const occupiedBounds = () => [
+    ...nodes.map(boundsFor),
+    ...nodes.filter((candidate) => candidate.arrow).map((candidate) => ({
+      x: candidate.arrow!.x,
+      y: candidate.arrow!.y,
+      width: 0,
+      height: 0
+    }))
+  ];
+  const bounds = occupiedBounds();
   const minimumX = Math.min(0, ...bounds.map((candidate) => candidate.x));
   const minimumY = Math.min(0, ...bounds.map((candidate) => candidate.y));
   const shiftX = minimumX < 0 ? padding - minimumX : 0;
@@ -48,9 +59,21 @@ export function expandCanvasForNode(diagram: FlowchartDiagram, node: FlowchartNo
         y: (Number(node.position?.y) || 0) + shiftY
       };
     }
+    // Waypoints and callout targets are absolute canvas coordinates, so they have to travel with
+    // the nodes when the canvas origin moves.
+    for (const candidate of nodes) {
+      if (candidate.arrow) {
+        candidate.arrow = { x: candidate.arrow.x + shiftX, y: candidate.arrow.y + shiftY };
+      }
+    }
+    for (const edge of diagram.edges || []) {
+      if (edge.waypoint) {
+        edge.waypoint = { x: edge.waypoint.x + shiftX, y: edge.waypoint.y + shiftY };
+      }
+    }
   }
 
-  const expandedBounds = nodes.map(boundsFor);
+  const expandedBounds = occupiedBounds();
   diagram.canvas = {
     ...diagram.canvas,
     width: Math.max(width + shiftX, ...expandedBounds.map((candidate) => candidate.x + candidate.width + padding)),
@@ -423,6 +446,38 @@ export function setEdgeLabel(edge: FlowchartEdge, label: string): FlowchartEdge 
 export function setEdgeRoute(edge: FlowchartEdge, route: string): FlowchartEdge {
   edge.route = route;
   return edge;
+}
+
+// Deletes the key rather than assigning undefined: the serializer emits every own key, so a
+// lingering `waypoint` key would round-trip into the canonical source as `waypoint: undefined`.
+export function clearEdgeWaypoint(edge: FlowchartEdge): FlowchartEdge {
+  delete edge.waypoint;
+  return edge;
+}
+
+export function setNodeCalloutPointer(node: FlowchartNode, arrow: Position): FlowchartNode {
+  node.arrow = { x: arrow.x, y: arrow.y };
+  return node;
+}
+
+export function clearNodeCalloutPointer(node: FlowchartNode): FlowchartNode {
+  delete node.arrow;
+  return node;
+}
+
+export function toggleNodeCalloutPointer(diagram: FlowchartDiagram, node: FlowchartNode): FlowchartNode {
+  if (node.arrow) {
+    return clearNodeCalloutPointer(node);
+  }
+
+  const bounds = getFlowchartNodeBounds(diagram, node);
+  const grid = getGridSize(diagram);
+  const pointer = setNodeCalloutPointer(node, {
+    x: snapToGrid(bounds.x + bounds.width / 2, grid),
+    y: snapToGrid(bounds.y + bounds.height + Math.max(60, bounds.height * 0.75), grid)
+  });
+  expandCanvasForNode(diagram, node);
+  return pointer;
 }
 
 export function setEdgeAnchor(edge: FlowchartEdge, endpoint: string, anchor: string): FlowchartEdge {

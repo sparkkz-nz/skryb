@@ -14,6 +14,7 @@ const insertTemplates: Record<string, string> = {
     "canvas:",
     "  width: 600",
     "  height: 300",
+    "  grid: 5",
     "nodes:",
     "  - id: first-node",
     "    label: First node",

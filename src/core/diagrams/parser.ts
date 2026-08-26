@@ -15,7 +15,7 @@ import {
 } from "./schema";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "children"] as const;
+const flowchartNodeFields = ["id", "label", "shape", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
 const flowchartEdgeFields = ["source", "target", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
 const flowchartEdgeStyleFields = ["stroke", "strokeWidth", "text"] as const;
@@ -286,6 +286,21 @@ function assertAllowedStyleFields(style: Record<string, unknown> | undefined, al
   }
 }
 
+function assertCoordinatePair(value: unknown, description: string): void {
+  const sentence = description.charAt(0).toUpperCase() + description.slice(1);
+
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${sentence} must be a mapping.`);
+  }
+
+  const point = value as { x?: unknown; y?: unknown };
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error(`${sentence} requires finite x and y coordinates.`);
+  }
+
+  assertAllowedFields(value as ParsedObject, ["x", "y"], description);
+}
+
 function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): void {
   if (diagram.participants !== undefined || diagram.messages !== undefined ||
     diagram.activations !== undefined || diagram.notes !== undefined || diagram.groups !== undefined) {
@@ -329,6 +344,9 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
     }
 
     assertAllowedStyleFields(node.style as Record<string, unknown> | undefined, flowchartNodeStyleFields, `node "${node.id}"`);
+    if (node.arrow !== undefined) {
+      assertCoordinatePair(node.arrow, `node "${node.id}" arrow`);
+    }
     if (nodeIds.has(node.id)) {
       throw new Error(`Duplicate flowchart node id: ${node.id}`);
     }
@@ -368,14 +386,7 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
       throw new Error(`Unsupported edge route: ${edge.route}`);
     }
     if (edge.waypoint !== undefined) {
-      if (typeof edge.waypoint !== "object" || Array.isArray(edge.waypoint)) {
-        throw new Error(`Edge "${edge.source}" -> "${edge.target}" waypoint must be a mapping.`);
-      }
-      const waypoint = edge.waypoint as { x?: unknown; y?: unknown };
-      if (!Number.isFinite(waypoint.x) || !Number.isFinite(waypoint.y)) {
-        throw new Error(`Edge "${edge.source}" -> "${edge.target}" waypoint requires finite x and y coordinates.`);
-      }
-      assertAllowedFields(edge.waypoint as unknown as ParsedObject, ["x", "y"], `edge "${edge.source}" -> "${edge.target}" waypoint`);
+      assertCoordinatePair(edge.waypoint, `edge "${edge.source}" -> "${edge.target}" waypoint`);
     }
 
     if (edge.start !== undefined && !edgeMarkerStyles.includes(edge.start as (typeof edgeMarkerStyles)[number])) {
