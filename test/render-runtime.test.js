@@ -3008,3 +3008,32 @@ test("a live inspector text field keeps the text being typed across its debounce
     "the draft is restored before the caret, so the caret lands in the restored text"
   );
 });
+
+test("the shipped flowchart starting points set a snapping grid and sit on it", () => {
+  const templates = [
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-document-template.html")),
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "docs", "quickstart.html"))
+  ];
+
+  // The docs tell authors to set canvas.grid (normally 5) and place nodes on it, so the templates
+  // they copy from have to demonstrate that rather than contradict it.
+  assert.match(runtime, /"  grid: 5",/, "the source tray's flowchart template sets a grid");
+
+  for (const template of templates) {
+    for (const source of readDiagramSources(template)) {
+      const diagram = parseDiagram(source);
+      if (diagram.type !== "flowchart") {
+        continue;
+      }
+
+      assert.equal(getGridSize(diagram), 5);
+      for (const { node } of flattenFlowchartNodes(diagram)) {
+        for (const value of [node.position?.x, node.position?.y, node.size?.width, node.size?.height]) {
+          if (value !== undefined) {
+            assert.equal(value % 5, 0, `expected ${value} to sit on the grid`);
+          }
+        }
+      }
+    }
+  }
+});

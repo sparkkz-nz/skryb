@@ -76,8 +76,11 @@ Everything happens inside the open document; there is no separate application.
   keys; double-click it to restore the default height.
 - **Diagram editing** selects a node to set its label, subtitle, shape, palette,
   status colour, fill, stroke, alignment, and size. Nodes can be dragged,
-  resized, duplicated, and reconnected; every change is serialized back into the
-  matching diagram fence.
+  resized, duplicated, and reconnected; connectors can be rerouted, given a
+  waypoint, or removed, and any node can carry a callout pointer. Every change
+  is serialized back into the matching diagram fence. Set `grid: 5` on a
+  flowchart's `canvas` so dragging and resizing snap to a shared grid and shapes
+  stay aligned.
 - **Theme and colour scheme** are set in frontmatter or from the document menu:
   `theme` is `auto`, `light`, or `dark`, and `colourScheme` is `classic`, `ice`,
   `midnight`, or `paper`. Diagrams render as live SVG and follow the theme, and

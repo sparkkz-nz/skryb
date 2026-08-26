@@ -116,6 +116,21 @@ diagram compact and include adjacent prose that explains the flow. Sequence
 diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
+Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
+nodes on multiples of that grid. Shared coordinates are what make a diagram look
+deliberate: node edges line up, rows and columns align, and connectors meet
+anchors squarely instead of missing by a pixel or two. It also makes later
+graphical edits snap into the same alignment rather than drifting out of it.
+(This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
+directive.)
+
+Prefer `orthogonal` routes for most flows. Reach for `curved` when an orthogonal
+route would be hard to follow - a long edge doubling back, several edges
+converging on one anchor, or an edge that would otherwise run along or across an
+unrelated node. A curve separates from its neighbours and reads as one
+continuous line, so it can resolve a crowded layout that would otherwise need
+another right-angled detour.
+
 An edge may include one optional `waypoint: { x: number, y: number }` in canvas
 coordinates, which every route honours: orthogonal legs, a two-segment polyline
 for `straight`, and a smooth curve through the point for `curved`. The graphical
@@ -158,6 +173,8 @@ Before returning a document, verify:
 - Every diagram declares its supported type. Every flowchart has explicit shapes
   and edge anchors and uses only supported palette, route, marker, waypoint,
   callout pointer, and style values.
+- Flowcharts set `canvas.grid` (normally `5`) and their node positions and sizes
+  are multiples of it.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

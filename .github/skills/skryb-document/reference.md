@@ -253,6 +253,13 @@ review, while the reference preserves the diagram's intended rendered position.
 numeric `canvas.grid` enables snapping while moving or resizing; omit it or use
 `0` to disable snapping.
 
+Set `grid: 5` on a flowchart unless there is a reason not to. Snapping keeps
+dragged nodes, resized nodes, waypoints, and callout targets on shared
+coordinates, so edges meet anchors squarely and node edges line up instead of
+missing each other by a pixel or two. A grid of `5` is fine enough to place
+anything precisely while still doing the alignment work for you; larger values
+align more aggressively but make small adjustments coarse.
+
 ### Nodes
 
 Every node requires `id` and `shape`; `label` must be present but may be empty.
@@ -365,6 +372,13 @@ Every edge requires both explicit endpoint anchors:
 Anchors resolve on the rendered shape perimeter. Endpoint markers follow the
 edge stroke colour and maintain their own definitions, so one edge's styling
 does not affect another.
+
+`orthogonal` suits most flows and reads as a conventional box-and-line diagram.
+`curved` is worth reaching for when an orthogonal route would be hard to
+follow: a long edge that doubles back, several edges converging on one anchor,
+or an edge that would otherwise run along or across an unrelated node. A curve
+separates from its neighbours and reads as one continuous line, which is often
+clearer than adding another right-angled detour.
 
 ### Sequence diagrams
 
