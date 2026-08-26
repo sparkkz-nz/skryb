@@ -77,6 +77,7 @@ id: first-flowchart
 canvas:
   width: 720
   height: 300
+  grid: 5
 nodes:
   - id: browser
     label: Browser
@@ -95,7 +96,7 @@ nodes:
       ## Order request
       **Authenticated** customer call
     shape: text
-    position: { x: 390, y: 18 }
+    position: { x: 390, y: 20 }
     size: { width: 260, height: 70 }
 edges:
   - source: browser
@@ -113,6 +114,16 @@ itself to its drawn shapes on first render; drag the frame's bottom edge to
 change that height, or press **Zoom to fit** to restore it. Choose **Edit** to
 make flowchart changes, then keep the edit to serialize them back into the
 matching diagram fence.
+
+Note the `grid: 5` on the canvas. It is worth setting on every flowchart:
+dragging and resizing then snap to multiples of five, so node edges line up and
+connectors meet anchors squarely instead of missing by a pixel or two. Five is
+fine enough to place anything exactly while still doing the alignment work for
+you. Omit it, or set `0`, to turn snapping off.
+
+Most connectors read best as the default `orthogonal` route. Switch one to
+`curved` when a right-angled route is hard to follow, such as a long edge that
+doubles back or one that would otherwise run across an unrelated node.
 
 Use the **text** shape for diagram annotations. Its existing **Label** editor
 accepts multiple lines and supports `# Heading`, `## Subheading`, `**bold**`,
