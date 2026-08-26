@@ -66,6 +66,9 @@ setting and writes the result back to frontmatter when you save.
 This flowchart is YAML in the document source. It shows a browser submitting an
 order to an API. Flowchart edit mode can change node and connector presentation,
 resize or duplicate nodes, reconnect edges, and drag a selected edge waypoint.
+A waypoint handle is a circle until you drag it, then a diamond; **Remove
+waypoint** in the edge inspector clears it again. **Add pointer** in the node
+inspector gives a node a callout pointer you can drag at its target.
 
 ```diagram
 type: flowchart
@@ -105,7 +108,7 @@ edges:
 ```
 
 Use the diagram toolbar to zoom, fit, or pan. Panning is visual only: it does
-not alter the stored node and waypoint coordinates. A diagram frame sizes
+not alter the stored node, waypoint, and callout coordinates. A diagram frame sizes
 itself to its drawn shapes on first render; drag the frame's bottom edge to
 change that height, or press **Zoom to fit** to restore it. Choose **Edit** to
 make flowchart changes, then keep the edit to serialize them back into the

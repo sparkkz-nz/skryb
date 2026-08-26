@@ -15,6 +15,7 @@ import {
 import { escapeHtml } from "../core/diagrams/parser";
 import { findFlowchartNode } from "../core/diagrams/hierarchy";
 import {
+  clearEdgeWaypoint,
   deleteConnector,
   deleteNode,
   duplicateNode,
@@ -31,7 +32,8 @@ import {
   setNodeStyleOverride,
   setNodeSubtitle,
   setNodeTextAlignment,
-  setStyleStrokeWidth
+  setStyleStrokeWidth,
+  toggleNodeCalloutPointer
 } from "../core/diagrams/mutations";
 import { getEdgeEffectiveStyle, getGridSize, getNodeEffectiveStyle, getSequenceElementEffectiveStyle } from "../core/diagrams/styles";
 import type { EditorState, SequenceSelection } from "./state";
@@ -84,7 +86,7 @@ export function buildNodeInspectorFields(
     ).join("")}</select></label>`,
     `<div class="docdiagram-inspector-row docdiagram-inspector-colour-row"><span>Fill</span><input type="color" class="docdiagram-inspector-fill" value="${escapeHtml(style.fill || "")}"><span>Stroke</span><input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-stroke-width">Stroke width</label><input id="docdiagram-inspector-stroke-width" type="number" aria-label="Stroke width" class="docdiagram-inspector-stroke-width" value="${Number(style.strokeWidth) || 2}" min="1" step="1"></div>`,
     `<label class="docdiagram-inspector-text-row"><span>Text</span><input type="color" class="docdiagram-inspector-text" value="${escapeHtml(style.text || "")}"></label>`,
-    `<div class="docdiagram-inspector-paired-controls"><span>Align</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-v-align">Vertical alignment</label><select id="docdiagram-inspector-text-v-align" class="docdiagram-inspector-text-v-align" aria-label="Vertical alignment"><option value="top"${node.textVAlign === "top" ? " selected" : ""}>Top</option><option value="center"${node.textVAlign !== "top" ? " selected" : ""}>Middle</option></select><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-h-align">Horizontal alignment</label><select id="docdiagram-inspector-text-h-align" class="docdiagram-inspector-text-h-align" aria-label="Horizontal alignment"><option value="left"${node.textHAlign === "left" ? " selected" : ""}>Left</option><option value="center"${node.textHAlign !== "left" && node.textHAlign !== "right" ? " selected" : ""}>Center</option><option value="right"${node.textHAlign === "right" ? " selected" : ""}>Right</option></select><span>Size</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-width">Width</label><input id="docdiagram-inspector-width" type="number" aria-label="Width" class="docdiagram-inspector-width" value="${width}" min="${widthMinimum}" step="${step}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-height">Height</label><input id="docdiagram-inspector-height" type="number" aria-label="Height" class="docdiagram-inspector-height" value="${height}" min="${heightMinimum}" step="${step}"><span></span><button type="button" class="docdiagram-inspector-delete">Delete</button><button type="button" class="docdiagram-inspector-duplicate">Duplicate</button></div>`
+    `<div class="docdiagram-inspector-paired-controls"><span>Align</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-v-align">Vertical alignment</label><select id="docdiagram-inspector-text-v-align" class="docdiagram-inspector-text-v-align" aria-label="Vertical alignment"><option value="top"${node.textVAlign === "top" ? " selected" : ""}>Top</option><option value="center"${node.textVAlign !== "top" ? " selected" : ""}>Middle</option></select><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-h-align">Horizontal alignment</label><select id="docdiagram-inspector-text-h-align" class="docdiagram-inspector-text-h-align" aria-label="Horizontal alignment"><option value="left"${node.textHAlign === "left" ? " selected" : ""}>Left</option><option value="center"${node.textHAlign !== "left" && node.textHAlign !== "right" ? " selected" : ""}>Center</option><option value="right"${node.textHAlign === "right" ? " selected" : ""}>Right</option></select><span>Size</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-width">Width</label><input id="docdiagram-inspector-width" type="number" aria-label="Width" class="docdiagram-inspector-width" value="${width}" min="${widthMinimum}" step="${step}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-height">Height</label><input id="docdiagram-inspector-height" type="number" aria-label="Height" class="docdiagram-inspector-height" value="${height}" min="${heightMinimum}" step="${step}"><span>Callout</span><button type="button" class="docdiagram-inspector-callout">${node.arrow ? "Remove pointer" : "Add pointer"}</button><span></span><button type="button" class="docdiagram-inspector-delete">Delete</button><button type="button" class="docdiagram-inspector-duplicate">Duplicate</button></div>`
   ].join("");
 }
 
@@ -115,7 +117,9 @@ export function buildEdgeInspectorFields(diagram: { theme?: string }, edge: Flow
     `<label class="docdiagram-field">Stroke<input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}"></label>`,
     `<label class="docdiagram-field">Label colour<input type="color" class="docdiagram-inspector-text" value="${escapeHtml(style.text || "")}"></label>`,
     `<label class="docdiagram-field">Stroke width<input type="number" class="docdiagram-inspector-stroke-width" value="${strokeWidth}" min="1" step="1"></label>`,
-    `<div class="docdiagram-inspector-actions"><button type="button" class="docdiagram-inspector-delete">Delete</button></div>`
+    `<div class="docdiagram-inspector-actions">${edge.waypoint
+      ? `<button type="button" class="docdiagram-inspector-clear-waypoint">Remove waypoint</button>`
+      : ""}<button type="button" class="docdiagram-inspector-delete">Delete</button></div>`
   ].join("");
 }
 
@@ -248,6 +252,9 @@ export function wireNodeInspector(host: InspectorHost, container: ParentNode, di
   change(container, ".docdiagram-inspector-stroke-width", (value) => withNode((_, node) => setStyleStrokeWidth(node, value)));
   change(container, ".docdiagram-inspector-width", (value) => withNode((diagram, node) => setNodeSize(diagram, node, "width", value)));
   change(container, ".docdiagram-inspector-height", (value) => withNode((diagram, node) => setNodeSize(diagram, node, "height", value)));
+  container.querySelector<HTMLButtonElement>(".docdiagram-inspector-callout")?.addEventListener("click", () => {
+    withNode((diagram, node) => toggleNodeCalloutPointer(diagram, node));
+  });
   container.querySelector<HTMLButtonElement>(".docdiagram-inspector-delete")?.addEventListener("click", () => {
     withNode((diagram, node) => {
       deleteNode(diagram, node.id);
@@ -286,6 +293,9 @@ export function wireEdgeInspector(host: InspectorHost, container: ParentNode, di
   change(container, ".docdiagram-inspector-stroke", (value) => withEdge((_, edge) => setEdgeStyleOverride(edge, "stroke", value)));
   change(container, ".docdiagram-inspector-text", (value) => withEdge((_, edge) => setEdgeStyleOverride(edge, "text", value)));
   change(container, ".docdiagram-inspector-stroke-width", (value) => withEdge((_, edge) => setStyleStrokeWidth(edge, value)));
+  container.querySelector<HTMLButtonElement>(".docdiagram-inspector-clear-waypoint")?.addEventListener("click", () => {
+    withEdge((_, edge) => clearEdgeWaypoint(edge));
+  });
   container.querySelector<HTMLButtonElement>(".docdiagram-inspector-delete")?.addEventListener("click", () => {
     withEdge((diagram) => {
       deleteConnector(diagram, edgeIndex);

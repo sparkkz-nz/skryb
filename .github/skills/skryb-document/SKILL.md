@@ -117,8 +117,15 @@ diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
 An edge may include one optional `waypoint: { x: number, y: number }` in canvas
-coordinates. The graphical flowchart editor can drag this waypoint; use it only
-when the default route does not communicate the relationship clearly.
+coordinates, which every route honours: orthogonal legs, a two-segment polyline
+for `straight`, and a smooth curve through the point for `curved`. The graphical
+flowchart editor can drag this waypoint; use it only when the default route does
+not communicate the relationship clearly.
+
+A node may include one optional `arrow: { x: number, y: number }` in canvas
+coordinates, which draws a callout pointer from the node centre out to that
+point in the node's own colours. Use it to tie an annotation - most often a
+`text` shape - to the thing it describes.
 
 For large or detailed diagrams, strongly prefer a `:::diagram { id=... }`
 reference at the intended reading position and place the matching fenced
@@ -131,7 +138,7 @@ Use **Edit source** for canonical Markdown, document structure, and sequence
 diagram changes. The source tray's menu can insert valid flowchart, sequence,
 diagram-reference, panel, and grid templates, and **Help** opens the published
 reference. Flowchart edit mode supports node and connector presentation,
-endpoints, and an optional edge waypoint.
+endpoints, an optional edge waypoint, and an optional node callout pointer.
 
 **Save As** keeps a hosted runtime URL in the downloaded portable document.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
@@ -149,8 +156,8 @@ Before returning a document, verify:
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
 - Every diagram declares its supported type. Every flowchart has explicit shapes
-  and edge anchors and uses only supported palette, route, marker, waypoint, and style
-  values.
+  and edge anchors and uses only supported palette, route, marker, waypoint,
+  callout pointer, and style values.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

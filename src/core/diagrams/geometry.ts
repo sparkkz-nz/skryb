@@ -225,6 +225,24 @@ function getPolylineMidpoint(points: Position[]): Position {
   return points[0];
 }
 
+function getCurveControlDistance(from: Position, to: Position): number {
+  return Math.min(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y), 80) / 2, 140);
+}
+
+// Unit vector the curve travels through a waypoint along. Using the overall source-to-target
+// direction keeps both curve segments heading the same way through the waypoint, so the join
+// stays smooth instead of forming a visible kink.
+function getWaypointTangent(source: Position, target: Position, waypoint: Position): Position {
+  for (const [from, to] of [[source, target], [source, waypoint], [waypoint, target]]) {
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length > 0) {
+      return { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+    }
+  }
+
+  return { x: 1, y: 0 };
+}
+
 export function buildEdgePath(
   source: Position,
   target: Position,
@@ -242,7 +260,40 @@ export function buildEdgePath(
   let startTangent: Position;
   let endTangent: Position;
 
-  if (waypoint) {
+  if (waypoint && route === "straight") {
+    path = `M ${formatPathPoint(source)} L ${formatPathPoint(waypoint)} L ${formatPathPoint(target)}`;
+    midpoint = waypoint;
+    startTangent = { x: waypoint.x - source.x, y: waypoint.y - source.y };
+    endTangent = { x: target.x - waypoint.x, y: target.y - waypoint.y };
+  } else if (waypoint && route === "curved") {
+    const sourceControlDistance = getCurveControlDistance(source, waypoint);
+    const targetControlDistance = getCurveControlDistance(waypoint, target);
+    const tangent = getWaypointTangent(source, target, waypoint);
+    const sourceControl = {
+      x: source.x + sourceDirection.x * sourceControlDistance,
+      y: source.y + sourceDirection.y * sourceControlDistance
+    };
+    const waypointEntry = {
+      x: waypoint.x - tangent.x * sourceControlDistance,
+      y: waypoint.y - tangent.y * sourceControlDistance
+    };
+    const waypointExit = {
+      x: waypoint.x + tangent.x * targetControlDistance,
+      y: waypoint.y + tangent.y * targetControlDistance
+    };
+    const targetControl = {
+      x: target.x + targetDirection.x * targetControlDistance,
+      y: target.y + targetDirection.y * targetControlDistance
+    };
+    path = [
+      `M ${formatPathPoint(source)}`,
+      `C ${formatPathPoint(sourceControl)} ${formatPathPoint(waypointEntry)} ${formatPathPoint(waypoint)}`,
+      `C ${formatPathPoint(waypointExit)} ${formatPathPoint(targetControl)} ${formatPathPoint(target)}`
+    ].join(" ");
+    midpoint = waypoint;
+    startTangent = { x: sourceControl.x - source.x, y: sourceControl.y - source.y };
+    endTangent = { x: target.x - targetControl.x, y: target.y - targetControl.y };
+  } else if (waypoint) {
     const anchorClearance = 24;
     const sourceIsBehind = (waypoint.x - source.x) * sourceDirection.x +
       (waypoint.y - source.y) * sourceDirection.y <= 0;
@@ -303,8 +354,7 @@ export function buildEdgePath(
     startTangent = { x: target.x - source.x, y: target.y - source.y };
     endTangent = startTangent;
   } else if (route === "curved") {
-    const distance = Math.max(Math.abs(target.x - source.x), Math.abs(target.y - source.y), 80);
-    const controlDistance = Math.min(distance / 2, 140);
+    const controlDistance = getCurveControlDistance(source, target);
     const sourceControl = {
       x: source.x + sourceDirection.x * controlDistance,
       y: source.y + sourceDirection.y * controlDistance
@@ -411,6 +461,36 @@ export function buildEdgePath(
   return { path, midpoint, startTangent, endTangent, hitPath: path };
 }
 
+// The waypoint handle doubles as a state indicator: a circle while the edge merely offers a
+// waypoint at its midpoint, and a diamond once a waypoint has actually been anchored. Both
+// states are the same element type so dragging can reshape the handle in place.
+export function getEdgeWaypointHandleGeometry(
+  point: Position,
+  anchored: boolean
+): { x: number; y: number; size: number; radius: number; transform: string } {
+  const size = anchored ? 13 : 15;
+
+  return {
+    x: point.x - size / 2,
+    y: point.y - size / 2,
+    size,
+    radius: anchored ? 2 : size / 2,
+    transform: anchored ? `rotate(45 ${point.x} ${point.y})` : ""
+  };
+}
+
+export function renderEdgeWaypointHandle(
+  diagramIndex: number,
+  edgeIndex: number,
+  point: Position,
+  anchored: boolean
+): string {
+  const handle = getEdgeWaypointHandleGeometry(point, anchored);
+  const label = anchored ? "Anchored edge waypoint" : "Edge waypoint";
+
+  return `<rect class="docdiagram-edge-waypoint" data-diagram-index="${diagramIndex}" data-edge-index="${edgeIndex}" data-anchored="${anchored}" x="${handle.x}" y="${handle.y}" width="${handle.size}" height="${handle.size}" rx="${handle.radius}"${handle.transform ? ` transform="${handle.transform}"` : ""} aria-label="${label}"/>`;
+}
+
 export function getEdgeMarkerDimensions(strokeWidth: number): { size: number; circleRadius: number } {
   const width = Math.max(1, Number(strokeWidth) || 2);
   const size = 6 + width * 2.5;
@@ -440,4 +520,119 @@ export function buildEdgeMarkerDef(
   }
 
   return "";
+}
+
+export interface NodeCalloutPointer {
+  points: Position[];
+  polygonPoints: string;
+  bounds: TextBounds;
+}
+
+// A callout pointer is a tapered triangle running from the node centre out to the callout target.
+// Anchoring the base at the centre rather than at the outline keeps the construction identical for
+// every shape: the part inside the node is either covered by the node's own fill or masked away.
+export function buildNodeCalloutPointer(
+  bounds: { x: number; y: number; width: number; height: number },
+  arrow: Position
+): NodeCalloutPointer | null {
+  const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+  const deltaX = arrow.x - center.x;
+  const deltaY = arrow.y - center.y;
+  const length = Math.hypot(deltaX, deltaY);
+
+  if (!Number.isFinite(length) || length < 1) {
+    return null;
+  }
+
+  const baseHalfWidth = Math.max(
+    6,
+    Math.min(Math.min(bounds.width, bounds.height) * 0.28, length * 0.6, 44)
+  );
+  const perpendicular = {
+    x: -deltaY / length * baseHalfWidth,
+    y: deltaX / length * baseHalfWidth
+  };
+  const points = [
+    { x: center.x + perpendicular.x, y: center.y + perpendicular.y },
+    { x: arrow.x, y: arrow.y },
+    { x: center.x - perpendicular.x, y: center.y - perpendicular.y }
+  ];
+  const xs = [...points.map((point) => point.x), bounds.x, bounds.x + bounds.width];
+  const ys = [...points.map((point) => point.y), bounds.y, bounds.y + bounds.height];
+  const minimumX = Math.min(...xs);
+  const minimumY = Math.min(...ys);
+
+  return {
+    points,
+    polygonPoints: points.map((point) => `${point.x},${point.y}`).join(" "),
+    bounds: {
+      x: minimumX,
+      y: minimumY,
+      width: Math.max(...xs) - minimumX,
+      height: Math.max(...ys) - minimumY
+    }
+  };
+}
+
+function getNodeBodyFillMarkup(bodyMarkup: string, fill: string, className: string): string {
+  const detailIndex = bodyMarkup.indexOf('<path class="docdiagram-node-detail"');
+  const body = detailIndex === -1 ? bodyMarkup : bodyMarkup.slice(0, detailIndex);
+  return body
+    .replace('class="docdiagram-node-body"', `class="${className}"`)
+    .replace("/>", ` fill="${fill}" stroke="none"/>`);
+}
+
+// The mask copy of the node body is what keeps the pointer outline outside the node. It is filled
+// only (no stroke) so the outline runs to the border's centreline and meets it without a notch.
+export function renderNodeCalloutMaskBody(bodyMarkup: string): string {
+  return getNodeBodyFillMarkup(bodyMarkup, "#000000", "docdiagram-node-callout-mask-body");
+}
+
+export function getNodeCalloutMaskRegion(
+  pointer: NodeCalloutPointer,
+  strokeWidth: number
+): { x: number; y: number; width: number; height: number } {
+  const padding = strokeWidth * 2 + 8;
+
+  return {
+    x: pointer.bounds.x - padding,
+    y: pointer.bounds.y - padding,
+    width: pointer.bounds.width + padding * 2,
+    height: pointer.bounds.height + padding * 2
+  };
+}
+
+// Renders the pointer as a fill layer plus a masked outline layer. The unmasked fill hides the
+// node's own border where the pointer joins it, and masking the outline against the node body
+// keeps it outside the node, so the two shapes read as a single speech-bubble outline.
+export function renderNodeCalloutPointer(
+  pointer: NodeCalloutPointer,
+  bodyMarkup: string,
+  style: NodeStyle,
+  strokeWidth: number,
+  maskId: string
+): string {
+  const hasFill = Boolean(style.fill) && style.fill !== "none";
+  const hasStroke = Boolean(style.stroke) && style.stroke !== "none";
+  const fill = hasFill ? style.fill : hasStroke ? "none" : style.text || "none";
+  const region = getNodeCalloutMaskRegion(pointer, strokeWidth);
+  const mask = [
+    `<mask id="${maskId}" maskUnits="userSpaceOnUse" x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}">`,
+    `<rect class="docdiagram-node-callout-mask-region" x="${region.x}" y="${region.y}" width="${region.width}" height="${region.height}" fill="#ffffff"/>`,
+    renderNodeCalloutMaskBody(bodyMarkup),
+    `</mask>`
+  ].join("");
+  // A node without a fill cannot hide the pointer's base, so the fill layer is masked too and the
+  // pointer starts at the node outline instead of overlapping the node's own content.
+  const fillMask = hasFill ? "" : ` mask="url(#${maskId})"`;
+
+  return [
+    mask,
+    fill === "none"
+      ? ""
+      : `<polygon class="docdiagram-node-callout" points="${pointer.polygonPoints}" fill="${escapeHtml(fill || "")}" stroke="none"${fillMask}/>`,
+    hasStroke
+      ? `<polygon class="docdiagram-node-callout-outline" points="${pointer.polygonPoints}" fill="none" stroke="${escapeHtml(style.stroke || "")}" stroke-width="${strokeWidth}" stroke-linejoin="round" mask="url(#${maskId})"/>`
+      : ""
+  ].join("");
 }
