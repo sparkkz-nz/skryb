@@ -20,6 +20,7 @@ import { serializeDiagram } from "../core/diagrams/serializer";
 import { findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, reparentFlowchartNode } from "../core/diagrams/hierarchy";
 import {
   clampZoom,
+  getWheelPixels,
   getWheelZoom,
   createNode,
   expandCanvasForNode,
@@ -660,6 +661,7 @@ export class BrowserRuntime {
       buildEdgeInspectorFields,
       buildNodeInspectorFields,
       clampZoom,
+      getWheelPixels,
       getWheelZoom,
       renderTextShapeContent,
       parseTextShapeInlineRuns,

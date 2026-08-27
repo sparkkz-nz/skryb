@@ -683,13 +683,14 @@ export function injectStyles(): void {
       margin: 1.5rem 0;
       height: min(70vh, 42rem);
       min-height: 16rem;
-      overflow: auto;
+      /* The camera offset is the only thing that moves the canvas, so the frame
+         itself never scrolls. Native scrolling cannot reach past the canvas
+         origin, which put anywhere the camera had moved left of it out of
+         reach. */
+      overflow: hidden;
       padding: 1rem;
       position: relative;
       resize: vertical;
-    }
-    .docdiagram {
-      scrollbar-width: none;
     }
     .docdiagram[data-expanded="true"] {
       border-radius: 0;
@@ -706,9 +707,6 @@ export function injectStyles(): void {
       bottom: var(--docdiagram-source-tray-height, 0px);
       resize: none;
       z-index: 25;
-    }
-    .docdiagram::-webkit-scrollbar {
-      display: none;
     }
     .docdiagram-panning svg {
       cursor: grabbing;

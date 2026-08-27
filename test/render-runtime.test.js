@@ -84,6 +84,7 @@ const {
   clearEdgeWaypoint,
   toggleNodeCalloutPointer,
   clampZoom,
+  getWheelPixels,
   getWheelZoom,
   paletteRoles,
   desugarBlockScalars,
@@ -1219,9 +1220,15 @@ test("diagram viewports can be vertically resized", () => {
   assert.match(diagramEditor, /!isViewportResizePointer\(frame, event\)/);
 });
 
-test("diagram scrollbars are visually hidden while retaining overflow support", () => {
-  assert.match(runtime, /\.docdiagram \{\s*scrollbar-width: none;/);
-  assert.match(runtime, /\.docdiagram::-webkit-scrollbar \{\s*display: none;/);
+test("a diagram frame never scrolls natively, so the camera offset has no bounds", () => {
+  // Native scrolling cannot reach past the canvas origin, so anything the camera
+  // moved left of or above it was unreachable. The camera offset is now the only
+  // thing that positions the canvas, which is what lets a diagram be pushed into
+  // a corner - or right out of view, with Zoom to fit to recover.
+  assert.match(runtime, /\.docdiagram \{[^}]*overflow: hidden;/);
+  assert.doesNotMatch(runtime, /\.docdiagram \{[^}]*overflow: auto;/);
+  // The scrollbar-hiding rules the frame used to need are gone with it.
+  assert.doesNotMatch(runtime, /\.docdiagram::-webkit-scrollbar/);
 });
 
 test("flowchart edge waypoints parse, render, route, and round-trip", () => {
@@ -3457,4 +3464,14 @@ test("ctrl or cmd wheel zoom is registered so it can suppress the browser's own 
   // The listener has to be non-passive, or preventDefault is ignored and the
   // gesture zooms the whole page instead of the diagram.
   assert.match(runtime, /"wheel"[\s\S]{0,120}passive:\s*!1/, "the wheel listener opts out of passive");
+});
+
+test("wheel deltas normalise to pixels whichever unit the device reports", () => {
+  assert.equal(getWheelPixels(100), 100);
+  assert.equal(getWheelPixels(-100), -100);
+  assert.equal(getWheelPixels(3, 1), 48, "lines are read as pixels");
+  assert.equal(getWheelPixels(1, 2), 400, "pages are read as pixels");
+  // Panning and zooming share this, so a device reporting lines moves a diagram
+  // the same distance as one reporting the equivalent in pixels.
+  assert.equal(getWheelZoom(100, 3, 1), getWheelZoom(100, getWheelPixels(3, 1), 0));
 });

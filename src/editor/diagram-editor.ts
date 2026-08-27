@@ -13,6 +13,7 @@ import {
   duplicateNode,
   expandCanvasForNode,
   getResizeNodeOrigin,
+  getWheelPixels,
   getWheelZoom,
   reconnectConnector,
   resizeFlowchartNode,
@@ -74,34 +75,50 @@ export class DiagramEditor {
           this.beginCanvasPan(svg, event);
         }
       });
-      // Not passive, because holding Ctrl or Cmd while scrolling otherwise zooms
-      // the whole page and the diagram never sees the gesture.
-      frame.addEventListener("wheel", (event) => this.zoomWithWheel(svg, event), { passive: false });
+      // Not passive, because both gestures replace a browser default: Ctrl or
+      // Cmd with the wheel would zoom the whole page, and a plain wheel would
+      // scroll it.
+      frame.addEventListener("wheel", (event) => this.moveCanvasWithWheel(svg, event), { passive: false });
     }
   }
 
   /**
-   * Zooms a diagram under the pointer on Ctrl/Cmd + wheel, leaving a plain wheel
-   * to scroll the frame as usual. The point under the cursor is held in place by
-   * measuring where it lands after the resize and correcting the camera by the
-   * difference, which avoids having to model how the frame's scroll, layout and
-   * camera offset combine. Like panning, this writes to the element directly and
-   * only records the result in state, because a re-render per wheel event would
-   * rebuild the whole document.
+   * Ctrl or Cmd with the wheel zooms; the wheel alone pans. Both move the camera
+   * offset, which is the only thing that positions the canvas, so neither has
+   * bounds: the diagram can be pushed into a corner to clear space, or right out
+   * of view, and Zoom to fit brings it back. Native scrolling used to do the
+   * panning, but it cannot reach past the canvas origin, so anything moved left
+   * of it became unreachable.
+   *
+   * Like dragging, this writes to the element and only records the result in
+   * state, because a re-render per wheel event would rebuild the whole document.
    */
-  private zoomWithWheel(svg: SVGSVGElement, event: WheelEvent): void {
+  private moveCanvasWithWheel(svg: SVGSVGElement, event: WheelEvent): void {
+    event.preventDefault();
+    const diagramIndex = pointerNumber(svg.dataset.diagramIndex);
+    const offset = this.host.state.diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
+
     if (!event.ctrlKey && !event.metaKey) {
+      // Shift with a wheel that only reports a vertical delta is the usual way
+      // to ask for horizontal movement on a mouse that has no horizontal wheel.
+      const primary = getWheelPixels(event.deltaY, event.deltaMode);
+      const sideways = getWheelPixels(event.deltaX, event.deltaMode);
+      this.setCameraOffset(svg, diagramIndex, {
+        x: offset.x - (event.shiftKey && !sideways ? primary : sideways),
+        y: offset.y - (event.shiftKey && !sideways ? 0 : primary)
+      });
       return;
     }
-    event.preventDefault();
 
-    const diagramIndex = pointerNumber(svg.dataset.diagramIndex);
     const currentZoom = this.host.state.diagramZooms.get(diagramIndex) || 100;
     const nextZoom = getWheelZoom(currentZoom, event.deltaY, event.deltaMode);
     if (nextZoom === currentZoom) {
       return;
     }
 
+    // The point under the cursor is held in place by measuring where it lands
+    // after the resize and correcting by the difference, rather than modelling
+    // how layout and the camera offset combine to place the canvas.
     const before = svg.getBoundingClientRect();
     const anchorX = before.width ? (event.clientX - before.left) / before.width : 0.5;
     const anchorY = before.height ? (event.clientY - before.top) / before.height : 0.5;
@@ -110,13 +127,15 @@ export class DiagramEditor {
     svg.style.width = `${nextZoom}%`;
 
     const after = svg.getBoundingClientRect();
-    const offset = this.host.state.diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
-    const nextOffset = {
+    this.setCameraOffset(svg, diagramIndex, {
       x: offset.x + event.clientX - (after.left + anchorX * after.width),
       y: offset.y + event.clientY - (after.top + anchorY * after.height)
-    };
-    this.host.state.diagramCameraOffsets.set(diagramIndex, nextOffset);
-    svg.style.transform = `translate(${nextOffset.x}px, ${nextOffset.y}px)`;
+    });
+  }
+
+  private setCameraOffset(svg: SVGSVGElement, diagramIndex: number, offset: Position): void {
+    this.host.state.diagramCameraOffsets.set(diagramIndex, offset);
+    svg.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
   }
 
   public enableSequenceSelection(): void {

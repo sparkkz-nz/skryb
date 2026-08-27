@@ -454,13 +454,18 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
-The runtime provides per-diagram zoom, fit, pan, and edit controls. Holding
-Ctrl or Cmd while scrolling the wheel over a diagram zooms it around the pointer,
-keeping whatever sits under the cursor in place; the browser's own page zoom is
-suppressed for that gesture, and a plain wheel still scrolls the frame. Zoom is
-bounded between a quarter and eight times the frame width. Panning can
-move the canvas beyond its visible bounds, and does not change diagram
-coordinates. In edit mode, authors can select nodes and edges, edit supported
+The runtime provides per-diagram zoom, fit, pan, and edit controls. Over a
+diagram, the wheel pans it and Ctrl or Cmd with the wheel zooms it around the
+pointer, keeping whatever sits under the cursor in place. Shift with a wheel that
+reports only a vertical delta pans sideways. Both gestures replace a browser
+default over that frame, so the page neither scrolls nor zooms while the pointer
+is over a diagram.
+
+Neither panning nor scrolling has bounds: a diagram can be pushed into a corner
+to clear working space, or moved out of view entirely, and **Zoom to fit**
+returns it. Zoom is bounded between a quarter and eight times the frame width.
+Panning does not change diagram coordinates. In edit mode, authors can select
+nodes and edges, edit supported
 properties, drag nodes, resize nodes, duplicate or delete nodes, change
 connector endpoints, and drag an edge's optional waypoint. A selected edge's
 waypoint handle is a circle while the edge has no stored waypoint and a diamond

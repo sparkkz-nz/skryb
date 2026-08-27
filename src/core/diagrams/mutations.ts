@@ -520,20 +520,26 @@ export function clampZoom(value: unknown): number {
 }
 
 /**
- * Zoom reached by one wheel gesture. Deltas arrive in whichever unit the device
- * reports, so they are converted to approximate pixels first: otherwise a notch
- * from a wheel reporting lines would zoom a fraction as far as the same notch
- * from one reporting pixels. The step is proportional rather than a fixed number
- * of percentage points, so zooming out is the exact inverse of zooming in and a
- * gesture feels the same at every magnification.
+ * A wheel delta converted to approximate pixels. Devices report deltas in
+ * pixels, lines or pages, so without this a wheel reporting lines would move a
+ * diagram a fraction as far as one reporting the equivalent in pixels.
  */
-export function getWheelZoom(currentZoom: unknown, deltaY: number, deltaMode = 0): number {
+export function getWheelPixels(delta: number, deltaMode = 0): number {
   const pixelsPerLine = 16;
   const pixelsPerPage = 400;
-  const sensitivity = 0.0025;
-  const pixels = deltaMode === 1
-    ? deltaY * pixelsPerLine
-    : deltaMode === 2 ? deltaY * pixelsPerPage : deltaY;
+  if (deltaMode === 1) {
+    return delta * pixelsPerLine;
+  }
+  return deltaMode === 2 ? delta * pixelsPerPage : delta;
+}
 
-  return clampZoom(clampZoom(currentZoom) * Math.exp(-pixels * sensitivity));
+/**
+ * Zoom reached by one wheel gesture. The step is proportional rather than a
+ * fixed number of percentage points, so zooming out is the exact inverse of
+ * zooming in and a gesture feels the same at every magnification.
+ */
+export function getWheelZoom(currentZoom: unknown, deltaY: number, deltaMode = 0): number {
+  const sensitivity = 0.0025;
+
+  return clampZoom(clampZoom(currentZoom) * Math.exp(-getWheelPixels(deltaY, deltaMode) * sensitivity));
 }
