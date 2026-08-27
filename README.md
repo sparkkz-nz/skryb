@@ -86,7 +86,8 @@ Everything happens inside the open document; there is no separate application.
   `midnight`, or `paper`. Diagrams render as live SVG and follow the theme, and
   a menu change becomes canonical frontmatter when the document is saved.
 - **Layout and zoom** switch the reading view between centred and full-width,
-  and zoom, fit, or pan a diagram inside its frame. These are view controls:
+  and zoom, fit, or pan a diagram inside its frame. Ctrl/Cmd + wheel over a
+  diagram zooms around the pointer. These are view controls:
   panning and zooming never alter stored coordinates. A diagram frame sizes
   itself to the drawn shapes on first render, so short diagrams leave no empty
   band; drag the frame's bottom edge to resize it, or press **Zoom to fit** to

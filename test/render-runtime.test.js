@@ -84,6 +84,7 @@ const {
   clearEdgeWaypoint,
   toggleNodeCalloutPointer,
   clampZoom,
+  getWheelZoom,
   paletteRoles,
   desugarBlockScalars,
   parseTextShapeInlineRuns,
@@ -1205,6 +1206,9 @@ test("clampZoom limits diagram zoom to supported discrete bounds", () => {
   assert.equal(clampZoom(10), 25);
   assert.equal(clampZoom(125), 125);
   assert.equal(clampZoom(600), 600);
+  // A wheel gesture can raise the zoom continuously, so it needs a ceiling to
+  // stop a runaway one leaving the diagram unrecoverably large.
+  assert.equal(clampZoom(5000), 800);
 });
 
 test("diagram viewports can be vertically resized", () => {
@@ -3411,4 +3415,46 @@ test("the expanded frame hands its controls to the document toolbar", () => {
     "docked controls get layout that suits a row rather than their own frame"
   );
   assert.match(runtime, /dockExpandedDiagramToolbar|prepend/, "the runtime moves the toolbar when expanded");
+});
+
+test("a wheel gesture zooms proportionally and is reversible", () => {
+  // Zooming out has to undo zooming in exactly, or repeatedly nudging the wheel
+  // back and forth would drift the diagram away from where it started.
+  assert.equal(getWheelZoom(getWheelZoom(100, -100), 100), 100);
+  assert.equal(getWheelZoom(getWheelZoom(250, -37), 37).toFixed(6), "250.000000");
+
+  // Proportional rather than a fixed number of points, so a gesture feels the
+  // same at every magnification.
+  const fromHundred = getWheelZoom(100, -100) / 100;
+  const fromFourHundred = getWheelZoom(400, -100) / 400;
+  assert.equal(fromHundred.toFixed(6), fromFourHundred.toFixed(6));
+
+  // One notch of a detented wheel lands near the toolbar's own zoom step.
+  assert.ok(getWheelZoom(100, -100) > 120 && getWheelZoom(100, -100) < 135);
+});
+
+test("wheel zoom reads line and page deltas as comparable to pixel deltas", () => {
+  // A device reporting three lines must not zoom a sixteenth as far as one
+  // reporting the equivalent in pixels.
+  assert.equal(getWheelZoom(100, -3, 1), getWheelZoom(100, -48, 0));
+  assert.equal(getWheelZoom(100, -1, 2), getWheelZoom(100, -400, 0));
+  assert.ok(getWheelZoom(100, -3, 1) > 110, "a line-mode notch is a usable step");
+});
+
+test("wheel zoom stays inside the supported bounds however hard it is driven", () => {
+  let zoomedIn = 100;
+  let zoomedOut = 100;
+  for (let step = 0; step < 200; step += 1) {
+    zoomedIn = getWheelZoom(zoomedIn, -200);
+    zoomedOut = getWheelZoom(zoomedOut, 200);
+  }
+
+  assert.equal(zoomedIn, 800);
+  assert.equal(zoomedOut, 25);
+});
+
+test("ctrl or cmd wheel zoom is registered so it can suppress the browser's own page zoom", () => {
+  // The listener has to be non-passive, or preventDefault is ignored and the
+  // gesture zooms the whole page instead of the diagram.
+  assert.match(runtime, /"wheel"[\s\S]{0,120}passive:\s*!1/, "the wheel listener opts out of passive");
 });

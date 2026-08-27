@@ -510,6 +510,30 @@ export function setEdgeMarkerEnd(edge: FlowchartEdge, markerStyle: string): Flow
   return edge;
 }
 
+/**
+ * Diagram zoom as a percentage of the frame width. The ceiling matters now that
+ * a wheel gesture can raise the zoom continuously rather than a button step at a
+ * time, and it stops a runaway gesture leaving the diagram unrecoverably large.
+ */
 export function clampZoom(value: unknown): number {
-  return Math.max(25, Number(value) || 100);
+  return Math.min(Math.max(25, Number(value) || 100), 800);
+}
+
+/**
+ * Zoom reached by one wheel gesture. Deltas arrive in whichever unit the device
+ * reports, so they are converted to approximate pixels first: otherwise a notch
+ * from a wheel reporting lines would zoom a fraction as far as the same notch
+ * from one reporting pixels. The step is proportional rather than a fixed number
+ * of percentage points, so zooming out is the exact inverse of zooming in and a
+ * gesture feels the same at every magnification.
+ */
+export function getWheelZoom(currentZoom: unknown, deltaY: number, deltaMode = 0): number {
+  const pixelsPerLine = 16;
+  const pixelsPerPage = 400;
+  const sensitivity = 0.0025;
+  const pixels = deltaMode === 1
+    ? deltaY * pixelsPerLine
+    : deltaMode === 2 ? deltaY * pixelsPerPage : deltaY;
+
+  return clampZoom(clampZoom(currentZoom) * Math.exp(-pixels * sensitivity));
 }

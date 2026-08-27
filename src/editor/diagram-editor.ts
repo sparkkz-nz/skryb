@@ -13,6 +13,7 @@ import {
   duplicateNode,
   expandCanvasForNode,
   getResizeNodeOrigin,
+  getWheelZoom,
   reconnectConnector,
   resizeFlowchartNode,
   setEdgeLabel,
@@ -73,7 +74,49 @@ export class DiagramEditor {
           this.beginCanvasPan(svg, event);
         }
       });
+      // Not passive, because holding Ctrl or Cmd while scrolling otherwise zooms
+      // the whole page and the diagram never sees the gesture.
+      frame.addEventListener("wheel", (event) => this.zoomWithWheel(svg, event), { passive: false });
     }
+  }
+
+  /**
+   * Zooms a diagram under the pointer on Ctrl/Cmd + wheel, leaving a plain wheel
+   * to scroll the frame as usual. The point under the cursor is held in place by
+   * measuring where it lands after the resize and correcting the camera by the
+   * difference, which avoids having to model how the frame's scroll, layout and
+   * camera offset combine. Like panning, this writes to the element directly and
+   * only records the result in state, because a re-render per wheel event would
+   * rebuild the whole document.
+   */
+  private zoomWithWheel(svg: SVGSVGElement, event: WheelEvent): void {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+    event.preventDefault();
+
+    const diagramIndex = pointerNumber(svg.dataset.diagramIndex);
+    const currentZoom = this.host.state.diagramZooms.get(diagramIndex) || 100;
+    const nextZoom = getWheelZoom(currentZoom, event.deltaY, event.deltaMode);
+    if (nextZoom === currentZoom) {
+      return;
+    }
+
+    const before = svg.getBoundingClientRect();
+    const anchorX = before.width ? (event.clientX - before.left) / before.width : 0.5;
+    const anchorY = before.height ? (event.clientY - before.top) / before.height : 0.5;
+
+    this.host.state.diagramZooms.set(diagramIndex, nextZoom);
+    svg.style.width = `${nextZoom}%`;
+
+    const after = svg.getBoundingClientRect();
+    const offset = this.host.state.diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
+    const nextOffset = {
+      x: offset.x + event.clientX - (after.left + anchorX * after.width),
+      y: offset.y + event.clientY - (after.top + anchorY * after.height)
+    };
+    this.host.state.diagramCameraOffsets.set(diagramIndex, nextOffset);
+    svg.style.transform = `translate(${nextOffset.x}px, ${nextOffset.y}px)`;
   }
 
   public enableSequenceSelection(): void {

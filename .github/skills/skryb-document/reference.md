@@ -454,7 +454,11 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
-The runtime provides per-diagram zoom, fit, pan, and edit controls. Panning can
+The runtime provides per-diagram zoom, fit, pan, and edit controls. Holding
+Ctrl or Cmd while scrolling the wheel over a diagram zooms it around the pointer,
+keeping whatever sits under the cursor in place; the browser's own page zoom is
+suppressed for that gesture, and a plain wheel still scrolls the frame. Zoom is
+bounded between a quarter and eight times the frame width. Panning can
 move the canvas beyond its visible bounds, and does not change diagram
 coordinates. In edit mode, authors can select nodes and edges, edit supported
 properties, drag nodes, resize nodes, duplicate or delete nodes, change
