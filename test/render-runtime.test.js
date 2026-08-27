@@ -87,7 +87,11 @@ const {
   paletteRoles,
   desugarBlockScalars,
   parseTextShapeInlineRuns,
-  renderTextShapeContent
+  renderTextShapeContent,
+  extractDiagramFences,
+  getDiagramId,
+  setDiagramId,
+  setFrontmatterDoctype
 } = context.globalThis.DocDiagramCore;
 
 function readTemplateSource(filePath) {
@@ -3012,6 +3016,7 @@ test("a live inspector text field keeps the text being typed across its debounce
 test("the shipped flowchart starting points set a snapping grid and sit on it", () => {
   const templates = [
     readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-document-template.html")),
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-diagram-template.html")),
     readTemplateSource(path.resolve(__dirname, "..", "pages", "docs", "quickstart.html"))
   ];
 
@@ -3035,5 +3040,201 @@ test("the shipped flowchart starting points set a snapping grid and sit on it", 
         }
       }
     }
+  }
+});
+
+test("doctype defaults to document and only accepts the supported values", () => {
+  assert.equal(resolveDocument("# Untitled").doctype, "document");
+  assert.equal(resolveDocument("---\ndoctype: diagram\n---\n# Untitled").doctype, "diagram");
+  assert.throws(
+    () => resolveDocument("---\ndoctype: poster\n---\n# Untitled"),
+    /Unsupported document doctype: poster/
+  );
+});
+
+test("setFrontmatterDoctype adds a header when there is none and rewrites it when there is", () => {
+  assert.equal(
+    setFrontmatterDoctype("# Untitled", "diagram"),
+    "---\ndoctype: diagram\n---\n# Untitled"
+  );
+  assert.equal(
+    setFrontmatterDoctype("---\ntheme: dark\ndoctype: diagram\n---\n# Untitled", "document"),
+    "---\ntheme: dark\ndoctype: document\n---\n# Untitled"
+  );
+  // Switching back and forth must not accumulate duplicate keys, which would
+  // make the frontmatter ambiguous.
+  assert.equal(
+    setFrontmatterDoctype(setFrontmatterDoctype("---\ntheme: dark\n---\n# Untitled", "diagram"), "document"),
+    "---\ntheme: dark\ndoctype: document\n---\n# Untitled"
+  );
+});
+
+test("extractDiagramFences pulls out every diagram, skipping frontmatter and non-diagram fences", () => {
+  const source = [
+    "---",
+    "doctype: diagram",
+    "---",
+    "# Title",
+    "",
+    "```js",
+    "// not a diagram",
+    "```",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: first",
+    "nodes: []",
+    "```",
+    "",
+    "```diagram",
+    "type: sequence",
+    "id: second",
+    "participants: []",
+    "```"
+  ].join("\n");
+
+  const diagrams = extractDiagramFences(source);
+
+  assert.equal(diagrams.length, 2);
+  assert.equal(diagrams.map((diagram) => diagram.id).join(","), "first,second");
+  assert.match(diagrams[0].source, /^type: flowchart\n/);
+  assert.equal(diagrams[0].source.includes("```"), false, "the fence markers stay out of the diagram source");
+});
+
+test("extractDiagramFences ignores a diagram nested inside a longer fence", () => {
+  const source = [
+    "````markdown",
+    "```diagram",
+    "type: flowchart",
+    "id: illustration-only",
+    "```",
+    "````",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: real",
+    "```"
+  ].join("\n");
+
+  assert.equal(extractDiagramFences(source).map((diagram) => diagram.id).join(","), "real");
+});
+
+test("extractDiagramFences reads diagrams out of a block-quoted fence", () => {
+  const source = ["> ```diagram", "> type: flowchart", "> id: quoted", "> ```"].join("\n");
+  const [diagram] = extractDiagramFences(source);
+
+  assert.equal(diagram.id, "quoted");
+  assert.equal(diagram.source, "type: flowchart\nid: quoted");
+});
+
+test("setDiagramId rewrites an existing id and adds one when the diagram has none", () => {
+  assert.equal(
+    setDiagramId("type: flowchart\nid: original\nnodes: []", "renamed"),
+    "type: flowchart\nid: renamed\nnodes: []"
+  );
+  assert.equal(
+    setDiagramId("type: flowchart\nnodes: []", "added"),
+    "id: added\ntype: flowchart\nnodes: []"
+  );
+  // A quoted id is still the diagram's id, so it must be replaced rather than
+  // left behind next to a second id line.
+  assert.equal(getDiagramId(setDiagramId("id: \"quoted id\"\ntype: flowchart", "renamed")), "renamed");
+});
+
+test("an imported diagram keeps rendering after its id is rewritten to avoid a clash", () => {
+  const imported = extractDiagramFences([
+    "```diagram",
+    "type: flowchart",
+    "id: document-flow",
+    "canvas:",
+    "  width: 400",
+    "  height: 200",
+    "nodes:",
+    "  - id: only",
+    "    label: Only",
+    "    shape: rounded-rectangle",
+    "    position: { x: 20, y: 20 }",
+    "```"
+  ].join("\n"))[0];
+
+  const renamed = setDiagramId(imported.source, "document-flow-2");
+  const diagram = parseDiagram(renamed);
+
+  assert.equal(diagram.id, "document-flow-2");
+  assert.equal(diagram.nodes[0].label, "Only");
+  // The round trip has to stay stable, because the runtime re-serializes every
+  // diagram back into the fence whenever the model is persisted.
+  assert.equal(getDiagramId(serializeDiagram(diagram)), "document-flow-2");
+});
+
+test("a document with two diagrams sharing an id is rejected, which is what import guards against", () => {
+  const duplicate = ["```diagram", "type: flowchart", "id: shared", "```"].join("\n");
+
+  assert.throws(() => validateDocumentSource(`${duplicate}\n\n${duplicate}`), /Duplicate diagram id: shared/);
+});
+
+const sampleNodeLines = [
+  "id: sample",
+  "canvas:",
+  "  width: 400",
+  "  height: 200",
+  "nodes:",
+  "  - id: only",
+  "    label: Only",
+  "    shape: rounded-rectangle",
+  "    position: { x: 20, y: 20 }"
+];
+
+test("the diagram toolbar offers an expand toggle that reports its pressed state", () => {
+  const source = flowchartSource(sampleNodeLines);
+  const collapsed = renderDiagram(source, 0);
+
+  assert.match(collapsed, /class="docdiagram-icon-button docdiagram-toggle-expand"[^>]*aria-pressed="false"/);
+  assert.match(collapsed, /<figure class="docdiagram"[^>]*data-expanded="false"/);
+  assert.match(collapsed, /aria-label="Expand diagram"/);
+});
+
+test("the diagram export menu offers saving the diagram as its own Skryb document", () => {
+  const source = flowchartSource(sampleNodeLines);
+
+  assert.match(renderDiagram(source, 0), /class="docdiagram-save-diagram" data-diagram-index="0">Save as Skryb diagram</);
+});
+
+test("the source tray menu offers importing a diagram from another document", () => {
+  assert.match(runtime, /docdiagram-source-import/, "the tray exposes an import control");
+  assert.match(runtime, /Import diagram/, "the import control is labelled for authors");
+});
+
+test("an expanded frame drops its stored viewport height so it can fill the window", () => {
+  // The height the reader resized the frame to must not be re-applied inline
+  // while the frame is expanded, or it would fight the full-window layout.
+  assert.match(
+    runtime,
+    /docdiagram-source-tray-height, 0px\)/,
+    "the expanded frame stops above the source tray instead of hiding behind it"
+  );
+  assert.match(runtime, /\.docdiagram\[data-expanded="true"\]/, "expanded frames get their own layout");
+});
+
+test("the shipped diagram template is a valid doctype: diagram document", () => {
+  const source = readTemplateSource(
+    path.resolve(__dirname, "..", "pages", "templates", "skryb-diagram-template.html")
+  );
+  const document = validateDocumentSource(source);
+
+  assert.equal(document.doctype, "diagram");
+  assert.equal(extractDiagramFences(source).length, 1, "a diagram document holds exactly one diagram");
+});
+
+test("setDiagramId inserts the new id literally, so replacement patterns in it are not expanded", () => {
+  // The id comes from an imported file, and String.replace would otherwise
+  // treat $& and friends as references to the matched text, silently producing
+  // a different id from the one uniqueness was checked against.
+  for (const id of ["$&", "$'", "$`", "$1", "plain-id"]) {
+    assert.equal(
+      getDiagramId(setDiagramId("type: flowchart\nid: original\nnodes: []", id)),
+      id,
+      `expected the id to survive verbatim: ${id}`
+    );
   }
 });

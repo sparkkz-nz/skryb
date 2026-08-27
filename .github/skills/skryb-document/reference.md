@@ -34,13 +34,21 @@ colourScheme: ice
 | --- | --- | --- |
 | `theme` | `auto`, `light`, `dark` | `auto` |
 | `colourScheme` | `classic`, `ice`, `midnight`, `paper` | `classic` |
+| `doctype` | `document`, `diagram` | `document` |
 
 Unknown or malformed frontmatter is not a supported extension point. The
-runtime reports unsupported `theme` and `colourScheme` values. `auto` follows
-the viewer's system preference. The selected colour scheme supplies designed
-light and dark variants to document chrome, components, diagrams, edges, and
-markers. The document menu can change either setting; those changes become
-canonical when the document is saved.
+runtime reports unsupported `theme`, `colourScheme`, and `doctype` values.
+`auto` follows the viewer's system preference. The selected colour scheme
+supplies designed light and dark variants to document chrome, components,
+diagrams, edges, and markers. The document menu can change any of the three;
+those changes become canonical when the document is saved.
+
+`doctype: diagram` opens the document with its first diagram already expanded
+to fill the window, which suits a file that exists to hold one diagram. It is a
+presentation default rather than a separate format: the document is otherwise
+unchanged, the rest of its Markdown still renders behind the expanded frame,
+and collapsing the frame reveals it. Every editing, export, and save feature
+behaves identically under either doctype.
 
 ## Markdown compatibility
 
@@ -472,7 +480,12 @@ keeps focus while the document updates. The runtime preserves the reader and
 diagram scroll positions where possible.
 
 The source tray menu can insert a valid flowchart, sequence diagram, diagram
-reference, panel, or grid template at the cursor. Its **Help** option opens
+reference, panel, or grid template at the cursor. **Import diagram…** reads a
+diagram out of another saved Skryb document (or a plain Markdown file) and
+inserts it at the cursor; when the file holds several diagrams it asks which
+one. An imported diagram is validated before it is inserted, and its `id` is
+rewritten when the current document already uses that id, because duplicate
+diagram ids stop the whole document rendering. Its **Help** option opens
 this reference. Use the tray for document structure and sequence-diagram
 changes; the graphical editor is for flowchart presentation and connections.
 
@@ -486,8 +499,9 @@ the last valid version instead.
 
 Use Cmd/Ctrl+Shift+E to open or close the source tray; opening is suppressed
 while focus is in another editable field, but the shortcut closes an open tray
-even from its textarea. Escape closes an open document menu but does not discard
-source text. Cmd/Ctrl+S downloads the current valid source. Native textarea undo
+even from its textarea. Escape closes an open document menu and collapses an
+expanded diagram, but does not discard source text. Cmd/Ctrl+S downloads the
+current valid source. Native textarea undo
 and redo work normally and each undo or redo follows the same live-render path.
 Closing the tray returns keyboard focus to the document-menu button.
 
@@ -496,18 +510,29 @@ matching canonical-source occurrence. Generated controls and text with no exact
 source match are ignored. This navigation intentionally runs only from rendered
 content to source; source text does not attempt to infer a rendered location.
 
-The document menu also changes the theme and colour scheme, which writes
-frontmatter into the canonical source. **Save As** downloads a portable HTML
-copy that retains an external runtime URL. **Save for Offline** downloads a
+The document menu also changes the theme, colour scheme, and doctype, which
+writes frontmatter into the canonical source. **Save As** downloads a portable
+HTML copy that retains an external runtime URL. **Save for Offline** downloads a
 self-contained copy with the selected runtime embedded at the end of its body.
 The latter reports an error rather than producing a partial document if the
 runtime cannot be obtained.
 
+Each diagram frame has an **Expand** control that grows it to fill the window,
+and collapses it again from the same button or with Escape. An expanded frame
+stops above an open source tray rather than hiding behind it, so source and
+diagram stay usable together, and its own controls move to the left so they
+stay clear of the document menu and inspector. Expanding and collapsing both
+zoom the diagram to fit the new frame width; neither alters stored coordinates,
+and a frame returns to its previous height when it collapses.
+
 Each rendered diagram has an **Export** menu in its toolbar. **Open full
 diagram** opens a standalone SVG in a new tab without editor controls. **Save
+as Skryb diagram** downloads that one diagram as its own editable Skryb
+document with `doctype: diagram` set, which the source tray's **Import
+diagram…** can read back into any other document. **Save
 as SVG** downloads that same vector image; it can be opened directly in a
 browser or a compatible graphics application. **Print / Save as PDF** opens the
-browser print dialog for the diagram alone. All three actions preserve the
+browser print dialog for the diagram alone. All three SVG actions preserve the
 diagram's current theme background and system sans-serif font stack. The
 standalone export never includes editing controls, current zoom, or pan state.
 

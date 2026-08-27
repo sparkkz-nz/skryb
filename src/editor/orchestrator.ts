@@ -74,11 +74,15 @@ import {
 } from "../core/diagrams/geometry";
 import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
+  extractDiagramFences,
   findSourceTextRange,
+  getDiagramId,
   parseDocumentFrontmatter,
   resolveDocument,
+  setDiagramId,
   setFrontmatterColourScheme,
   scrollSourceEditorToRange,
+  setFrontmatterDoctype,
   setFrontmatterTheme,
   validateDocumentSource
 } from "../core/document";
@@ -159,6 +163,7 @@ export class BrowserRuntime {
       outputElement,
       getSource: () => this.getSource(),
       getDocumentTheme: () => this.getDocumentTheme(),
+      getDocumentColourScheme: () => this.state.documentColorScheme,
       renderDocument: (source, options) => this.renderDocument(source, options),
       stopDiagramEditing: () => this.stopDiagramEditing(),
       closeDocumentMenu: () => this.closeDocumentMenu()
@@ -254,6 +259,11 @@ export class BrowserRuntime {
         this.state.diagramViewportHeights.delete(diagramIndex);
         continue;
       }
+      // An expanded frame fills the viewport, so its height says nothing about
+      // the height the frame should return to once it collapses.
+      if (diagramIndex === this.state.expandedDiagramIndex) {
+        continue;
+      }
       this.state.diagramViewportHeights.set(diagramIndex, diagram.offsetHeight);
     }
     const pageScroll = { x: globalThis.scrollX || 0, y: globalThis.scrollY || 0 };
@@ -261,6 +271,7 @@ export class BrowserRuntime {
     const previousTheme = this.state.documentTheme;
     const previousThemeSetting = this.state.documentThemeSetting;
     const previousColorScheme = this.state.documentColorScheme;
+    const previousDoctype = this.state.documentDoctype;
     this.state.diagramModels.length = 0;
 
     let markup: string;
@@ -269,7 +280,15 @@ export class BrowserRuntime {
       this.state.documentTheme = parsedDocument.resolvedTheme;
       this.state.documentThemeSetting = parsedDocument.theme;
       this.state.documentColorScheme = parsedDocument.colourScheme;
+      this.state.documentDoctype = parsedDocument.doctype;
       markup = this.renderMarkdown(parsedDocument.content);
+      // A source edit can remove the diagram that was expanded, which would
+      // otherwise leave the runtime pinned to an index that no longer renders.
+      if (this.state.expandedDiagramIndex !== null && !this.state.diagramModels[this.state.expandedDiagramIndex]) {
+        this.state.expandedDiagramIndex = null;
+        this.state.diagramModels.length = 0;
+        markup = this.renderMarkdown(parsedDocument.content);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.state.diagramModels.length = 0;
@@ -278,6 +297,7 @@ export class BrowserRuntime {
         this.state.documentTheme = previousTheme;
         this.state.documentThemeSetting = previousThemeSetting;
         this.state.documentColorScheme = previousColorScheme;
+        this.state.documentDoctype = previousDoctype;
         this.sourceEditor?.setError(message);
         return false;
       }
@@ -325,7 +345,8 @@ export class BrowserRuntime {
     }
     for (const figure of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
       const diagramIndex = Number(figure.dataset.diagramIndex);
-      if (this.state.diagramViewportHeights.has(diagramIndex)) {
+      if (this.state.diagramViewportHeights.has(diagramIndex) ||
+        diagramIndex === this.state.expandedDiagramIndex) {
         continue;
       }
       const fittedHeight = measureDiagramContentHeight(figure);
@@ -353,7 +374,7 @@ export class BrowserRuntime {
     for (const figure of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
       const diagramIndex = Number(figure.dataset.diagramIndex);
       const autoFittedHeight = this.autoFittedDiagrams.get(diagramIndex);
-      if (autoFittedHeight === undefined) {
+      if (autoFittedHeight === undefined || diagramIndex === this.state.expandedDiagramIndex) {
         continue;
       }
       if (figure.offsetHeight !== autoFittedHeight) {
@@ -408,14 +429,14 @@ export class BrowserRuntime {
     this.state.savedSource = this.getSource();
   }
 
-  private createDocumentCopy(): HTMLElement {
+  private createDocumentCopy(source = this.getSource()): HTMLElement {
     const copy = document.documentElement.cloneNode(true) as HTMLElement;
     const sourceCopy = copy.querySelector<HTMLTemplateElement>("#source");
     const toolbar = copy.querySelector(".docdiagram-toolbar");
     const sourceTray = copy.querySelector(".docdiagram-source-tray");
     const output = copy.querySelector<HTMLElement>("#rendered-document");
     const body = copy.querySelector("body");
-    sourceCopy?.content.replaceChildren(document.createTextNode(this.getSource()));
+    sourceCopy?.content.replaceChildren(document.createTextNode(source));
     toolbar?.remove();
     sourceTray?.remove();
     for (const style of copy.querySelectorAll<HTMLStyleElement>("style")) {
@@ -425,6 +446,7 @@ export class BrowserRuntime {
       }
     }
     copy.removeAttribute("data-docdiagram-theme");
+    copy.removeAttribute("data-docdiagram-expanded");
     copy.style.removeProperty("--docdiagram-page-background");
     copy.style.removeProperty("--docdiagram-page-text");
     if (!copy.getAttribute("style")) {
@@ -441,10 +463,10 @@ export class BrowserRuntime {
     return copy;
   }
 
-  private downloadHtml(documentHtml: string, suffix: string): void {
+  private downloadHtml(documentHtml: string, suffix: string, name = ""): void {
     const blob = new Blob([`<!doctype html>\n${documentHtml}`], { type: "text/html;charset=utf-8" });
     const link = document.createElement("a");
-    const title = document.title.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
+    const title = name || document.title.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, "");
     link.href = URL.createObjectURL(blob);
     link.download = `${title || "document"}${suffix}.html`;
     link.click();
@@ -492,6 +514,11 @@ export class BrowserRuntime {
       }
       if (event.key === "Escape") {
         this.closeDocumentMenu();
+        if (!event.defaultPrevented && !isEditableElement(event.target) &&
+          this.state.expandedDiagramIndex !== null) {
+          event.preventDefault();
+          this.toggleDiagramExpansion(this.state.expandedDiagramIndex);
+        }
       }
     });
     document.addEventListener("pointerdown", (event) => {
@@ -524,6 +551,16 @@ export class BrowserRuntime {
       }
       this.sourceEditor?.reveal(globalThis.getSelection?.()?.toString() || "");
     });
+    // A `doctype: diagram` document opens straight into the expanded frame.
+    // Reading the frontmatter up front keeps that to a single render, and an
+    // unparseable header is reported by renderDocument as usual.
+    try {
+      if (parseDocumentFrontmatter(this.getSource()).frontmatter.doctype === "diagram") {
+        this.state.expandedDiagramIndex = 0;
+      }
+    } catch {
+      this.state.expandedDiagramIndex = null;
+    }
     this.renderDocument();
   }
 
@@ -570,6 +607,10 @@ export class BrowserRuntime {
       parseDocumentFrontmatter,
       resolveDocument,
       setFrontmatterTheme,
+      setFrontmatterDoctype,
+      extractDiagramFences,
+      getDiagramId,
+      setDiagramId,
       isSafeUrl,
       renderInline,
       renderMarkdown: (source: string, state?: { diagramIndex: number }) => this.renderMarkdown(source, state),
@@ -653,6 +694,10 @@ export class BrowserRuntime {
       `<option value="centered"${this.state.documentFormat === "centered" ? " selected" : ""}>Centered</option>`,
       `<option value="full-width"${this.state.documentFormat === "full-width" ? " selected" : ""}>Full width</option>`,
       `</select></label>`,
+      `<label class="docdiagram-theme-control">Opens as<select class="docdiagram-doctype-select">`,
+      `<option value="document"${this.state.documentDoctype === "document" ? " selected" : ""}>Document</option>`,
+      `<option value="diagram"${this.state.documentDoctype === "diagram" ? " selected" : ""}>Diagram</option>`,
+      `</select></label>`,
       `<button type="button" class="docdiagram-edit-source">Edit source</button>`,
       `<button type="button" class="docdiagram-save">Save As</button>`,
       `<button type="button" class="docdiagram-offline-save">Save for Offline</button>`,
@@ -703,6 +748,12 @@ export class BrowserRuntime {
     });
     toolbar.querySelector<HTMLSelectElement>(".docdiagram-format-select")?.addEventListener("change", (event) => {
       this.state.documentFormat = (event.currentTarget as HTMLSelectElement).value === "full-width" ? "full-width" : "centered";
+      this.renderDocument();
+    });
+    toolbar.querySelector<HTMLSelectElement>(".docdiagram-doctype-select")?.addEventListener("change", (event) => {
+      const doctype = (event.currentTarget as HTMLSelectElement).value === "diagram" ? "diagram" : "document";
+      this.setSource(setFrontmatterDoctype(this.getSource(), doctype));
+      this.setExpandedDiagram(doctype === "diagram" ? 0 : null);
       this.renderDocument();
     });
     this.outputElement.before(toolbar);
@@ -782,10 +833,19 @@ export class BrowserRuntime {
         button.setAttribute("aria-expanded", String(open));
       });
     }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-toggle-expand")) {
+      button.addEventListener("click", () => this.toggleDiagramExpansion(Number(button.dataset.diagramIndex)));
+    }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-open-diagram")) {
       button.addEventListener("click", () => {
         this.closeDiagramExportMenus();
         this.openDiagram(Number(button.dataset.diagramIndex));
+      });
+    }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-save-diagram")) {
+      button.addEventListener("click", () => {
+        this.closeDiagramExportMenus();
+        this.downloadDiagramDocument(Number(button.dataset.diagramIndex));
       });
     }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-download-diagram")) {
@@ -908,6 +968,48 @@ export class BrowserRuntime {
     globalThis.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
+  /**
+   * Writes a single diagram out as its own Skryb document. The result carries
+   * `doctype: diagram`, so opening it drops straight into the expanded editor,
+   * and it stays a normal Skryb document that can be imported back into any
+   * other document later.
+   */
+  private downloadDiagramDocument(diagramIndex: number): void {
+    const diagram = this.state.diagramModels[diagramIndex];
+    if (!diagram) {
+      globalThis.alert("The diagram is no longer available to save.");
+      return;
+    }
+    const diagramSource = serializeDiagram(diagram);
+    const name = getDiagramId(diagramSource) || this.getDiagramExportName(diagramIndex);
+    const source = [
+      "---",
+      `theme: ${this.state.documentThemeSetting}`,
+      `colourScheme: ${this.state.documentColorScheme}`,
+      "doctype: diagram",
+      "---",
+      "",
+      "```diagram",
+      diagramSource,
+      "```",
+      ""
+    ].join("\n");
+    const copy = this.createDocumentCopy(source);
+    const title = copy.querySelector("title");
+    if (title) {
+      title.textContent = name;
+    }
+    try {
+      restoreExternalRuntimeForSaveAs(copy);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Save as Skryb diagram failed.", error);
+      globalThis.alert(`Save as Skryb diagram failed: ${message}`);
+      return;
+    }
+    this.downloadHtml(copy.outerHTML, "", name.toLowerCase().replace(/[^\w]+/g, "-").replace(/^-|-$/g, ""));
+  }
+
   private downloadDiagram(diagramIndex: number): void {
     const url = this.getDiagramExportUrl(diagramIndex, "image/svg+xml;charset=utf-8");
     if (!url) {
@@ -990,9 +1092,42 @@ export class BrowserRuntime {
     const background = getNodeColorPalette(this.state.documentColorScheme, theme, "background");
     const text = background?.text;
     document.documentElement.dataset.docdiagramTheme = theme;
+    document.documentElement.dataset.docdiagramExpanded = String(this.state.expandedDiagramIndex !== null);
     document.documentElement.style.setProperty("--docdiagram-page-background", background?.fill || "");
     document.documentElement.style.setProperty("--docdiagram-page-text", text || "");
     document.body?.dataset && (document.body.dataset.docdiagramTheme = theme);
+  }
+
+  /**
+   * Expands one diagram frame to fill the window, or collapses the expanded
+   * one. The frame stays in the document tree so editing, panning and the
+   * inspector keep working; only its layout changes. Both the frame being
+   * expanded and the one being collapsed are re-fitted, because the frame's
+   * width - and so the scale the diagram is drawn at - changes with the
+   * transition. Marking them pending also stops the next render from recording
+   * a fixed-position frame's viewport-filling height as its stored height.
+   */
+  private setExpandedDiagram(diagramIndex: number | null): void {
+    const previousIndex = this.state.expandedDiagramIndex;
+    if (previousIndex === diagramIndex) {
+      return;
+    }
+    this.state.expandedDiagramIndex = diagramIndex;
+    for (const index of [previousIndex, diagramIndex]) {
+      if (index === null) {
+        continue;
+      }
+      this.state.diagramZooms.set(index, 100);
+      this.state.diagramCameraOffsets.delete(index);
+      this.pendingViewportFits.add(index);
+      this.autoFittedDiagrams.delete(index);
+    }
+  }
+
+  public toggleDiagramExpansion(diagramIndex: number): void {
+    this.setExpandedDiagram(this.state.expandedDiagramIndex === diagramIndex ? null : diagramIndex);
+    this.closeDiagramExportMenus();
+    this.renderDocument();
   }
 
   private removeToolbarChrome(): void {

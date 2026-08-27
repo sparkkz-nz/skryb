@@ -1,10 +1,18 @@
-import { findSourceTextRange, scrollSourceEditorToRange } from "../core/document";
+import {
+  extractDiagramFences,
+  findSourceTextRange,
+  scrollSourceEditorToRange,
+  setDiagramId,
+  type ExtractedDiagram
+} from "../core/document";
+import { parseDiagram } from "../core/diagrams/parser";
 
 const referenceUrl = "https://sparkkz-nz.github.io/skryb/docs/reference.html";
 
 const MINIMUM_TRAY_HEIGHT = 192;
 const TRAY_VIEWPORT_MARGIN = 96;
 const TRAY_KEYBOARD_STEP = 24;
+const MAXIMUM_IMPORT_BYTES = 8_000_000;
 
 const insertTemplates: Record<string, string> = {
   flowchart: [
@@ -101,9 +109,63 @@ export interface SourceEditorHost {
   readonly outputElement: HTMLElement;
   getSource(): string;
   getDocumentTheme(): string;
+  getDocumentColourScheme(): string;
   renderDocument(source?: string, options?: { preserveOnError?: boolean }): boolean;
   stopDiagramEditing(): void;
   closeDocumentMenu(): void;
+}
+
+/**
+ * Reads the canonical Markdown out of an imported file. Saved Skryb documents
+ * keep their source in a `<template id="source">`, so an HTML file is unwrapped
+ * first; anything else is treated as Markdown. Parsing is inert - the parsed
+ * tree is only read for that template's text and is never attached to the page.
+ */
+export function readImportedSource(fileText: string): string {
+  if (!/<template[^>]*\bid=["']?source\b/i.test(fileText)) {
+    return fileText;
+  }
+  const parsed = new DOMParser().parseFromString(fileText, "text/html");
+  const template = parsed.querySelector<HTMLTemplateElement>("template#source");
+  if (!template) {
+    throw new Error("That Skryb document has no source template to import from.");
+  }
+  return template.content.textContent || "";
+}
+
+function pickImportFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".html,.htm,.md,.markdown,text/html,text/markdown";
+    input.hidden = true;
+    const settle = (file: File | null) => {
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener("change", () => settle(input.files?.[0] || null), { once: true });
+    input.addEventListener("cancel", () => settle(null), { once: true });
+    document.body.append(input);
+    input.click();
+  });
+}
+
+function chooseImportedDiagram(diagrams: ExtractedDiagram[]): ExtractedDiagram | null {
+  if (diagrams.length <= 1) {
+    return diagrams[0] || null;
+  }
+  const listing = diagrams
+    .map((diagram, index) => `${index + 1}. ${diagram.id || "(no id)"}`)
+    .join("\n");
+  const answer = globalThis.prompt(`That file has ${diagrams.length} diagrams. Import which one?\n\n${listing}`, "1");
+  if (answer === null) {
+    return null;
+  }
+  const choice = Number.parseInt(answer.trim(), 10);
+  if (!Number.isInteger(choice) || choice < 1 || choice > diagrams.length) {
+    throw new Error(`Enter a number between 1 and ${diagrams.length}.`);
+  }
+  return diagrams[choice - 1];
 }
 
 export class SourceEditor {
@@ -251,6 +313,7 @@ export class SourceEditor {
       `<button type="button" data-source-template="flowchart">Flowchart</button>`,
       `<button type="button" data-source-template="sequence">Sequence</button>`,
       `<button type="button" data-source-template="diagram-reference">Diagram Reference</button>`,
+      `<button type="button" class="docdiagram-source-import">Import diagram…</button>`,
       `<button type="button" data-source-template="panel">Panel</button>`,
       `<button type="button" data-source-template="grid">Grid</button>`,
       `<button type="button" class="docdiagram-source-help">Help</button>`,
@@ -294,6 +357,20 @@ export class SourceEditor {
         menuToggle.setAttribute("aria-expanded", "false");
       });
     }
+    tray.querySelector<HTMLButtonElement>(".docdiagram-source-import")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      menu.hidden = true;
+      menuToggle.setAttribute("aria-expanded", "false");
+      button.disabled = true;
+      try {
+        await this.importDiagram(editor);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        globalThis.alert(`Import diagram failed: ${message}`);
+      } finally {
+        button.disabled = false;
+      }
+    });
     tray.querySelector<HTMLButtonElement>(".docdiagram-source-help")?.addEventListener("click", () => {
       globalThis.open(referenceUrl, "_blank", "noopener");
     });
@@ -434,6 +511,34 @@ export class SourceEditor {
     this.updateStatus();
     this.scheduleRender();
     editor.focus();
+  }
+
+  /**
+   * Imports one diagram from a saved Skryb document (or a plain Markdown file)
+   * and inserts it at the caret. The imported id is rewritten when it would
+   * clash, because duplicate diagram ids stop the whole document rendering.
+   */
+  private async importDiagram(editor: HTMLTextAreaElement): Promise<void> {
+    const file = await pickImportFile();
+    if (!file) {
+      return;
+    }
+    if (file.size > MAXIMUM_IMPORT_BYTES) {
+      throw new Error("That file is too large to import.");
+    }
+
+    const diagrams = extractDiagramFences(readImportedSource(await file.text()));
+    if (!diagrams.length) {
+      throw new Error("That file has no diagrams to import.");
+    }
+    const chosen = chooseImportedDiagram(diagrams);
+    if (!chosen) {
+      return;
+    }
+
+    parseDiagram(chosen.source, this.host.getDocumentColourScheme());
+    const id = getUniqueDiagramId(editor.value, chosen.id || "imported-diagram");
+    this.insertTemplate(editor, `\`\`\`diagram\n${setDiagramId(chosen.source, id)}\n\`\`\``);
   }
 
   private focus(): void {

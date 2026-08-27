@@ -1,4 +1,5 @@
 import type { Diagram } from "../core/diagrams/schema";
+import type { DocumentDoctype } from "../core/document";
 import type {
   ConnectionDrag,
   DiagramRenderState,
@@ -31,6 +32,7 @@ export interface EditorState extends DiagramRenderState {
   documentThemeSetting: string;
   documentColorScheme: string;
   documentFormat: "centered" | "full-width";
+  documentDoctype: DocumentDoctype;
   savedSource: string;
   editSessionDiagram: Diagram | null;
 }
@@ -49,8 +51,10 @@ export function createEditorState(): EditorState {
     documentThemeSetting: "auto",
     documentColorScheme: "classic",
     documentFormat: "centered",
+    documentDoctype: "document",
     savedSource: "",
     editSessionDiagram: null,
+    expandedDiagramIndex: null,
     diagramZooms: new Map(),
     diagramCameraOffsets: new Map(),
     diagramViewportHeights: new Map()

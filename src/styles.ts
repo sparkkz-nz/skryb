@@ -24,6 +24,10 @@ export function injectStyles(): void {
       background: var(--docdiagram-page-background, #17202a);
       color: var(--docdiagram-page-text, #f3f8fc);
     }
+    html[data-docdiagram-expanded="true"],
+    html[data-docdiagram-expanded="true"] body {
+      overflow: hidden;
+    }
     #rendered-document {
       background: var(--docdiagram-background);
       box-sizing: border-box;
@@ -686,6 +690,22 @@ export function injectStyles(): void {
     .docdiagram {
       scrollbar-width: none;
     }
+    .docdiagram[data-expanded="true"] {
+      border-radius: 0;
+      border-width: 1px 0 0;
+      box-shadow: none;
+      height: auto;
+      margin: 0;
+      max-height: none;
+      min-height: 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: var(--docdiagram-source-tray-height, 0px);
+      resize: none;
+      z-index: 25;
+    }
     .docdiagram::-webkit-scrollbar {
       display: none;
     }
@@ -707,6 +727,15 @@ export function injectStyles(): void {
     }
     .docdiagram-diagram-export {
       position: relative;
+    }
+    /* Expanded frames share the top-right corner with the fixed document menu
+       and inspector, so their own controls move to the free left edge. */
+    .docdiagram[data-expanded="true"] .docdiagram-diagram-toolbar {
+      justify-content: flex-start;
+    }
+    .docdiagram[data-expanded="true"] .docdiagram-diagram-export-menu {
+      left: 0;
+      right: auto;
     }
     .docdiagram-diagram-export-menu {
       background: var(--docdiagram-background);

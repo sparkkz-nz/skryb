@@ -60,8 +60,9 @@ export function renderSequenceDiagram(
   const selfLoopHeight = 28;
   const groupHeaderSpace = 40;
   const groupFooterSpace = 22;
+  const isExpanded = state.expandedDiagramIndex === diagramIndex;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
-  const viewportStyle = viewportHeight
+  const viewportStyle = viewportHeight && !isExpanded
     ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
     : "";
   const sequenceMarkerId = `docdiagram-sequence-arrow-${diagramIndex}`;
@@ -316,7 +317,7 @@ export function renderSequenceDiagram(
   }).join("");
 
   return [
-    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}"${viewportStyle}>`,
+    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "sequence", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Sequence diagram" data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
     `<defs>${buildEdgeMarkerDef(sequenceMarkerId, "arrow", "end", theme.edge.stroke, 2)}</defs>`,
