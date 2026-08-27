@@ -19,7 +19,7 @@ whether they remove the need to guess, or make a guess cheap to check.
 | 5 | Whole-document print/PDF | Medium | Shareability outside the browser |
 | 6 | Figure numbering and cross-references | Medium | Table stakes for technical writing |
 | 7 | Named styles | Small | Stops style drift across a large diagram |
-| 8 | Heading anchors / TOC | Small | Navigation and deep links |
+| 8 | Table of contents | Small | Navigation for long documents (anchors already ship) |
 | 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
 | 10 | Regeneration boundaries | Medium | Makes documents safe to maintain over time |
 
@@ -241,10 +241,14 @@ whole documents.
 
 ---
 
-## 8. Heading anchors and optional TOC
+## 8. Table of contents
 
-Long documents need deep links and navigation. Slugged heading anchors, plus an
-opt-in `:::toc` directive that builds from the heading tree.
+Headings already carry slugged, de-duplicated `id` attributes (`getHeadingId` in
+`core/markdown.ts`), so deep links work today — though this is not mentioned in
+the reference, which is worth fixing on its own.
+
+What is missing is navigation for long documents: an opt-in `:::toc` directive
+that builds from the heading tree, with a depth attribute.
 
 ---
 
