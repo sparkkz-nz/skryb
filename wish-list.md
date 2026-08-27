@@ -1,0 +1,260 @@
+# Skryb wish list
+
+Enhancements suggested from the perspective of an agent authoring Skryb
+documents. Captured for a later session; nothing here is committed to.
+
+The framing that produced this list: **an authoring agent works blind.** It
+emits YAML with absolute coordinates and never sees the result. Most of the ways
+generated documents come out ugly trace back to that, so features are ranked by
+whether they remove the need to guess, or make a guess cheap to check.
+
+## Priority
+
+| # | Item | Lift | Why |
+| --- | --- | --- | --- |
+| 1 | Lint command | Small | Closes the authoring feedback loop; mostly assembles logic that already exists |
+| 2 | Label wrapping + sizing hints | Small | Kills the most common visual defect |
+| 3 | Flowchart auto-layout | Large | Biggest single quality win |
+| 4 | Code syntax highlighting | Medium | Largest gap in document polish |
+| 5 | Whole-document print/PDF | Medium | Shareability outside the browser |
+| 6 | Figure numbering and cross-references | Medium | Table stakes for technical writing |
+| 7 | Named styles | Small | Stops style drift across a large diagram |
+| 8 | Heading anchors / TOC | Small | Navigation and deep links |
+| 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
+| 10 | Regeneration boundaries | Medium | Makes documents safe to maintain over time |
+
+---
+
+## 1. Lint command
+
+The highest value for the least work. Schema errors are already covered by
+`validateDocumentSource`; the gap is **visual-quality warnings**, which are
+exactly what an authoring agent cannot see:
+
+- a node overlapping another node
+- a node extending past the canvas
+- a label wider or taller than its shape
+- an edge passing through an unrelated node
+- orphan edge endpoints, unreachable nodes
+- duplicate ids (already an error, but worth surfacing early)
+
+### Where the code should live
+
+Skryb documents are single files with either an external runtime URL or an
+embedded runtime, so this needs care. Three options:
+
+**In the runtime bundle, exposed on the core API — recommended.** Add the rules
+under `src/core/`, expose `lintDocument(source)` through `getCoreApi()`, and add
+a thin `scripts/lint.mjs` wrapper. There is already a proven precedent for
+running the bundle headlessly: `test/render-runtime.test.js` loads
+`dist/skryb-runtime.js` into a Node `vm` with a stubbed `document` and calls core
+functions directly. No browser, no service, no new infrastructure.
+
+Two further advantages:
+
+- The rules sit next to the geometry they describe, so they cannot drift from
+  the renderer that actually draws the diagram.
+- The same lint becomes available *in the browser* for free, so the source tray
+  could show "3 layout warnings" alongside its existing error reporting.
+
+**In the skill.** Agent-local and versioned with the authoring guidance, but it
+would duplicate geometry logic that already lives in `core/` and would drift from
+the runtime. Better for the skill to *document* the command than to implement it.
+
+**In the cloud.** Recommend against. It introduces a network dependency and a
+privacy question for internal documents, and it runs against the project's
+portable, no-infrastructure premise. A document that needs a server to be checked
+is no longer self-contained.
+
+### Trade-off to settle first
+
+Putting lint in the default bundle grows every embedded-runtime document by its
+size. The rules are pure functions over the parsed model so they should be small,
+but measure before committing. If it is material, build two bundles — a lean
+runtime for embedding and a full one for tooling — and have the lint script load
+the full build.
+
+### Shape
+
+```
+node scripts/lint.mjs doc.html            # errors and warnings
+node scripts/lint.mjs doc.html --errors   # schema only, for CI
+```
+
+Exit non-zero on error; warnings are advisory so generated documents are not
+blocked on aesthetics.
+
+---
+
+## 2. Label wrapping and sizing hints
+
+**Auto-width is the wrong answer** — sizing every node to its own text produces a
+diagram of ragged, mismatched boxes, which reads as less tidy than uniform
+widths, not more. Keep explicit sizes.
+
+Instead:
+
+**Wrap within the declared width.** Today `splitTextLines` only splits on
+explicit `\n`, so an over-long label silently overflows its shape and the agent
+has to hand-break every label — which means guessing widths anyway. Wrapping on
+word boundaries inside the given `size.width` removes the guess without touching
+the tidy uniform-width property.
+
+**Publish the capacity in the skill**, so labels can be written to fit in the
+first place. Measured against the runtime's own font stack
+(`-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`) using
+representative technical vocabulary:
+
+- Label: 16px, weight 650 → **~8.4px per character**
+- Subtitle: 13px, weight 400 → **~6.6px per character**
+
+| Node width | Label chars/line | Subtitle chars/line |
+| --- | --- | --- |
+| 160 | ~16 | ~20 |
+| **190 (default)** | **~19** | **~25** |
+| 220 | ~23 | ~29 |
+| 260 | ~28 | ~35 |
+
+Vertically, label line height is 20 and subtitle 15, so the default 80-high node
+fits **two label lines comfortably**, three at a squeeze.
+
+Caveat worth stating in the skill: these are averages for technical English.
+Uppercase or `W`/`M`-heavy strings run wider — "Webhook dispatcher" measures
+8.8px per character. Budget **~9px per character** for safety, so a default
+190-wide node is closer to **18 characters per line**.
+
+---
+
+## 3. Flowchart auto-layout
+
+The single biggest quality win, and the largest lift.
+
+Worth noting that **sequence diagrams already solve this**:
+`renderSequenceDiagram` computes participant positions from `participantSpacing`
+and index, which is exactly why generated sequence diagrams come out reliably
+better than generated flowcharts. The runtime already proves it can place
+things; flowcharts are the outlier.
+
+### Proposed syntax
+
+```yaml
+type: flowchart
+layout: { engine: layered, direction: right, nodeGap: 60, rankGap: 120 }
+canvas: auto
+nodes:
+  - id: api
+    label: Payments API
+    shape: rounded-rectangle      # no position: the engine places it
+  - id: ledger
+    label: Customer ledger
+    shape: database
+    position: { x: 640, y: 240 }  # pinned: the engine works around it
+edges:
+  - source: api
+    target: ledger
+```
+
+### Rules
+
+- **`layout` absent → today's behaviour exactly.** Fully backwards compatible;
+  every existing document is unaffected.
+- **`position` wins.** A node that declares one is pinned and the engine places
+  the rest around it. This allows incremental adoption and lets a human nail down
+  the one node that matters.
+- `direction` is `right`, `down`, `left`, or `up`.
+- Containers (`children`) lay out recursively inside their parent's box.
+- `canvas: auto` fits computed content bounds, so the agent stops maintaining a
+  bounding box by hand.
+
+### Engine
+
+A layered (Sugiyama-style) approach is the right fit for the flowcharts this
+format is used for:
+
+1. Rank nodes by longest path from the sources.
+2. Order within each rank with a couple of median-heuristic passes to reduce
+   crossings.
+3. Assign coordinates from `nodeGap` / `rankGap`, snapped to `canvas.grid`.
+
+Deterministic ordering matters — the same source must always produce the same
+diagram, or regenerating a document produces spurious diffs.
+
+### Baking
+
+The moment a node is dragged in the editor, serialise the computed positions
+into the fence and switch the diagram to `layout: manual` (or drop the key). The
+engine must never fight a hand edit. This follows the existing philosophy that
+the fence is canonical and `persistDiagramModels` writes the model back to it.
+
+---
+
+## 4. Code syntax highlighting
+
+The reference is explicit that a fence language only produces a
+`language-<name>` class. Technical documents are largely code, and unhighlighted
+blocks are the flattest-looking part of an otherwise polished format.
+
+Even a small tokeniser covering a handful of languages would lift perceived
+quality noticeably. If runtime size is the concern — and it matters for embedded
+documents — make it a build-time opt-in, or highlight at author time into spans
+so the runtime carries no tokeniser at all.
+
+---
+
+## 5. Whole-document print / PDF
+
+Only single-diagram print exists today. A document-level print stylesheet with
+sensible page breaks — never split a panel or diagram across a page boundary,
+keep headings with their content — would make Skryb documents shareable in
+contexts where HTML is not accepted.
+
+---
+
+## 6. Figure numbering and cross-references
+
+Technical documents need "see Figure 3". Diagrams already carry stable `id`s, so
+auto-numbered captions plus an inline `{ref=payments-flow}` form is a natural fit
+for the existing directive machinery. Numbering should be derived at render time
+so inserting a diagram renumbers everything after it.
+
+---
+
+## 7. Named styles
+
+Inline `style: { ... }` objects get repeated across many nodes, and consistency
+drifts as a diagram grows — one node ends up a shade off. A document-level
+`styles:` block with `class: warning` on nodes would let intent be declared once.
+It would also shrink diagram source materially, which matters when regenerating
+whole documents.
+
+---
+
+## 8. Heading anchors and optional TOC
+
+Long documents need deep links and navigation. Slugged heading anchors, plus an
+opt-in `:::toc` directive that builds from the heading tree.
+
+---
+
+## 9. Edge obstacle avoidance
+
+Orthogonal routing no longer draws spurs, but edges still pass through unrelated
+nodes. This is very visible when nodes are placed by an agent that cannot see the
+result. Naturally follows auto-layout — an engine that owns node placement is
+also the right place to route edges around obstacles.
+
+---
+
+## 10. Regeneration boundaries
+
+When an agent regenerates a document, hand edits are clobbered. Some marker for
+generated versus hand-authored regions would make round-tripping safe, and make
+agents useful for documents that are *maintained* rather than written once.
+
+---
+
+## Caveat
+
+This list is reasoned from the code and from authoring experience, not from
+observing readers. The reader-facing items — print, TOC, cross-references — are
+the ones where the project's own instincts should outrank this list.
