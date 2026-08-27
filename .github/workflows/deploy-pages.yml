@@ -89,8 +89,30 @@ jobs:
               git config user.name github-actions[bot]
               git config user.email 41898282+github-actions[bot]@users.noreply.github.com
               git commit -m "Publish ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}"
-              git push origin HEAD:gh-pages
+              # Another run may have published between this run's clone and now,
+              # most likely a tag and its branch pushed together. Rebasing keeps
+              # that publish rather than racing it, and retries because the same
+              # window can reopen while we push.
+              for attempt in 1 2 3 4 5; do
+                if git push origin HEAD:gh-pages; then
+                  break
+                fi
+                if [ "$attempt" = "5" ]; then
+                  echo "Could not publish to gh-pages after $attempt attempts." >&2
+                  exit 1
+                fi
+                sleep $((attempt * 3))
+                git fetch origin gh-pages
+                git rebase origin/gh-pages
+              done
             fi
+            # The uploaded artifact is what Pages actually serves, so it has to
+            # match the branch rather than this run's own snapshot of it. A run
+            # that skipped the push needs this too: its clone can still predate a
+            # sibling's publish.
+            git fetch origin gh-pages
+            git reset --hard origin/gh-pages
+            git clean -fd
             rm -rf .git
           )
 
