@@ -3360,3 +3360,25 @@ test("an orthogonal edge steps around instead of overshooting when an anchor fac
     "M 640 75 L 750 75 L 750 127.5 L 200 127.5 L 200 180"
   );
 });
+
+test("a C bend clears the furthest anchor by a fixed margin, not by the whole span", () => {
+  // Two right anchors on the same vertical line only need the bend far enough
+  // right to clear them both. Scaling the clearance by the span let the vertical
+  // gap between them push the bend sideways, which sent it off a tight canvas.
+  const near = buildEdgePath({ x: 860, y: 375 }, { x: 860, y: 215 }, "right", "right", "orthogonal");
+  assert.equal(near.path, "M 860 375 L 884 375 L 884 215 L 860 215");
+
+  // Pulling the endpoints four times further apart on the cross axis must not
+  // move the bend, because that distance is not the direction it travels.
+  const spread = buildEdgePath({ x: 860, y: 900 }, { x: 860, y: 260 }, "right", "right", "orthogonal");
+  assert.equal(spread.path, "M 860 900 L 884 900 L 884 260 L 860 260");
+
+  // The margin is measured from whichever anchor reaches furthest, so an
+  // offset pair still only clears the outermost of the two.
+  const offset = buildEdgePath({ x: 200, y: 100 }, { x: 800, y: 300 }, "right", "right", "orthogonal");
+  assert.equal(offset.path, "M 200 100 L 824 100 L 824 300 L 800 300");
+
+  // Anchors pointing the other way clear on the other side by the same margin.
+  const leftward = buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 260 }, "left", "left", "orthogonal");
+  assert.equal(leftward.path, "M 100 100 L 76 100 L 76 260 L 300 260");
+});

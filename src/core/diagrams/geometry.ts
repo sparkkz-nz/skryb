@@ -318,8 +318,7 @@ function buildAlignedRoute(
   sourceDirection: Position,
   targetDirection: Position,
   axis: RouteAxis,
-  lead: number,
-  span: number
+  lead: number
 ): Position[] {
   const sourceAlong = axis.along(source);
   const sourceCross = axis.cross(source);
@@ -344,9 +343,13 @@ function buildAlignedRoute(
   // the cross axis. Nearly aligned anchors would draw the outward and return
   // prongs almost on top of each other, so those route around instead.
   if (sourceStep === targetStep && Math.abs(sourceCross - targetCross) >= minimumAnchorLead) {
+    // The bend only has to clear whichever anchor reaches furthest, so it sits a
+    // fixed clearance past it. Scaling that by the span would let the distance
+    // between the endpoints on the cross axis push the bend out sideways, which
+    // is the one direction it does not need to travel.
     const bend = sourceStep > 0
-      ? Math.max(sourceAlong, targetAlong) + span / 2
-      : Math.min(sourceAlong, targetAlong) - span / 2;
+      ? Math.max(sourceAlong, targetAlong) + minimumAnchorLead
+      : Math.min(sourceAlong, targetAlong) - minimumAnchorLead;
     return [source, axis.point(bend, sourceCross), axis.point(bend, targetCross), target];
   }
 
@@ -388,7 +391,7 @@ function buildOrthogonalRoute(
   const axis = sourceIsHorizontal ? horizontalRouteAxis : verticalRouteAxis;
 
   return sourceIsHorizontal === (targetDirection.x !== 0)
-    ? buildAlignedRoute(source, target, sourceDirection, targetDirection, axis, lead, span)
+    ? buildAlignedRoute(source, target, sourceDirection, targetDirection, axis, lead)
     : buildPerpendicularRoute(source, target, sourceDirection, targetDirection, axis, lead);
 }
 
