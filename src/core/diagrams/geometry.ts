@@ -229,6 +229,169 @@ function getCurveControlDistance(from: Position, to: Position): number {
   return Math.min(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y), 80) / 2, 140);
 }
 
+// Orthogonal routing works on one axis at a time: "along" is the axis an anchor
+// points down, "cross" is the other. Describing both orientations through these
+// pair of accessors keeps a single routing implementation for horizontal and
+// vertical anchors instead of two mirrored copies that can drift apart.
+interface RouteAxis {
+  along: (point: Position) => number;
+  cross: (point: Position) => number;
+  point: (along: number, cross: number) => Position;
+}
+
+const horizontalRouteAxis: RouteAxis = {
+  along: (point) => point.x,
+  cross: (point) => point.y,
+  point: (along, cross) => ({ x: along, y: cross })
+};
+
+const verticalRouteAxis: RouteAxis = {
+  along: (point) => point.y,
+  cross: (point) => point.x,
+  point: (along, cross) => ({ x: cross, y: along })
+};
+
+// How far an edge steps clear of an anchor before it turns. Scaled to the span
+// so long edges bend gently, with a floor so short ones still leave the node.
+const minimumAnchorLead = 24;
+
+/**
+ * Route between anchors that point down different axes, such as a right anchor
+ * feeding a top one. A single corner is enough when the target already sits in
+ * the direction the source anchor points and the source sits on the side the
+ * target anchor faces. Otherwise the edge steps clear of each anchor first and
+ * crosses between those leads, which keeps every turn a right angle.
+ */
+function buildPerpendicularRoute(
+  source: Position,
+  target: Position,
+  sourceDirection: Position,
+  targetDirection: Position,
+  axis: RouteAxis,
+  lead: number
+): Position[] {
+  const sourceAlong = axis.along(source);
+  const sourceCross = axis.cross(source);
+  const targetAlong = axis.along(target);
+  const targetCross = axis.cross(target);
+  const sourceStep = axis.along(sourceDirection);
+  const targetStep = axis.cross(targetDirection);
+
+  if (Math.sign(targetAlong - sourceAlong) === sourceStep &&
+    Math.sign(sourceCross - targetCross) === targetStep) {
+    return [source, axis.point(targetAlong, sourceCross), target];
+  }
+
+  // Where a lead can sit between the two endpoints, it goes at the midpoint,
+  // which keeps the bend compact and well clear of both. Where it cannot -
+  // because the endpoint is behind the anchor - stepping a lead past the anchor
+  // is already clear of the other end, so no extra separation is needed. Either
+  // way the segment between the leads keeps a real length, and it is a
+  // zero-length or hairline segment there that draws the edge back over itself
+  // as a spur sticking out of a node.
+  const alongLead = Math.sign(targetAlong - sourceAlong) === sourceStep
+    ? (sourceAlong + targetAlong) / 2
+    : sourceAlong + sourceStep * lead;
+  const crossLead = Math.sign(sourceCross - targetCross) === targetStep
+    ? (sourceCross + targetCross) / 2
+    : targetCross + targetStep * lead;
+
+  return [
+    source,
+    axis.point(alongLead, sourceCross),
+    axis.point(alongLead, crossLead),
+    axis.point(targetAlong, crossLead),
+    target
+  ];
+}
+
+/**
+ * Route between anchors that point down the same axis. Anchors facing each other
+ * take the familiar Z bend at the midpoint, and anchors pointing the same way
+ * take a C bend clear of both. When neither applies - anchors facing away, or a
+ * C bend that would collapse because both endpoints share a cross coordinate -
+ * the edge steps off both anchors and crosses on a line clear of both nodes.
+ */
+function buildAlignedRoute(
+  source: Position,
+  target: Position,
+  sourceDirection: Position,
+  targetDirection: Position,
+  axis: RouteAxis,
+  lead: number,
+  span: number
+): Position[] {
+  const sourceAlong = axis.along(source);
+  const sourceCross = axis.cross(source);
+  const targetAlong = axis.along(target);
+  const targetCross = axis.cross(target);
+  const sourceStep = axis.along(sourceDirection);
+  const targetStep = axis.along(targetDirection);
+  const facesTarget = Math.sign(targetAlong - sourceAlong) === sourceStep;
+
+  if (sourceStep === -targetStep && facesTarget) {
+    return sourceCross === targetCross
+      ? [source, target]
+      : [
+        source,
+        axis.point((sourceAlong + targetAlong) / 2, sourceCross),
+        axis.point((sourceAlong + targetAlong) / 2, targetCross),
+        target
+      ];
+  }
+
+  // A C bend is only readable while the two endpoints are far enough apart on
+  // the cross axis. Nearly aligned anchors would draw the outward and return
+  // prongs almost on top of each other, so those route around instead.
+  if (sourceStep === targetStep && Math.abs(sourceCross - targetCross) >= minimumAnchorLead) {
+    const bend = sourceStep > 0
+      ? Math.max(sourceAlong, targetAlong) + span / 2
+      : Math.min(sourceAlong, targetAlong) - span / 2;
+    return [source, axis.point(bend, sourceCross), axis.point(bend, targetCross), target];
+  }
+
+  // Going around both nodes needs more room than stepping off a single anchor.
+  const detourLead = lead * 2;
+  const sourceDetour = sourceAlong + sourceStep * detourLead;
+  const targetDetour = targetAlong + targetStep * detourLead;
+  if (sourceDetour === targetDetour) {
+    // Both leads land on the same line, so crossing out to a further line and
+    // back would only draw the edge over itself. One bend on that line is the
+    // whole route.
+    return [source, axis.point(sourceDetour, sourceCross), axis.point(sourceDetour, targetCross), target];
+  }
+
+  const crossLine = Math.min(sourceCross, targetCross) - detourLead;
+  return [
+    source,
+    axis.point(sourceDetour, sourceCross),
+    axis.point(sourceDetour, crossLine),
+    axis.point(targetDetour, crossLine),
+    axis.point(targetDetour, targetCross),
+    target
+  ];
+}
+
+function buildOrthogonalRoute(
+  source: Position,
+  target: Position,
+  sourceDirection: Position,
+  targetDirection: Position
+): Position[] {
+  if (source.x === target.x && source.y === target.y) {
+    return [source, target];
+  }
+
+  const span = Math.max(Math.abs(target.x - source.x), Math.abs(target.y - source.y));
+  const lead = Math.max(span / 4, minimumAnchorLead);
+  const sourceIsHorizontal = sourceDirection.x !== 0;
+  const axis = sourceIsHorizontal ? horizontalRouteAxis : verticalRouteAxis;
+
+  return sourceIsHorizontal === (targetDirection.x !== 0)
+    ? buildAlignedRoute(source, target, sourceDirection, targetDirection, axis, lead, span)
+    : buildPerpendicularRoute(source, target, sourceDirection, targetDirection, axis, lead);
+}
+
 // Unit vector the curve travels through a waypoint along. Using the overall source-to-target
 // direction keeps both curve segments heading the same way through the waypoint, so the join
 // stays smooth instead of forming a visible kink.
@@ -371,73 +534,7 @@ export function buildEdgePath(
     startTangent = { x: sourceControl.x - source.x, y: sourceControl.y - source.y };
     endTangent = { x: target.x - targetControl.x, y: target.y - targetControl.y };
   } else {
-    const targetIsHorizontal = targetDirection.x !== 0;
-    const sameAxis = sourceIsHorizontal === targetIsHorizontal;
-    const sameDirection = sourceDirection.x === targetDirection.x && sourceDirection.y === targetDirection.y;
-    const span = Math.max(Math.abs(target.x - source.x), Math.abs(target.y - source.y));
-    let points: Position[];
-
-    if (sameAxis) {
-      const sourceAxis = sourceIsHorizontal ? source.x : source.y;
-      const targetAxis = sourceIsHorizontal ? target.x : target.y;
-      const direction = sourceIsHorizontal ? sourceDirection.x : sourceDirection.y;
-      const targetDirectionAxis = sourceIsHorizontal ? targetDirection.x : targetDirection.y;
-      const bendAxis = sameDirection
-        ? (direction > 0 ? Math.max(sourceAxis, targetAxis) + span / 2 : Math.min(sourceAxis, targetAxis) - span / 2)
-        : (sourceAxis + targetAxis) / 2;
-      const sourceApproach = Math.sign(bendAxis - sourceAxis);
-      const targetApproach = Math.sign(targetAxis - bendAxis);
-      const needsDetour = !sameDirection && (
-        sourceApproach !== direction ||
-        targetApproach !== -targetDirectionAxis
-      );
-
-      if (needsDetour) {
-        const lead = span / 2;
-        const sourceLead = {
-          x: source.x + sourceDirection.x * lead,
-          y: source.y + sourceDirection.y * lead
-        };
-        const targetLead = {
-          x: target.x + targetDirection.x * lead,
-          y: target.y + targetDirection.y * lead
-        };
-        points = sourceIsHorizontal
-          ? [
-            source,
-            sourceLead,
-            { x: sourceLead.x, y: Math.min(source.y, target.y) - lead },
-            { x: targetLead.x, y: Math.min(source.y, target.y) - lead },
-            targetLead,
-            target
-          ]
-          : [
-            source,
-            sourceLead,
-            { x: Math.min(source.x, target.x) - lead, y: sourceLead.y },
-            { x: Math.min(source.x, target.x) - lead, y: targetLead.y },
-            targetLead,
-            target
-          ];
-      } else {
-        points = sourceIsHorizontal
-          ? [source, { x: bendAxis, y: source.y }, { x: bendAxis, y: target.y }, target]
-          : [source, { x: source.x, y: bendAxis }, { x: target.x, y: bendAxis }, target];
-      }
-    } else {
-      const lead = span / 4;
-      const sourceLead = {
-        x: source.x + sourceDirection.x * lead,
-        y: source.y + sourceDirection.y * lead
-      };
-      const targetLead = {
-        x: target.x + targetDirection.x * lead,
-        y: target.y + targetDirection.y * lead
-      };
-      points = sourceIsHorizontal
-        ? [source, sourceLead, { x: targetLead.x, y: sourceLead.y }, targetLead, target]
-        : [source, sourceLead, { x: sourceLead.x, y: targetLead.y }, targetLead, target];
-    }
+    const points = buildOrthogonalRoute(source, target, sourceDirection, targetDirection);
 
     let distinctPoints = points.filter((point, index) =>
       index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y

@@ -1919,13 +1919,16 @@ test("buildEdgePath produces deterministic geometry for every route and anchor p
   assert.deepEqual(JSON.parse(JSON.stringify(overlapping.midpoint)), { x: 100, y: 100 });
 
   const sameSide = buildEdgePath({ x: 300, y: 100 }, { x: 100, y: 100 }, "right", "right", "orthogonal");
-  assert.equal(sameSide.path, "M 300 100 L 400 100 L 100 100");
+  // Both anchors point right and the endpoints share a y, so a C bend would
+  // collapse onto that line and double back. The edge routes clear of both
+  // instead, leaving the source rightwards and entering the target's right side.
+  assert.equal(sameSide.path, "M 300 100 L 400 100 L 400 0 L 200 0 L 200 100 L 100 100");
 
   const balanced = buildEdgePath(source, target, "right", "left", "orthogonal");
   assert.equal(balanced.path, "M 100 100 L 200 100 L 200 220 L 300 220");
 
   const rightTarget = buildEdgePath({ x: 190, y: 40 }, { x: 300, y: 40 }, "right", "right", "orthogonal");
-  assert.equal(rightTarget.path, "M 190 40 L 355 40 L 300 40");
+  assert.equal(rightTarget.path, "M 190 40 L 245 40 L 245 -15 L 355 -15 L 355 40 L 300 40");
   assert.deepEqual(JSON.parse(JSON.stringify(rightTarget.endTangent)), { x: -55, y: 0 });
 
   const reverse = buildEdgePath({ x: 490, y: 140 }, { x: 100, y: 140 }, "right", "left", "orthogonal");
@@ -3237,4 +3240,123 @@ test("setDiagramId inserts the new id literally, so replacement patterns in it a
       `expected the id to survive verbatim: ${id}`
     );
   }
+});
+
+test("an orthogonal edge with no waypoint never doubles back on itself", () => {
+  // A segment that reverses its predecessor draws a spur sticking out of a node
+  // that reads as a stray waypoint, even though the edge has none. Sweeping the
+  // anchor pairs against targets in every relative position is what caught it:
+  // the failures clustered in anchors on different axes, and in same-axis
+  // anchors whose endpoints shared a cross coordinate.
+  const anchorDirections = {
+    top: { x: 0, y: -1 },
+    right: { x: 1, y: 0 },
+    bottom: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }
+  };
+  const offsets = [-300, -190, -48, -1, 0, 1, 48, 190, 300];
+  const source = { x: 400, y: 400 };
+  let checked = 0;
+
+  for (const sourceAnchor of edgeAnchors) {
+    for (const targetAnchor of edgeAnchors) {
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          if (dx === 0 && dy === 0) {
+            continue;
+          }
+          const target = { x: source.x + dx, y: source.y + dy };
+          const { path } = buildEdgePath(source, target, sourceAnchor, targetAnchor, "orthogonal");
+          const points = path
+            .match(/-?\d+(?:\.\d+)?\s-?\d+(?:\.\d+)?/g)
+            .map((point) => point.split(" ").map(Number));
+          const segments = points
+            .slice(1)
+            .map((point, index) => [point[0] - points[index][0], point[1] - points[index][1]])
+            .filter(([x, y]) => x !== 0 || y !== 0);
+          const label = `${sourceAnchor} -> ${targetAnchor} at (${dx}, ${dy}): ${path}`;
+          checked += 1;
+
+          for (const [x, y] of segments) {
+            assert.ok(x === 0 || y === 0, `every segment stays axis-aligned. ${label}`);
+          }
+          for (let index = 0; index < segments.length - 1; index += 1) {
+            const [ax, ay] = segments[index];
+            const [bx, by] = segments[index + 1];
+            assert.ok(ax * bx + ay * by >= 0, `no segment doubles back. ${label}`);
+          }
+
+          // A U-turn much narrower than the endpoints are apart is the spur
+          // shape: the outward and return prongs sit almost on top of each
+          // other. Bends placed at a midpoint halve that distance by
+          // construction, so that is the bound.
+          for (let index = 0; index < segments.length - 2; index += 1) {
+            const [ax, ay] = segments[index];
+            const turn = segments[index + 1];
+            const [cx, cy] = segments[index + 2];
+            if (ax * cx + ay * cy >= 0) {
+              continue;
+            }
+            const separation = Math.abs(turn[0] !== 0 ? dx : dy);
+            assert.ok(
+              Math.hypot(turn[0], turn[1]) >= separation / 2,
+              `no hairline U-turn. ${label}`
+            );
+          }
+
+          // The route also has to respect the anchors it was asked for: leave
+          // along the source anchor and enter through the target's.
+          const sourceDirection = anchorDirections[sourceAnchor];
+          const targetDirection = anchorDirections[targetAnchor];
+          const first = segments[0];
+          const last = segments[segments.length - 1];
+          assert.ok(
+            first[0] * sourceDirection.x + first[1] * sourceDirection.y > 0,
+            `leaves along the source anchor. ${label}`
+          );
+          assert.ok(
+            last[0] * targetDirection.x + last[1] * targetDirection.y < 0,
+            `arrives through the target anchor. ${label}`
+          );
+        }
+      }
+    }
+  }
+
+  assert.equal(checked, 1280);
+});
+
+test("a single corner is enough when both anchors already face the way the edge travels", () => {
+  // The common case must stay the simple L rather than gaining bends.
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "right", "top", "orthogonal").path,
+    "M 100 100 L 300 100 L 300 200"
+  );
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "bottom", "left", "orthogonal").path,
+    "M 100 100 L 100 200 L 300 200"
+  );
+});
+
+test("an orthogonal edge steps around instead of overshooting when an anchor faces away", () => {
+  // Target sits behind the source's right anchor: the edge used to run right,
+  // then straight back over itself through the node it had just left.
+  assert.equal(
+    buildEdgePath({ x: 300, y: 100 }, { x: 100, y: 200 }, "right", "top", "orthogonal").path,
+    "M 300 100 L 350 100 L 350 150 L 100 150 L 100 200"
+  );
+  // Source sits behind the target's bottom anchor: the edge used to overshoot
+  // past the target and come back up into it. It now crosses at the midpoint
+  // between the two, so the bend stays clear of both ends.
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "right", "bottom", "orthogonal").path,
+    "M 100 100 L 200 100 L 200 250 L 300 250 L 300 200"
+  );
+  // A bend that would land almost on the source's own line is moved to the
+  // midpoint rather than pushed out past it, which keeps the detour compact
+  // instead of throwing it off the canvas.
+  assert.equal(
+    buildEdgePath({ x: 640, y: 75 }, { x: 200, y: 180 }, "right", "top", "orthogonal").path,
+    "M 640 75 L 750 75 L 750 127.5 L 200 127.5 L 200 180"
+  );
 });
