@@ -139,16 +139,16 @@ things; flowcharts are the outlier.
 
 ```yaml
 type: flowchart
-layout: { engine: layered, direction: right, nodeGap: 60, rankGap: 120 }
+layout: { direction: right, stageGap: 120, siblingGap: 60 }
 canvas: auto
 nodes:
   - id: api
     label: Payments API
-    shape: rounded-rectangle      # no position: the engine places it
+    shape: rounded-rectangle      # no position: layout places it
   - id: ledger
     label: Customer ledger
     shape: database
-    position: { x: 640, y: 240 }  # pinned: the engine works around it
+    position: { x: 640, y: 240 }  # pinned: layout works around it
 edges:
   - source: api
     target: ledger
@@ -158,23 +158,35 @@ edges:
 
 - **`layout` absent → today's behaviour exactly.** Fully backwards compatible;
   every existing document is unaffected.
-- **`position` wins.** A node that declares one is pinned and the engine places
+- **`position` wins.** A node that declares one is pinned and layout places
   the rest around it. This allows incremental adoption and lets a human nail down
   the one node that matters.
 - `direction` is `right`, `down`, `left`, or `up`.
+- `stageGap` is the distance between successive stages, along the flow.
+  `siblingGap` is the distance between nodes within the same stage, across it.
 - Containers (`children`) lay out recursively inside their parent's box.
 - `canvas: auto` fits computed content bounds, so the agent stops maintaining a
   bounding box by hand.
 
-### Engine
+No `engine` key until there is a second algorithm to choose between. If one is
+ever added — a tree or force-directed placement, say — `engine:` can be
+introduced then, defaulting to the behaviour described here.
 
-A layered (Sugiyama-style) approach is the right fit for the flowcharts this
-format is used for:
+### How placement works
 
-1. Rank nodes by longest path from the sources.
-2. Order within each rank with a couple of median-heuristic passes to reduce
-   crossings.
-3. Assign coordinates from `nodeGap` / `rankGap`, snapped to `canvas.grid`.
+Nodes fall into **stages** by how deep they sit in the dependency chain, and each
+stage is drawn perpendicular to the flow: columns when `direction: right`, rows
+when `direction: down`. For `A → B`, `A → C`, `B → D`, `C → D`, A is stage 0, B
+and C are stage 1, and D is stage 2.
+
+This is the approach usually called *layered* or *Sugiyama* drawing, and is what
+Graphviz's `dot` does. The literature's terms — "layer", "rank" — are avoided
+here in favour of "stage", which describes the result rather than the algorithm.
+
+1. Assign each node a stage from the longest path from the sources.
+2. Order nodes within a stage to reduce edge crossings — a couple of
+   median-heuristic passes. Most of the visual quality comes from this step.
+3. Assign coordinates from `stageGap` / `siblingGap`, snapped to `canvas.grid`.
 
 Deterministic ordering matters — the same source must always produce the same
 diagram, or regenerating a document produces spurious diffs.
@@ -182,8 +194,8 @@ diagram, or regenerating a document produces spurious diffs.
 ### Baking
 
 The moment a node is dragged in the editor, serialise the computed positions
-into the fence and switch the diagram to `layout: manual` (or drop the key). The
-engine must never fight a hand edit. This follows the existing philosophy that
+into the fence and switch the diagram to `layout: manual` (or drop the key).
+Layout must never fight a hand edit. This follows the existing philosophy that
 the fence is canonical and `persistDiagramModels` writes the model back to it.
 
 ---
@@ -240,7 +252,7 @@ opt-in `:::toc` directive that builds from the heading tree.
 
 Orthogonal routing no longer draws spurs, but edges still pass through unrelated
 nodes. This is very visible when nodes are placed by an agent that cannot see the
-result. Naturally follows auto-layout — an engine that owns node placement is
+result. Naturally follows auto-layout — whatever owns node placement is
 also the right place to route edges around obstacles.
 
 ---
