@@ -24,6 +24,10 @@ export function injectStyles(): void {
       background: var(--docdiagram-page-background, #17202a);
       color: var(--docdiagram-page-text, #f3f8fc);
     }
+    html[data-docdiagram-expanded="true"],
+    html[data-docdiagram-expanded="true"] body {
+      overflow: hidden;
+    }
     #rendered-document {
       background: var(--docdiagram-background);
       box-sizing: border-box;
@@ -209,6 +213,7 @@ export function injectStyles(): void {
       background: var(--docdiagram-background);
       color: var(--docdiagram-text);
       display: flex;
+      gap: .35rem;
       justify-content: flex-end;
       margin: 0;
       max-width: 1100px;
@@ -678,16 +683,30 @@ export function injectStyles(): void {
       margin: 1.5rem 0;
       height: min(70vh, 42rem);
       min-height: 16rem;
-      overflow: auto;
+      /* The camera offset is the only thing that moves the canvas, so the frame
+         itself never scrolls. Native scrolling cannot reach past the canvas
+         origin, which put anywhere the camera had moved left of it out of
+         reach. */
+      overflow: hidden;
       padding: 1rem;
       position: relative;
       resize: vertical;
     }
-    .docdiagram {
-      scrollbar-width: none;
-    }
-    .docdiagram::-webkit-scrollbar {
-      display: none;
+    .docdiagram[data-expanded="true"] {
+      border-radius: 0;
+      border-width: 0;
+      box-shadow: none;
+      height: auto;
+      margin: 0;
+      max-height: none;
+      min-height: 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: var(--docdiagram-source-tray-height, 0px);
+      resize: none;
+      z-index: 25;
     }
     .docdiagram-panning svg {
       cursor: grabbing;
@@ -707,6 +726,13 @@ export function injectStyles(): void {
     }
     .docdiagram-diagram-export {
       position: relative;
+    }
+    /* Docked into the document toolbar while a frame fills the window, where it
+       is one item in that row rather than a bar spanning its own frame. */
+    .docdiagram-toolbar .docdiagram-diagram-toolbar {
+      margin-bottom: 0;
+      position: static;
+      width: auto;
     }
     .docdiagram-diagram-export-menu {
       background: var(--docdiagram-background);

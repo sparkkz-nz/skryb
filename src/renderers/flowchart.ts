@@ -34,15 +34,18 @@ export function renderDiagramToolbar(
 ): string {
   const allowsEditing = editingMode !== "none";
   const allowsNodeCreation = editingMode === "flowchart";
+  const isExpanded = state.expandedDiagramIndex === diagramIndex;
   return [
     `<div class="docdiagram-diagram-toolbar" role="toolbar" aria-label="Diagram controls">`,
     `<button type="button" class="docdiagram-icon-button docdiagram-zoom-in" data-diagram-index="${diagramIndex}" aria-label="Zoom in" title="Zoom in">+</button>`,
     `<button type="button" class="docdiagram-icon-button docdiagram-zoom-out" data-diagram-index="${diagramIndex}" aria-label="Zoom out" title="Zoom out">−</button>`,
     `<button type="button" class="docdiagram-icon-button docdiagram-fit" data-diagram-index="${diagramIndex}" aria-label="Zoom to fit" title="Zoom to fit">⊡</button>`,
+    `<button type="button" class="docdiagram-icon-button docdiagram-toggle-expand" data-diagram-index="${diagramIndex}" aria-pressed="${isExpanded}" aria-label="${isExpanded ? "Collapse diagram" : "Expand diagram"}" title="${isExpanded ? "Collapse diagram (Esc)" : "Expand diagram"}">${isExpanded ? "⤡" : "⤢"}</button>`,
     `<div class="docdiagram-diagram-export">`,
     `<button type="button" class="docdiagram-icon-button docdiagram-export-toggle" data-diagram-index="${diagramIndex}" aria-label="Export diagram" aria-expanded="false" title="Export diagram">⇧</button>`,
     `<div class="docdiagram-diagram-export-menu" hidden>`,
     `<button type="button" class="docdiagram-open-diagram" data-diagram-index="${diagramIndex}">Open full diagram</button>`,
+    `<button type="button" class="docdiagram-save-diagram" data-diagram-index="${diagramIndex}">Save as Skryb diagram</button>`,
     `<button type="button" class="docdiagram-download-diagram" data-diagram-index="${diagramIndex}">Save as SVG</button>`,
     `<button type="button" class="docdiagram-print-diagram" data-diagram-index="${diagramIndex}">Print / Save as PDF</button>`,
     `</div>`,
@@ -51,7 +54,7 @@ export function renderDiagramToolbar(
       ? state.editingDiagramIndex === diagramIndex
         ? `<button type="button" class="docdiagram-icon-button docdiagram-done-editing" aria-label="Done editing" title="Done editing">✓</button><button type="button" class="docdiagram-icon-button docdiagram-cancel-editing" aria-label="Cancel editing and discard changes" title="Cancel editing and discard changes">×</button>${allowsNodeCreation ? `<button type="button" class="docdiagram-icon-button docdiagram-create-node" data-diagram-index="${diagramIndex}" aria-label="New node" title="New node">+</button>` : ""}`
         : state.editingDiagramIndex === null
-          ? `<button type="button" class="docdiagram-icon-button docdiagram-start-editing" aria-label="Edit diagram" title="Edit diagram">✎</button>`
+          ? `<button type="button" class="docdiagram-icon-button docdiagram-start-editing" data-diagram-index="${diagramIndex}" aria-label="Edit diagram" title="Edit diagram">✎</button>`
           : ""
       : "",
     `</div>`
@@ -246,15 +249,16 @@ export function renderFlowchartDiagram(
 
   const width = Number(diagram.canvas.width) || 1000;
   const height = Number(diagram.canvas.height) || 560;
+  const isExpanded = state.expandedDiagramIndex === diagramIndex;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
-  const viewportStyle = viewportHeight
+  const viewportStyle = viewportHeight && !isExpanded
     ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
     : "";
   const cameraOffset = diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
 
   return [
-    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}"${viewportStyle}>`,
+    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "flowchart", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Architecture diagram" data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
     `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,

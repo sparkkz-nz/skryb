@@ -3,6 +3,19 @@ import { parseDiagram, parseScalar } from "./diagrams/parser";
 import { resolveTheme } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen, stripFencePrefix } from "./fences";
 
+export const documentDoctypes = ["document", "diagram"] as const;
+
+export type DocumentDoctype = (typeof documentDoctypes)[number];
+
+export interface ResolvedDocument {
+  content: string;
+  frontmatter: Record<string, unknown>;
+  theme: string;
+  resolvedTheme: "light" | "dark";
+  colourScheme: string;
+  doctype: DocumentDoctype;
+}
+
 export function parseDocumentFrontmatter(source: string): { content: string; frontmatter: Record<string, unknown> } {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const openingIndex = lines.findIndex((line) => line.trim() !== "");
@@ -32,10 +45,11 @@ export function parseDocumentFrontmatter(source: string): { content: string; fro
   return { content: lines.slice(closingIndex + 1).join("\n"), frontmatter };
 }
 
-export function resolveDocument(source: string): { content: string; frontmatter: Record<string, unknown>; theme: string; resolvedTheme: "light" | "dark"; colourScheme: string } {
+export function resolveDocument(source: string): ResolvedDocument {
   const document = parseDocumentFrontmatter(source);
   const theme = String(document.frontmatter.theme || "auto");
   const colourScheme = String(document.frontmatter.colourScheme || "classic");
+  const doctype = String(document.frontmatter.doctype || "document");
 
   let resolvedTheme: "light" | "dark";
   try {
@@ -46,11 +60,14 @@ export function resolveDocument(source: string): { content: string; frontmatter:
   if (!colourSchemes[colourScheme]) {
     throw new Error(`Unsupported document colour scheme: ${colourScheme}`);
   }
+  if (!documentDoctypes.includes(doctype as DocumentDoctype)) {
+    throw new Error(`Unsupported document doctype: ${doctype}`);
+  }
 
-  return { ...document, theme, resolvedTheme, colourScheme };
+  return { ...document, theme, resolvedTheme, colourScheme, doctype: doctype as DocumentDoctype };
 }
 
-export function validateDocumentSource(source: string): { content: string; frontmatter: Record<string, unknown>; theme: string; resolvedTheme: "light" | "dark"; colourScheme: string } {
+export function validateDocumentSource(source: string): ResolvedDocument {
   const document = resolveDocument(source);
   const lines = document.content.replace(/\r\n/g, "\n").split("\n");
   let index = 0;
@@ -111,7 +128,58 @@ export function validateDocumentSource(source: string): { content: string; front
   return document;
 }
 
-export function setFrontmatterSetting(source: string, settingName: "theme" | "colourScheme", value: string): string {
+export interface ExtractedDiagram {
+  id: string | null;
+  source: string;
+}
+
+export function getDiagramId(diagramSource: string): string | null {
+  return diagramSource.match(/^id:\s*(?:"([^"]+)"|([^\s#]+))\s*$/m)?.slice(1).find(Boolean) || null;
+}
+
+/**
+ * Pulls every `diagram` fence body out of a Markdown document. Fence parsing is
+ * shared with document validation so nested and block-quoted fences behave the
+ * same way here as they do when the document renders.
+ */
+export function extractDiagramFences(source: string): ExtractedDiagram[] {
+  const { content } = parseDocumentFrontmatter(source.replace(/\r\n/g, "\n"));
+  const lines = content.split("\n");
+  const diagrams: ExtractedDiagram[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const fence = parseFenceOpen(stripFencePrefix(lines[index]));
+    if (!fence) {
+      index += 1;
+      continue;
+    }
+
+    const closeIndex = findFenceClose(lines, index + 1, fence.marker);
+    if (closeIndex === -1) {
+      break;
+    }
+    if (fence.info === "diagram") {
+      const diagramSource = lines
+        .slice(index + 1, closeIndex)
+        .map((line) => stripFencePrefix(line))
+        .join("\n");
+      diagrams.push({ id: getDiagramId(diagramSource), source: diagramSource });
+    }
+    index = closeIndex + 1;
+  }
+
+  return diagrams;
+}
+
+/** Rewrites a diagram's `id:` line, adding one when the diagram has no id yet. */
+export function setDiagramId(diagramSource: string, id: string): string {
+  return getDiagramId(diagramSource) === null
+    ? `id: ${id}\n${diagramSource}`
+    : diagramSource.replace(/^id:\s*(?:"[^"]+"|[^\s#]+)\s*$/m, () => `id: ${id}`);
+}
+
+export function setFrontmatterSetting(source: string, settingName: "theme" | "colourScheme" | "doctype", value: string): string {
   const normalized = source.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
   const openingIndex = lines.findIndex((line) => line.trim() !== "");
@@ -154,6 +222,10 @@ export function setFrontmatterTheme(source: string, themeName: string): string {
 
 export function setFrontmatterColourScheme(source: string, colourScheme: string): string {
   return setFrontmatterSetting(source, "colourScheme", colourScheme);
+}
+
+export function setFrontmatterDoctype(source: string, doctype: string): string {
+  return setFrontmatterSetting(source, "doctype", doctype);
 }
 
 export function findSourceTextRange(source: string, text: string): { start: number; end: number } | null {

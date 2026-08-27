@@ -86,11 +86,25 @@ Everything happens inside the open document; there is no separate application.
   `midnight`, or `paper`. Diagrams render as live SVG and follow the theme, and
   a menu change becomes canonical frontmatter when the document is saved.
 - **Layout and zoom** switch the reading view between centred and full-width,
-  and zoom, fit, or pan a diagram inside its frame. These are view controls:
+  and zoom, fit, or pan a diagram inside its frame. Over a diagram the wheel pans
+  and Ctrl/Cmd + wheel zooms around the pointer. Neither has bounds, so a diagram
+  can be pushed into a corner to clear working space; **Zoom to fit** brings it
+  back. These are view controls:
   panning and zooming never alter stored coordinates. A diagram frame sizes
   itself to the drawn shapes on first render, so short diagrams leave no empty
   band; drag the frame's bottom edge to resize it, or press **Zoom to fit** to
   return to the automatic height.
+- **Expand a diagram** to fill the window when a frame is too small to work in,
+  and collapse it again from the same control or with Escape. An expanded frame
+  keeps the source tray usable alongside it rather than hiding behind it. Set
+  `doctype: diagram` in frontmatter for a file whose point is a single diagram:
+  it opens with that diagram already expanded, while remaining an ordinary
+  Skryb document in every other respect.
+- **Move diagrams between documents** with **Save as Skryb diagram** in a
+  diagram's export menu, which writes that one diagram as its own `doctype:
+  diagram` file, and **Import diagram…** in the source tray menu, which reads a
+  diagram out of such a file and inserts it at the cursor, renaming its `id` if
+  the current document already uses it.
 
 ## Runtime URLs
 

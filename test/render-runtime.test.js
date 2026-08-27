@@ -84,10 +84,16 @@ const {
   clearEdgeWaypoint,
   toggleNodeCalloutPointer,
   clampZoom,
+  getWheelPixels,
+  getWheelZoom,
   paletteRoles,
   desugarBlockScalars,
   parseTextShapeInlineRuns,
-  renderTextShapeContent
+  renderTextShapeContent,
+  extractDiagramFences,
+  getDiagramId,
+  setDiagramId,
+  setFrontmatterDoctype
 } = context.globalThis.DocDiagramCore;
 
 function readTemplateSource(filePath) {
@@ -1201,6 +1207,9 @@ test("clampZoom limits diagram zoom to supported discrete bounds", () => {
   assert.equal(clampZoom(10), 25);
   assert.equal(clampZoom(125), 125);
   assert.equal(clampZoom(600), 600);
+  // A wheel gesture can raise the zoom continuously, so it needs a ceiling to
+  // stop a runaway one leaving the diagram unrecoverably large.
+  assert.equal(clampZoom(5000), 800);
 });
 
 test("diagram viewports can be vertically resized", () => {
@@ -1211,9 +1220,15 @@ test("diagram viewports can be vertically resized", () => {
   assert.match(diagramEditor, /!isViewportResizePointer\(frame, event\)/);
 });
 
-test("diagram scrollbars are visually hidden while retaining overflow support", () => {
-  assert.match(runtime, /\.docdiagram \{\s*scrollbar-width: none;/);
-  assert.match(runtime, /\.docdiagram::-webkit-scrollbar \{\s*display: none;/);
+test("a diagram frame never scrolls natively, so the camera offset has no bounds", () => {
+  // Native scrolling cannot reach past the canvas origin, so anything the camera
+  // moved left of or above it was unreachable. The camera offset is now the only
+  // thing that positions the canvas, which is what lets a diagram be pushed into
+  // a corner - or right out of view, with Zoom to fit to recover.
+  assert.match(runtime, /\.docdiagram \{[^}]*overflow: hidden;/);
+  assert.doesNotMatch(runtime, /\.docdiagram \{[^}]*overflow: auto;/);
+  // The scrollbar-hiding rules the frame used to need are gone with it.
+  assert.doesNotMatch(runtime, /\.docdiagram::-webkit-scrollbar/);
 });
 
 test("flowchart edge waypoints parse, render, route, and round-trip", () => {
@@ -1915,13 +1930,16 @@ test("buildEdgePath produces deterministic geometry for every route and anchor p
   assert.deepEqual(JSON.parse(JSON.stringify(overlapping.midpoint)), { x: 100, y: 100 });
 
   const sameSide = buildEdgePath({ x: 300, y: 100 }, { x: 100, y: 100 }, "right", "right", "orthogonal");
-  assert.equal(sameSide.path, "M 300 100 L 400 100 L 100 100");
+  // Both anchors point right and the endpoints share a y, so a C bend would
+  // collapse onto that line and double back. The edge routes clear of both
+  // instead, leaving the source rightwards and entering the target's right side.
+  assert.equal(sameSide.path, "M 300 100 L 400 100 L 400 0 L 200 0 L 200 100 L 100 100");
 
   const balanced = buildEdgePath(source, target, "right", "left", "orthogonal");
   assert.equal(balanced.path, "M 100 100 L 200 100 L 200 220 L 300 220");
 
   const rightTarget = buildEdgePath({ x: 190, y: 40 }, { x: 300, y: 40 }, "right", "right", "orthogonal");
-  assert.equal(rightTarget.path, "M 190 40 L 355 40 L 300 40");
+  assert.equal(rightTarget.path, "M 190 40 L 245 40 L 245 -15 L 355 -15 L 355 40 L 300 40");
   assert.deepEqual(JSON.parse(JSON.stringify(rightTarget.endTangent)), { x: -55, y: 0 });
 
   const reverse = buildEdgePath({ x: 490, y: 140 }, { x: 100, y: 140 }, "right", "left", "orthogonal");
@@ -3012,6 +3030,7 @@ test("a live inspector text field keeps the text being typed across its debounce
 test("the shipped flowchart starting points set a snapping grid and sit on it", () => {
   const templates = [
     readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-document-template.html")),
+    readTemplateSource(path.resolve(__dirname, "..", "pages", "templates", "skryb-diagram-template.html")),
     readTemplateSource(path.resolve(__dirname, "..", "pages", "docs", "quickstart.html"))
   ];
 
@@ -3036,4 +3055,423 @@ test("the shipped flowchart starting points set a snapping grid and sit on it", 
       }
     }
   }
+});
+
+test("doctype defaults to document and only accepts the supported values", () => {
+  assert.equal(resolveDocument("# Untitled").doctype, "document");
+  assert.equal(resolveDocument("---\ndoctype: diagram\n---\n# Untitled").doctype, "diagram");
+  assert.throws(
+    () => resolveDocument("---\ndoctype: poster\n---\n# Untitled"),
+    /Unsupported document doctype: poster/
+  );
+});
+
+test("setFrontmatterDoctype adds a header when there is none and rewrites it when there is", () => {
+  assert.equal(
+    setFrontmatterDoctype("# Untitled", "diagram"),
+    "---\ndoctype: diagram\n---\n# Untitled"
+  );
+  assert.equal(
+    setFrontmatterDoctype("---\ntheme: dark\ndoctype: diagram\n---\n# Untitled", "document"),
+    "---\ntheme: dark\ndoctype: document\n---\n# Untitled"
+  );
+  // Switching back and forth must not accumulate duplicate keys, which would
+  // make the frontmatter ambiguous.
+  assert.equal(
+    setFrontmatterDoctype(setFrontmatterDoctype("---\ntheme: dark\n---\n# Untitled", "diagram"), "document"),
+    "---\ntheme: dark\ndoctype: document\n---\n# Untitled"
+  );
+});
+
+test("extractDiagramFences pulls out every diagram, skipping frontmatter and non-diagram fences", () => {
+  const source = [
+    "---",
+    "doctype: diagram",
+    "---",
+    "# Title",
+    "",
+    "```js",
+    "// not a diagram",
+    "```",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: first",
+    "nodes: []",
+    "```",
+    "",
+    "```diagram",
+    "type: sequence",
+    "id: second",
+    "participants: []",
+    "```"
+  ].join("\n");
+
+  const diagrams = extractDiagramFences(source);
+
+  assert.equal(diagrams.length, 2);
+  assert.equal(diagrams.map((diagram) => diagram.id).join(","), "first,second");
+  assert.match(diagrams[0].source, /^type: flowchart\n/);
+  assert.equal(diagrams[0].source.includes("```"), false, "the fence markers stay out of the diagram source");
+});
+
+test("extractDiagramFences ignores a diagram nested inside a longer fence", () => {
+  const source = [
+    "````markdown",
+    "```diagram",
+    "type: flowchart",
+    "id: illustration-only",
+    "```",
+    "````",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: real",
+    "```"
+  ].join("\n");
+
+  assert.equal(extractDiagramFences(source).map((diagram) => diagram.id).join(","), "real");
+});
+
+test("extractDiagramFences reads diagrams out of a block-quoted fence", () => {
+  const source = ["> ```diagram", "> type: flowchart", "> id: quoted", "> ```"].join("\n");
+  const [diagram] = extractDiagramFences(source);
+
+  assert.equal(diagram.id, "quoted");
+  assert.equal(diagram.source, "type: flowchart\nid: quoted");
+});
+
+test("setDiagramId rewrites an existing id and adds one when the diagram has none", () => {
+  assert.equal(
+    setDiagramId("type: flowchart\nid: original\nnodes: []", "renamed"),
+    "type: flowchart\nid: renamed\nnodes: []"
+  );
+  assert.equal(
+    setDiagramId("type: flowchart\nnodes: []", "added"),
+    "id: added\ntype: flowchart\nnodes: []"
+  );
+  // A quoted id is still the diagram's id, so it must be replaced rather than
+  // left behind next to a second id line.
+  assert.equal(getDiagramId(setDiagramId("id: \"quoted id\"\ntype: flowchart", "renamed")), "renamed");
+});
+
+test("an imported diagram keeps rendering after its id is rewritten to avoid a clash", () => {
+  const imported = extractDiagramFences([
+    "```diagram",
+    "type: flowchart",
+    "id: document-flow",
+    "canvas:",
+    "  width: 400",
+    "  height: 200",
+    "nodes:",
+    "  - id: only",
+    "    label: Only",
+    "    shape: rounded-rectangle",
+    "    position: { x: 20, y: 20 }",
+    "```"
+  ].join("\n"))[0];
+
+  const renamed = setDiagramId(imported.source, "document-flow-2");
+  const diagram = parseDiagram(renamed);
+
+  assert.equal(diagram.id, "document-flow-2");
+  assert.equal(diagram.nodes[0].label, "Only");
+  // The round trip has to stay stable, because the runtime re-serializes every
+  // diagram back into the fence whenever the model is persisted.
+  assert.equal(getDiagramId(serializeDiagram(diagram)), "document-flow-2");
+});
+
+test("a document with two diagrams sharing an id is rejected, which is what import guards against", () => {
+  const duplicate = ["```diagram", "type: flowchart", "id: shared", "```"].join("\n");
+
+  assert.throws(() => validateDocumentSource(`${duplicate}\n\n${duplicate}`), /Duplicate diagram id: shared/);
+});
+
+const sampleNodeLines = [
+  "id: sample",
+  "canvas:",
+  "  width: 400",
+  "  height: 200",
+  "nodes:",
+  "  - id: only",
+  "    label: Only",
+  "    shape: rounded-rectangle",
+  "    position: { x: 20, y: 20 }"
+];
+
+test("the diagram toolbar offers an expand toggle that reports its pressed state", () => {
+  const source = flowchartSource(sampleNodeLines);
+  const collapsed = renderDiagram(source, 0);
+
+  assert.match(collapsed, /class="docdiagram-icon-button docdiagram-toggle-expand"[^>]*aria-pressed="false"/);
+  assert.match(collapsed, /<figure class="docdiagram"[^>]*data-expanded="false"/);
+  assert.match(collapsed, /aria-label="Expand diagram"/);
+});
+
+test("the diagram export menu offers saving the diagram as its own Skryb document", () => {
+  const source = flowchartSource(sampleNodeLines);
+
+  assert.match(renderDiagram(source, 0), /class="docdiagram-save-diagram" data-diagram-index="0">Save as Skryb diagram</);
+});
+
+test("the source tray menu offers importing a diagram from another document", () => {
+  assert.match(runtime, /docdiagram-source-import/, "the tray exposes an import control");
+  assert.match(runtime, /Import diagram/, "the import control is labelled for authors");
+});
+
+test("an expanded frame drops its stored viewport height so it can fill the window", () => {
+  // The height the reader resized the frame to must not be re-applied inline
+  // while the frame is expanded, or it would fight the full-window layout.
+  assert.match(
+    runtime,
+    /docdiagram-source-tray-height, 0px\)/,
+    "the expanded frame stops above the source tray instead of hiding behind it"
+  );
+  assert.match(runtime, /\.docdiagram\[data-expanded="true"\]/, "expanded frames get their own layout");
+});
+
+test("the shipped diagram template is a valid doctype: diagram document", () => {
+  const source = readTemplateSource(
+    path.resolve(__dirname, "..", "pages", "templates", "skryb-diagram-template.html")
+  );
+  const document = validateDocumentSource(source);
+
+  assert.equal(document.doctype, "diagram");
+  assert.equal(extractDiagramFences(source).length, 1, "a diagram document holds exactly one diagram");
+});
+
+test("setDiagramId inserts the new id literally, so replacement patterns in it are not expanded", () => {
+  // The id comes from an imported file, and String.replace would otherwise
+  // treat $& and friends as references to the matched text, silently producing
+  // a different id from the one uniqueness was checked against.
+  for (const id of ["$&", "$'", "$`", "$1", "plain-id"]) {
+    assert.equal(
+      getDiagramId(setDiagramId("type: flowchart\nid: original\nnodes: []", id)),
+      id,
+      `expected the id to survive verbatim: ${id}`
+    );
+  }
+});
+
+test("an orthogonal edge with no waypoint never doubles back on itself", () => {
+  // A segment that reverses its predecessor draws a spur sticking out of a node
+  // that reads as a stray waypoint, even though the edge has none. Sweeping the
+  // anchor pairs against targets in every relative position is what caught it:
+  // the failures clustered in anchors on different axes, and in same-axis
+  // anchors whose endpoints shared a cross coordinate.
+  const anchorDirections = {
+    top: { x: 0, y: -1 },
+    right: { x: 1, y: 0 },
+    bottom: { x: 0, y: 1 },
+    left: { x: -1, y: 0 }
+  };
+  const offsets = [-300, -190, -48, -1, 0, 1, 48, 190, 300];
+  const source = { x: 400, y: 400 };
+  let checked = 0;
+
+  for (const sourceAnchor of edgeAnchors) {
+    for (const targetAnchor of edgeAnchors) {
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          if (dx === 0 && dy === 0) {
+            continue;
+          }
+          const target = { x: source.x + dx, y: source.y + dy };
+          const { path } = buildEdgePath(source, target, sourceAnchor, targetAnchor, "orthogonal");
+          const points = path
+            .match(/-?\d+(?:\.\d+)?\s-?\d+(?:\.\d+)?/g)
+            .map((point) => point.split(" ").map(Number));
+          const segments = points
+            .slice(1)
+            .map((point, index) => [point[0] - points[index][0], point[1] - points[index][1]])
+            .filter(([x, y]) => x !== 0 || y !== 0);
+          const label = `${sourceAnchor} -> ${targetAnchor} at (${dx}, ${dy}): ${path}`;
+          checked += 1;
+
+          for (const [x, y] of segments) {
+            assert.ok(x === 0 || y === 0, `every segment stays axis-aligned. ${label}`);
+          }
+          for (let index = 0; index < segments.length - 1; index += 1) {
+            const [ax, ay] = segments[index];
+            const [bx, by] = segments[index + 1];
+            assert.ok(ax * bx + ay * by >= 0, `no segment doubles back. ${label}`);
+          }
+
+          // A U-turn much narrower than the endpoints are apart is the spur
+          // shape: the outward and return prongs sit almost on top of each
+          // other. Bends placed at a midpoint halve that distance by
+          // construction, so that is the bound.
+          for (let index = 0; index < segments.length - 2; index += 1) {
+            const [ax, ay] = segments[index];
+            const turn = segments[index + 1];
+            const [cx, cy] = segments[index + 2];
+            if (ax * cx + ay * cy >= 0) {
+              continue;
+            }
+            const separation = Math.abs(turn[0] !== 0 ? dx : dy);
+            assert.ok(
+              Math.hypot(turn[0], turn[1]) >= separation / 2,
+              `no hairline U-turn. ${label}`
+            );
+          }
+
+          // The route also has to respect the anchors it was asked for: leave
+          // along the source anchor and enter through the target's.
+          const sourceDirection = anchorDirections[sourceAnchor];
+          const targetDirection = anchorDirections[targetAnchor];
+          const first = segments[0];
+          const last = segments[segments.length - 1];
+          assert.ok(
+            first[0] * sourceDirection.x + first[1] * sourceDirection.y > 0,
+            `leaves along the source anchor. ${label}`
+          );
+          assert.ok(
+            last[0] * targetDirection.x + last[1] * targetDirection.y < 0,
+            `arrives through the target anchor. ${label}`
+          );
+        }
+      }
+    }
+  }
+
+  assert.equal(checked, 1280);
+});
+
+test("a single corner is enough when both anchors already face the way the edge travels", () => {
+  // The common case must stay the simple L rather than gaining bends.
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "right", "top", "orthogonal").path,
+    "M 100 100 L 300 100 L 300 200"
+  );
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "bottom", "left", "orthogonal").path,
+    "M 100 100 L 100 200 L 300 200"
+  );
+});
+
+test("an orthogonal edge steps around instead of overshooting when an anchor faces away", () => {
+  // Target sits behind the source's right anchor: the edge used to run right,
+  // then straight back over itself through the node it had just left.
+  assert.equal(
+    buildEdgePath({ x: 300, y: 100 }, { x: 100, y: 200 }, "right", "top", "orthogonal").path,
+    "M 300 100 L 350 100 L 350 150 L 100 150 L 100 200"
+  );
+  // Source sits behind the target's bottom anchor: the edge used to overshoot
+  // past the target and come back up into it. It now crosses at the midpoint
+  // between the two, so the bend stays clear of both ends.
+  assert.equal(
+    buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 200 }, "right", "bottom", "orthogonal").path,
+    "M 100 100 L 200 100 L 200 250 L 300 250 L 300 200"
+  );
+  // A bend that would land almost on the source's own line is moved to the
+  // midpoint rather than pushed out past it, which keeps the detour compact
+  // instead of throwing it off the canvas.
+  assert.equal(
+    buildEdgePath({ x: 640, y: 75 }, { x: 200, y: 180 }, "right", "top", "orthogonal").path,
+    "M 640 75 L 750 75 L 750 127.5 L 200 127.5 L 200 180"
+  );
+});
+
+test("a C bend clears the furthest anchor by a fixed margin, not by the whole span", () => {
+  // Two right anchors on the same vertical line only need the bend far enough
+  // right to clear them both. Scaling the clearance by the span let the vertical
+  // gap between them push the bend sideways, which sent it off a tight canvas.
+  const near = buildEdgePath({ x: 860, y: 375 }, { x: 860, y: 215 }, "right", "right", "orthogonal");
+  assert.equal(near.path, "M 860 375 L 884 375 L 884 215 L 860 215");
+
+  // Pulling the endpoints four times further apart on the cross axis must not
+  // move the bend, because that distance is not the direction it travels.
+  const spread = buildEdgePath({ x: 860, y: 900 }, { x: 860, y: 260 }, "right", "right", "orthogonal");
+  assert.equal(spread.path, "M 860 900 L 884 900 L 884 260 L 860 260");
+
+  // The margin is measured from whichever anchor reaches furthest, so an
+  // offset pair still only clears the outermost of the two.
+  const offset = buildEdgePath({ x: 200, y: 100 }, { x: 800, y: 300 }, "right", "right", "orthogonal");
+  assert.equal(offset.path, "M 200 100 L 824 100 L 824 300 L 800 300");
+
+  // Anchors pointing the other way clear on the other side by the same margin.
+  const leftward = buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 260 }, "left", "left", "orthogonal");
+  assert.equal(leftward.path, "M 100 100 L 76 100 L 76 260 L 300 260");
+});
+
+test("every diagram control names its own diagram, so the toolbar survives being docked", () => {
+  // An expanded frame's toolbar is moved into the document toolbar, outside the
+  // frame it belongs to. Any handler that recovered the index by walking up to
+  // the enclosing figure would break there, so the index travels on the button.
+  const source = flowchartSource(sampleNodeLines);
+  const markup = renderDiagram(source, 3);
+  const toolbar = markup.match(/<div class="docdiagram-diagram-toolbar"[\s\S]*?<\/svg>/)[0];
+  const buttons = [...toolbar.matchAll(/<button[^>]*class="([^"]*)"[^>]*>/g)]
+    .map((match) => ({ tag: match[0], classes: match[1] }));
+
+  // Done and Cancel act on whichever diagram is being edited, which the runtime
+  // already tracks, so they are the only controls without an index.
+  const scoped = buttons.filter(({ classes }) =>
+    !/docdiagram-(done|cancel)-editing/.test(classes) && !/docdiagram-source/.test(classes));
+
+  assert.ok(scoped.length >= 5, "the toolbar still has controls to check");
+  for (const { tag, classes } of scoped) {
+    assert.match(tag, /data-diagram-index="3"/, `${classes} carries its diagram index`);
+  }
+});
+
+test("the expanded frame hands its controls to the document toolbar", () => {
+  assert.match(
+    runtime,
+    /\.docdiagram-toolbar \.docdiagram-diagram-toolbar/,
+    "docked controls get layout that suits a row rather than their own frame"
+  );
+  assert.match(runtime, /dockExpandedDiagramToolbar|prepend/, "the runtime moves the toolbar when expanded");
+});
+
+test("a wheel gesture zooms proportionally and is reversible", () => {
+  // Zooming out has to undo zooming in exactly, or repeatedly nudging the wheel
+  // back and forth would drift the diagram away from where it started.
+  assert.equal(getWheelZoom(getWheelZoom(100, -100), 100), 100);
+  assert.equal(getWheelZoom(getWheelZoom(250, -37), 37).toFixed(6), "250.000000");
+
+  // Proportional rather than a fixed number of points, so a gesture feels the
+  // same at every magnification.
+  const fromHundred = getWheelZoom(100, -100) / 100;
+  const fromFourHundred = getWheelZoom(400, -100) / 400;
+  assert.equal(fromHundred.toFixed(6), fromFourHundred.toFixed(6));
+
+  // One notch of a detented wheel lands near the toolbar's own zoom step.
+  assert.ok(getWheelZoom(100, -100) > 120 && getWheelZoom(100, -100) < 135);
+});
+
+test("wheel zoom reads line and page deltas as comparable to pixel deltas", () => {
+  // A device reporting three lines must not zoom a sixteenth as far as one
+  // reporting the equivalent in pixels.
+  assert.equal(getWheelZoom(100, -3, 1), getWheelZoom(100, -48, 0));
+  assert.equal(getWheelZoom(100, -1, 2), getWheelZoom(100, -400, 0));
+  assert.ok(getWheelZoom(100, -3, 1) > 110, "a line-mode notch is a usable step");
+});
+
+test("wheel zoom stays inside the supported bounds however hard it is driven", () => {
+  let zoomedIn = 100;
+  let zoomedOut = 100;
+  for (let step = 0; step < 200; step += 1) {
+    zoomedIn = getWheelZoom(zoomedIn, -200);
+    zoomedOut = getWheelZoom(zoomedOut, 200);
+  }
+
+  assert.equal(zoomedIn, 800);
+  assert.equal(zoomedOut, 25);
+});
+
+test("ctrl or cmd wheel zoom is registered so it can suppress the browser's own page zoom", () => {
+  // The listener has to be non-passive, or preventDefault is ignored and the
+  // gesture zooms the whole page instead of the diagram.
+  assert.match(runtime, /"wheel"[\s\S]{0,120}passive:\s*!1/, "the wheel listener opts out of passive");
+});
+
+test("wheel deltas normalise to pixels whichever unit the device reports", () => {
+  assert.equal(getWheelPixels(100), 100);
+  assert.equal(getWheelPixels(-100), -100);
+  assert.equal(getWheelPixels(3, 1), 48, "lines are read as pixels");
+  assert.equal(getWheelPixels(1, 2), 400, "pages are read as pixels");
+  // Panning and zooming share this, so a device reporting lines moves a diagram
+  // the same distance as one reporting the equivalent in pixels.
+  assert.equal(getWheelZoom(100, 3, 1), getWheelZoom(100, getWheelPixels(3, 1), 0));
 });
