@@ -529,7 +529,13 @@ export class BrowserRuntime {
         activeInlineEditor.blur();
       }
       const toolbar = document.querySelector<HTMLElement>(".docdiagram-toolbar");
-      if (toolbar && event.target instanceof Node && !toolbar.contains(event.target)) {
+      // Diagram controls docked into the document toolbar are still diagram
+      // controls, so using them dismisses the document menu as they would from
+      // inside their own frame.
+      const withinDiagramControls = event.target instanceof Element &&
+        event.target.closest(".docdiagram-diagram-toolbar") !== null;
+      if (toolbar && event.target instanceof Node &&
+        (!toolbar.contains(event.target) || withinDiagramControls)) {
         this.closeDocumentMenu();
       }
       if (event.target instanceof Node && !(
@@ -767,6 +773,28 @@ export class BrowserRuntime {
       wireSequenceInspector(this, toolbar, sequenceElement);
     }
     this.wireChromeControls();
+    this.dockExpandedDiagramToolbar(toolbar);
+  }
+
+  /**
+   * While a frame fills the window it has no free corner of its own, and the
+   * document menu no longer floats above scrolling content because nothing
+   * scrolls behind it. Moving the frame's controls into the document toolbar
+   * makes the two a single row that lays itself out, instead of one having to
+   * reserve a guessed amount of space for the other. The controls keep the
+   * listeners bound in wireChromeControls, which travel with the element, and
+   * the next render rebuilds both from scratch.
+   */
+  private dockExpandedDiagramToolbar(toolbar: HTMLElement): void {
+    if (this.state.expandedDiagramIndex === null) {
+      return;
+    }
+    const diagramToolbar = this.outputElement?.querySelector<HTMLElement>(
+      `.docdiagram[data-diagram-index="${this.state.expandedDiagramIndex}"] .docdiagram-diagram-toolbar`
+    );
+    if (diagramToolbar) {
+      toolbar.prepend(diagramToolbar);
+    }
   }
 
   private getSelectedNode(): FlowchartNode | null {
@@ -880,7 +908,9 @@ export class BrowserRuntime {
     }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-start-editing")) {
       button.addEventListener("click", () => {
-        const diagramIndex = Number(button.closest(".docdiagram")?.getAttribute("data-diagram-index"));
+        // Read from the button rather than its ancestor frame, because an
+        // expanded diagram's controls are docked outside that frame.
+        const diagramIndex = Number(button.dataset.diagramIndex);
         const diagram = this.state.diagramModels[diagramIndex];
         if (!diagram) {
           return;
@@ -1051,13 +1081,12 @@ export class BrowserRuntime {
   }
 
   private closeDiagramExportMenus(): void {
-    if (!this.outputElement) {
-      return;
-    }
-    for (const menu of this.outputElement.querySelectorAll<HTMLElement>(".docdiagram-diagram-export-menu")) {
+    // Searched from the document because an expanded frame's controls are docked
+    // into the document toolbar, outside the rendered output.
+    for (const menu of document.querySelectorAll<HTMLElement>(".docdiagram-diagram-export-menu")) {
       menu.hidden = true;
     }
-    for (const toggle of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-export-toggle")) {
+    for (const toggle of document.querySelectorAll<HTMLButtonElement>(".docdiagram-export-toggle")) {
       toggle.setAttribute("aria-expanded", "false");
     }
   }

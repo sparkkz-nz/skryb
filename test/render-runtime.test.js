@@ -3382,3 +3382,33 @@ test("a C bend clears the furthest anchor by a fixed margin, not by the whole sp
   const leftward = buildEdgePath({ x: 100, y: 100 }, { x: 300, y: 260 }, "left", "left", "orthogonal");
   assert.equal(leftward.path, "M 100 100 L 76 100 L 76 260 L 300 260");
 });
+
+test("every diagram control names its own diagram, so the toolbar survives being docked", () => {
+  // An expanded frame's toolbar is moved into the document toolbar, outside the
+  // frame it belongs to. Any handler that recovered the index by walking up to
+  // the enclosing figure would break there, so the index travels on the button.
+  const source = flowchartSource(sampleNodeLines);
+  const markup = renderDiagram(source, 3);
+  const toolbar = markup.match(/<div class="docdiagram-diagram-toolbar"[\s\S]*?<\/svg>/)[0];
+  const buttons = [...toolbar.matchAll(/<button[^>]*class="([^"]*)"[^>]*>/g)]
+    .map((match) => ({ tag: match[0], classes: match[1] }));
+
+  // Done and Cancel act on whichever diagram is being edited, which the runtime
+  // already tracks, so they are the only controls without an index.
+  const scoped = buttons.filter(({ classes }) =>
+    !/docdiagram-(done|cancel)-editing/.test(classes) && !/docdiagram-source/.test(classes));
+
+  assert.ok(scoped.length >= 5, "the toolbar still has controls to check");
+  for (const { tag, classes } of scoped) {
+    assert.match(tag, /data-diagram-index="3"/, `${classes} carries its diagram index`);
+  }
+});
+
+test("the expanded frame hands its controls to the document toolbar", () => {
+  assert.match(
+    runtime,
+    /\.docdiagram-toolbar \.docdiagram-diagram-toolbar/,
+    "docked controls get layout that suits a row rather than their own frame"
+  );
+  assert.match(runtime, /dockExpandedDiagramToolbar|prepend/, "the runtime moves the toolbar when expanded");
+});

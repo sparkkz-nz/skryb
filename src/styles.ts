@@ -213,6 +213,7 @@ export function injectStyles(): void {
       background: var(--docdiagram-background);
       color: var(--docdiagram-text);
       display: flex;
+      gap: .35rem;
       justify-content: flex-end;
       margin: 0;
       max-width: 1100px;
@@ -692,7 +693,7 @@ export function injectStyles(): void {
     }
     .docdiagram[data-expanded="true"] {
       border-radius: 0;
-      border-width: 1px 0 0;
+      border-width: 0;
       box-shadow: none;
       height: auto;
       margin: 0;
@@ -728,14 +729,12 @@ export function injectStyles(): void {
     .docdiagram-diagram-export {
       position: relative;
     }
-    /* Expanded frames share the top-right corner with the fixed document menu
-       and inspector, so their own controls move to the free left edge. */
-    .docdiagram[data-expanded="true"] .docdiagram-diagram-toolbar {
-      justify-content: flex-start;
-    }
-    .docdiagram[data-expanded="true"] .docdiagram-diagram-export-menu {
-      left: 0;
-      right: auto;
+    /* Docked into the document toolbar while a frame fills the window, where it
+       is one item in that row rather than a bar spanning its own frame. */
+    .docdiagram-toolbar .docdiagram-diagram-toolbar {
+      margin-bottom: 0;
+      position: static;
+      width: auto;
     }
     .docdiagram-diagram-export-menu {
       background: var(--docdiagram-background);

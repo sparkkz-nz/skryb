@@ -54,7 +54,7 @@ export function renderDiagramToolbar(
       ? state.editingDiagramIndex === diagramIndex
         ? `<button type="button" class="docdiagram-icon-button docdiagram-done-editing" aria-label="Done editing" title="Done editing">✓</button><button type="button" class="docdiagram-icon-button docdiagram-cancel-editing" aria-label="Cancel editing and discard changes" title="Cancel editing and discard changes">×</button>${allowsNodeCreation ? `<button type="button" class="docdiagram-icon-button docdiagram-create-node" data-diagram-index="${diagramIndex}" aria-label="New node" title="New node">+</button>` : ""}`
         : state.editingDiagramIndex === null
-          ? `<button type="button" class="docdiagram-icon-button docdiagram-start-editing" aria-label="Edit diagram" title="Edit diagram">✎</button>`
+          ? `<button type="button" class="docdiagram-icon-button docdiagram-start-editing" data-diagram-index="${diagramIndex}" aria-label="Edit diagram" title="Edit diagram">✎</button>`
           : ""
       : "",
     `</div>`
