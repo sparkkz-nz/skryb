@@ -116,8 +116,16 @@ diagram compact and include adjacent prose that explains the flow. Sequence
 diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
+Set `layout: right` (or `down`, `left`, `up`) on a flowchart and leave the nodes
+without a `position`, unless you have a specific arrangement in mind. Placing
+nodes blind is the main source of untidy generated diagrams; declaring the flow
+direction and letting the runtime place them is both shorter to write and
+reliably better looking. Layout only ever places nodes that have no `position`,
+so you can pin the few that matter and let the rest fall into stages. Keep the
+`layout` key afterwards: it is what places a node you append later.
+
 Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
-nodes on multiples of that grid. Shared coordinates are what make a diagram look
+nodes on multiples of that grid when you do place them by hand. Shared coordinates are what make a diagram look
 deliberate: node edges line up, rows and columns align, and connectors meet
 anchors squarely instead of missing by a pixel or two. It also makes later
 graphical edits snap into the same alignment rather than drifting out of it.
@@ -223,8 +231,9 @@ Before returning a document, verify:
 - Every diagram declares its supported type. Every flowchart has explicit shapes
   and edge anchors and uses only supported palette, route, marker, waypoint,
   callout pointer, and style values.
-- Flowcharts set `canvas.grid` (normally `5`) and their node positions and sizes
-  are multiples of it.
+- Flowcharts set `canvas.grid` (normally `5`) and any hand-written node positions
+  and sizes are multiples of it.
+- A flowchart either declares `layout` or positions every node deliberately.
 - `node scripts/lint.mjs` reports no errors, and every warning it reports is
   either fixed or a deliberate choice.
 - A reader can understand each diagram from its heading, labels, and nearby
