@@ -96,6 +96,7 @@ import {
 import { formatLintMessages, lintDocument } from "../core/lint";
 import { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "../core/markdown";
 import { renderDiagramSource } from "../renderers/diagram";
+import type { DiagramFigure } from "../renderers/types";
 import { injectStyles } from "../styles";
 import { DiagramEditor } from "./diagram-editor";
 import {
@@ -204,8 +205,9 @@ export class BrowserRuntime {
     }
   }
 
-  public renderDiagram(source: string, diagramIndex: number): string {
+  public renderDiagram(source: string, diagramIndex: number, figure?: DiagramFigure): string {
     return renderDiagramSource(source, diagramIndex, {
+      figure,
       colourScheme: this.state.documentColorScheme,
       state: {
         ...this.state,
@@ -220,7 +222,7 @@ export class BrowserRuntime {
 
   public renderMarkdown(source: string, state = { diagramIndex: 0 }): string {
     return renderMarkdownCore(source, state, {
-      renderDiagram: (diagramSource, index) => this.renderDiagram(diagramSource, index),
+      renderDiagram: (diagramSource, index, figure) => this.renderDiagram(diagramSource, index, figure),
       documentColorScheme: this.state.documentColorScheme,
       documentTheme: this.state.documentTheme
     });

@@ -157,11 +157,22 @@ reference at the intended reading position and place the matching fenced
 definition at the end of the document. This keeps the explanatory source easy
 to edit and review without changing where the diagram renders.
 
+Give a diagram a `caption` when the prose refers to it. Write
+`caption: "Figure #: Authentication flow"` to have it numbered, and refer to it
+as `See Figure {ref=auth-flow}`; a caption with no `#` is just a title, and
+`{ref=}` then renders that title instead of a number. Numbers follow render
+order, so the reference pattern above numbers correctly. A diagram's `id` is
+also its anchor, so `#auth-flow` deep-links to it.
+
+Add `:::toc { depth=3 diagrams=true }` near the top of a long document. It takes
+no closing fence, and lists captioned diagrams under the heading they fall
+within.
+
 ## Editing and saving
 
 Use **Edit source** for canonical Markdown, document structure, and sequence
 diagram changes. The source tray's menu can insert valid flowchart, sequence,
-diagram-reference, panel, and grid templates, and **Help** opens the published
+diagram-reference, contents, panel, and grid templates, and **Help** opens the published
 reference. Flowchart edit mode supports node and connector presentation,
 endpoints, an optional edge waypoint, and an optional node callout pointer.
 

@@ -102,20 +102,20 @@ This panel contains **ordinary Markdown**.
 ```
 
 Open directives must begin in column 1 and use one of `section`, `panel`,
-`callout`, `grid`, `stack`, or `diagram`. An opening directive has the form
+`callout`, `grid`, `stack`, `diagram`, or `toc`. An opening directive has the form
 `:::name { key=value }`; braces are required when attributes are present.
 Attribute values are bare non-space values or double-quoted strings.
 
 Whether a directive holds content is a property of its name. The container
-directives — `section`, `panel`, `callout`, `grid`, and `stack` — wrap content
+directives - `section`, `panel`, `callout`, `grid`, and `stack` - wrap content
 and are closed with `:::` in column 1. Any text after whitespace is an ignored
 closing annotation, so `::: (panel)` and `::: End panel` close exactly like
 `:::`. Annotations are for human readability only and are not checked against
 the opening directive name.
 
 Void directives hold no content and therefore take **no closing fence**.
-`:::diagram` is the only one, and is a single self-contained line. A closing
-`:::` written after one out of habit is tolerated and produces nothing.
+`:::diagram` and `:::toc` are void, and each is a single self-contained line. A
+closing `:::` written after one out of habit is tolerated and produces nothing.
 
 Directives nest. Invalid attributes, unknown directive names, unclosed
 directives, and layout content that does not follow the rules below remain
@@ -247,13 +247,84 @@ definition at the end of the document. Keeping large YAML blocks out of the
 reading flow makes the canonical source substantially easier to edit and
 review, while the reference preserves the diagram's intended rendered position.
 
+### Captions, anchors, and cross-references
+
+A diagram's `id` is also its anchor, so `#payment-flow` deep-links to it exactly
+as `#some-heading` links to a heading. A diagram id wins a collision with a
+heading slug - it is explicitly declared and already load-bearing for `{ref=}`
+and `:::diagram`, whereas a heading slug is derived - so the heading takes the
+numeric suffix a repeated heading would get.
+
+A `caption` renders below the diagram, centred, as a `<figcaption>` inside the
+diagram's own `<figure>`. It is hidden while the frame is expanded, because a
+full-window frame is a working view rather than a document view. Caption text
+renders through the inline Markdown subset, so `**bold**` and `` `code` `` work
+but block content does not.
+
+```yaml
+type: flowchart
+id: auth-flow
+caption: "Figure #: Authentication flow"
+```
+
+`#` is replaced by the figure number. A caption without one is simply a title:
+
+```yaml
+caption: Authentication flow
+```
+
+**Only a caption containing the placeholder consumes a number.** That keeps
+numbering contiguous: an unnumbered titled figure sitting between Figure 1 and
+Figure 2 does not create a visible gap. Write `\#` for a literal `#`.
+
+Numbers follow **render order, not definition order**. A diagram referenced with
+`:::diagram` is numbered where the reference sits, not where its fenced
+definition appears, which is what makes the recommended
+reference-beside-the-prose pattern number correctly. A diagram may be referenced
+at most once, so each has exactly one number.
+
+`{ref=auth-flow}` renders a link to the diagram, whose text is:
+
+- **the figure number**, when the target's caption has a placeholder, so
+  `See Figure {ref=auth-flow}` renders as "See Figure 3";
+- **the caption text**, when it has none, so `See {ref=auth-flow}` renders as
+  "See Authentication flow".
+
+A reference to an unknown or uncaptioned id renders a visible error rather than
+nothing, because a silently wrong cross-reference is worse than a visible
+failure.
+
+There is a single figure counter shared by every diagram type.
+
+### Table of contents
+
+`:::toc` builds a contents listing from the document's heading tree. It holds no
+content, so like `:::diagram` it takes no closing fence:
+
+```markdown
+:::toc { depth=3 diagrams=true }
+```
+
+| Attribute | Values / behaviour |
+| --- | --- |
+| `depth` | Deepest heading level to list, `1` to `6`. Default `3`. |
+| `diagrams` | `true` or `false` (default). Lists captioned diagrams alongside headings, nested under the heading they fall within. |
+
+Only captioned diagrams are ever listed: the caption, with its number resolved,
+is the human-facing name, and a diagram without one would otherwise surface a
+raw id as a reading-list entry. Diagrams are listed in render order, the same
+rule numbering follows and for the same reason.
+
+The directive may appear anywhere, including before the headings it lists.
+
 ### Diagram fields
 
 | Field | Required | Description |
 | --- | --- | --- |
 | `type` | Yes | `flowchart` or `sequence`. |
 | `version` | No | A document-defined diagram version, commonly `1`. |
-| `id` | No | A document-defined diagram identifier. |
+| `id` | No | A document-defined diagram identifier. It is also the diagram's anchor and the target of `{ref=}`. |
+| `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
 | `nodes` | Flowchart | List of flowchart nodes. |
 | `edges` | Flowchart | List of flowchart connectors. |

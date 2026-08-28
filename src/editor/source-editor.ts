@@ -55,6 +55,7 @@ const insertTemplates: Record<string, string> = {
     "```"
   ].join("\n"),
   "diagram-reference": ":::diagram { id=diagram-id }",
+  toc: ":::toc { depth=3 diagrams=true }",
   panel: [
     ":::panel { title=\"New panel\" palette=accent }",
     "Panel content.",
@@ -313,6 +314,7 @@ export class SourceEditor {
       `<button type="button" data-source-template="flowchart">Flowchart</button>`,
       `<button type="button" data-source-template="sequence">Sequence</button>`,
       `<button type="button" data-source-template="diagram-reference">Diagram Reference</button>`,
+      `<button type="button" data-source-template="toc">Contents</button>`,
       `<button type="button" class="docdiagram-source-import">Import diagram…</button>`,
       `<button type="button" data-source-template="panel">Panel</button>`,
       `<button type="button" data-source-template="grid">Grid</button>`,

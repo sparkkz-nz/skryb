@@ -12,7 +12,9 @@ import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
 import { getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
-import type { DiagramRenderState, DiagramToolbarRenderer } from "./types";
+import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
+import { renderFigureAttributes, renderFigureCaption } from "./types";
+import { renderInline } from "../core/markdown";
 
 export function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: number; height: number } {
   return {
@@ -65,7 +67,8 @@ export function renderFlowchartDiagram(
   diagram: FlowchartDiagram,
   diagramIndex: number,
   state: DiagramRenderState,
-  renderToolbar: DiagramToolbarRenderer
+  renderToolbar: DiagramToolbarRenderer,
+  figure?: DiagramFigure
 ): string {
   const { selectedNode, selectedEdge, editingNode, editingEdge, connectionDrag, diagramZooms, diagramCameraOffsets } = state;
   const isDiagramEditing = state.editingDiagramIndex === diagramIndex;
@@ -258,7 +261,7 @@ export function renderFlowchartDiagram(
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
 
   return [
-    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
+    `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "flowchart", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Architecture diagram" data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
     `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,
@@ -269,6 +272,7 @@ export function renderFlowchartDiagram(
       : "",
     edgeEndpointMarkup.join(""),
     `</svg>`,
+    renderFigureCaption(figure, renderInline),
     `</figure>`
   ].join("");
 }
