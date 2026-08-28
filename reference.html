@@ -335,6 +335,7 @@ The directive may appear anywhere, including before the headings it lists.
 | `version` | No | A document-defined diagram version, commonly `1`. |
 | `id` | No | A document-defined diagram identifier. It is also the diagram's anchor and the target of `{ref=}`. |
 | `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
+| `layout` | No | Flowchart only. Places nodes that have no `position`. |
 | `styles` | No | Flowchart only. Named styles applied to nodes and edges with `class`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
 | `nodes` | Flowchart | List of flowchart nodes. |
@@ -382,6 +383,89 @@ its only lasting effects are export and print bounds and the diagram's aspect
 ratio — it is not a boundary nodes must sit inside. Give explicit `width` and
 `height` when a fixed aspect ratio matters, for instance so several diagrams in
 one document share a shape.
+
+### Auto-layout
+
+A flowchart can place its own nodes:
+
+```yaml
+type: flowchart
+layout: right
+canvas: auto
+nodes:
+  - id: api
+    label: Payments API
+    shape: rounded-rectangle      # no position: layout places it
+  - id: ledger
+    label: Customer ledger
+    shape: database
+    position: { x: 640, y: 240 }  # already positioned: kept as-is
+edges:
+  - source: api
+    target: ledger
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+`layout` takes `right`, `down`, `left`, or `up`.
+
+**This is a seeding step, not a layout mode.** Layout runs when a diagram is
+loaded and some node has no position, assigns positions to exactly those nodes,
+and the result is baked into the model immediately. Saving writes the actual
+current positions, so there is nothing left to do on a second open, layout can
+never fight a hand edit, and there is no `layout: manual` and no state to track.
+In practice it matters exactly once: the first time an agent-authored file is
+opened.
+
+**Keep the `layout` key after baking.** It becomes a no-op for a fully
+positioned diagram, but it declares *how to place anything unpositioned*, so a
+node appended later with no coordinates is placed on the next open. That is what
+makes incremental edits work without re-laying out the whole diagram.
+
+The rules:
+
+- **`layout` absent is exactly today's behaviour.** Every existing document is
+  unaffected, and a node with no position keeps the current fallback rather than
+  being laid out.
+- **An existing `position` always wins.** It is never moved and never re-flowed.
+- Containers lay out recursively inside their parent's box. A container with no
+  `size` grows to hold the result; a container with a `size` keeps it.
+- Layout runs before the canvas is measured, so `canvas: auto` fits the result.
+- The same source always produces the same positions, so a document that is
+  opened many times before it is ever saved looks the same every time.
+
+How a node is placed depends on what the diagram already says:
+
+**No node has a position** - a fresh diagram. The whole graph is laid out in
+*stages*: each node's stage is the longest path to it from the sources, and each
+stage is drawn perpendicular to the flow, so `right` gives columns and `down`
+gives rows. Nodes within a stage are then ordered to reduce edge crossings.
+
+**Some nodes have positions** - a diagram that has been appended to. Nothing is
+re-flowed. Every edge carries both anchors, so it already states a spatial
+relationship, and a node sits on the side its own anchor faces away from: a
+connector entering the new node's `left` means the neighbour is to its left, so
+the node goes to that neighbour's right, centred on it and one stage gap clear.
+Several connectors are reconciled by clearing every neighbour along the flow and
+sitting between them across it.
+
+**A node with no connectors at all** - a standalone text or legend node - is the
+only case with nothing to infer from, and takes the first free, grid-snapped slot
+that clears everything already placed.
+
+An edge whose anchors contradict the declared direction is a hint, not an error:
+it is read as a deliberate back-edge and left out of stage assignment so it
+cannot stretch the graph. If every edge contradicts the direction the hint says
+nothing useful, so the whole graph is used instead. Cycles are broken the same
+way.
+
+Spacing defaults to a stage gap of 120 and a sibling gap of 60. Because the
+result bakes immediately, an author who dislikes the spacing can simply drag a
+node, but the scalar can widen without breaking the short form:
+
+```yaml
+layout: { direction: right, stageGap: 120, siblingGap: 60 }
+```
 
 ### Named styles
 
