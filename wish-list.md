@@ -14,7 +14,7 @@ whether they remove the need to guess, or make a guess cheap to check.
 | --- | --- | --- | --- |
 | 1 | Lint command | Small | Closes the authoring feedback loop; mostly assembles logic that already exists |
 | 2 | Label wrapping + sizing hints | Small | Kills the most common visual defect |
-| 3 | Flowchart auto-layout | Large | Biggest single quality win |
+| 3 | Flowchart auto-layout | Medium | Biggest single quality win; a one-off seeding step, not a layout mode |
 | 4 | Code syntax highlighting | Medium | Largest gap in document polish |
 | 5 | Whole-document print/PDF | Medium | Shareability outside the browser |
 | 6 | Figure numbering and cross-references | Medium | Table stakes for technical writing |
@@ -150,7 +150,7 @@ things; flowcharts are the outlier.
 
 ```yaml
 type: flowchart
-layout: { direction: right, stageGap: 120, siblingGap: 60 }
+layout: right          # right | down | left | up
 canvas: auto
 nodes:
   - id: api
@@ -159,36 +159,54 @@ nodes:
   - id: ledger
     label: Customer ledger
     shape: database
-    position: { x: 640, y: 240 }  # pinned: layout works around it
+    position: { x: 640, y: 240 }  # already positioned: kept as-is
 edges:
   - source: api
     target: ledger
 ```
 
+### It is a seeding step, not a layout mode
+
+This is the key simplification. Layout runs when a diagram is loaded and any node
+lacks a `position`; it assigns positions to those nodes and the result is baked
+into the model immediately. Serialisation always writes the actual current
+positions, so:
+
+- Layout has nothing left to do on a second open — every node has a position.
+- It can never fight a hand edit, because it only ever touches nodes without one.
+- There is no `layout: manual`, no persistent mode, and no state to track.
+
+In practice auto-layout matters exactly once: the first time an agent-authored
+file is opened. After that the file is fully positioned like any hand-drawn
+diagram.
+
+**Keep the `layout` key after baking.** It becomes a no-op for a fully positioned
+diagram, but it declares *how to place anything unpositioned*, so an agent can
+later append a node with no coordinates and have it placed on the next open. That
+makes incremental agent edits work without re-laying out the whole diagram.
+
 ### Rules
 
 - **`layout` absent → today's behaviour exactly.** Fully backwards compatible;
-  every existing document is unaffected.
-- **`position` wins.** A node that declares one is pinned and layout places
-  the rest around it. This allows incremental adoption and lets a human nail down
-  the one node that matters.
-- `direction` is `right`, `down`, `left`, or `up`.
-- `stageGap` is the distance between successive stages, along the flow.
-  `siblingGap` is the distance between nodes within the same stage, across it.
+  every existing document is unaffected. A node with no position keeps the
+  current fallback rather than being laid out.
+- **An existing `position` always wins.** Never moved, never re-flowed.
 - Containers (`children`) lay out recursively inside their parent's box.
-- `canvas: auto` fits computed content bounds, so the agent stops maintaining a
-  bounding box by hand.
+- `canvas: auto` fits computed content bounds (see item 11).
 
-No `engine` key until there is a second algorithm to choose between. If one is
-ever added — a tree or force-directed placement, say — `engine:` can be
-introduced then, defaulting to the behaviour described here.
+Spacing is left to defaults deliberately. Because the result bakes immediately,
+an author who dislikes the spacing just drags a node, so configuration would earn
+its keep only rarely. If it is ever wanted, the scalar can widen to
+`layout: { direction: right, stageGap: 120, siblingGap: 60 }` without breaking
+the short form. No `engine` key until a second algorithm exists to choose between.
 
-### How placement works
+### Two paths, and only one of them is hard
 
-Nodes fall into **stages** by how deep they sit in the dependency chain, and each
-stage is drawn perpendicular to the flow: columns when `direction: right`, rows
-when `direction: down`. For `A → B`, `A → C`, `B → D`, `C → D`, A is stage 0, B
-and C are stage 1, and D is stage 2.
+**No node has a position** — a fresh agent-authored diagram. Lay out the whole
+graph. Nodes fall into **stages** by how deep they sit in the dependency chain,
+each stage drawn perpendicular to the flow: columns for `right`, rows for `down`.
+For `A → B`, `A → C`, `B → D`, `C → D`, A is stage 0, B and C are stage 1, and D
+is stage 2.
 
 This is the approach usually called *layered* or *Sugiyama* drawing, and is what
 Graphviz's `dot` does. The literature's terms — "layer", "rank" — are avoided
@@ -197,17 +215,34 @@ here in favour of "stage", which describes the result rather than the algorithm.
 1. Assign each node a stage from the longest path from the sources.
 2. Order nodes within a stage to reduce edge crossings — a couple of
    median-heuristic passes. Most of the visual quality comes from this step.
-3. Assign coordinates from `stageGap` / `siblingGap`, snapped to `canvas.grid`.
+3. Assign coordinates from the stage and sibling gaps, snapped to `canvas.grid`.
 
-Deterministic ordering matters — the same source must always produce the same
-diagram, or regenerating a document produces spurious diffs.
+**Some nodes have positions** — a baked diagram an agent has appended to. This is
+*not* a layout problem: re-flowing would move nodes the author placed. It is
+"drop this node somewhere sensible and free", which `getDefaultNodePosition`
+already solves — it walks outward from the centre for a non-overlapping,
+grid-snapped slot. Biasing that search toward the new node's neighbours would be
+a worthwhile refinement, but the existing helper is a reasonable starting point.
 
-### Baking
+Splitting these keeps the hard algorithm confined to the case where the diagram
+is empty of layout decisions, where it cannot damage anything.
 
-The moment a node is dragged in the editor, serialise the computed positions
-into the fence and switch the diagram to `layout: manual` (or drop the key).
-Layout must never fight a hand edit. This follows the existing philosophy that
-the fence is canonical and `persistDiagramModels` writes the model back to it.
+### Determinism is load-bearing
+
+A file may be opened many times before it is ever saved, so the same source must
+always produce the same positions. If ordering were unstable, a document would
+look different on each open until someone saved it.
+
+### Baking and the dirty flag
+
+One wrinkle worth designing for. `boot()` records `state.savedSource`, and
+`beforeunload` warns when the current source differs. Baking at load would
+therefore make an untouched document look edited the moment it opened.
+
+Bake into the model and update `savedSource` to match, so the document is not
+considered dirty. Nothing is lost by leaving it unsaved: layout is deterministic,
+so reopening reproduces the same positions. Any later Save As or offline export
+writes the baked positions out, exactly as `persistDiagramModels` already does.
 
 ---
 
