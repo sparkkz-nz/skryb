@@ -17,7 +17,7 @@ whether they remove the need to guess, or make a guess cheap to check.
 | 3 | Flowchart auto-layout | Medium | Biggest single quality win; a one-off seeding step, not a layout mode |
 | 4 | Code syntax highlighting | Medium | Largest gap in document polish |
 | 5 | Whole-document print/PDF | Medium | Shareability outside the browser |
-| 6 | Figure numbering and cross-references | Medium | Table stakes for technical writing |
+| 6 | Captions and cross-references | Small | Table stakes for technical writing; caption round-trips free |
 | 7 | Named styles | Small | Stops style drift across a large diagram |
 | 8 | Table of contents | Small | Navigation for long documents (anchors already ship) |
 | 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
@@ -294,12 +294,80 @@ contexts where HTML is not accepted.
 
 ---
 
-## 6. Figure numbering and cross-references
+## 6. Captions and cross-references
 
-Technical documents need "see Figure 3". Diagrams already carry stable `id`s, so
-auto-numbered captions plus an inline `{ref=payments-flow}` form is a natural fit
-for the existing directive machinery. Numbering should be derived at render time
-so inserting a diagram renumbers everything after it.
+### Captions
+
+A diagram gains a `caption` field, rendered below the diagram and centred:
+
+```yaml
+type: flowchart
+id: auth-flow
+caption: "Figure #: Authentication flow"
+```
+
+`#` is a placeholder substituted with the figure number. A caption without one is
+simply a title:
+
+```yaml
+caption: Authentication flow
+```
+
+**Only captions containing a placeholder consume a number**, assigned in order.
+That keeps numbering contiguous — an unnumbered titled figure sitting between
+Figure 1 and Figure 2 does not create a visible gap — and makes numbering opt-in
+per diagram rather than a document-wide mode.
+
+Captions render as a `<figcaption>` inside the existing `<figure class="docdiagram">`,
+which is both semantically correct and gives the hiding rule for free: a caption
+is suppressed while `data-expanded="true"`, because a full-window frame is a
+working view rather than a document view. Caption text should render through
+`renderInline`, so the safe inline subset works but block content does not.
+
+A literal `#` needs an escape — `\#` — worth settling early.
+
+### Numbering follows render order, not definition order
+
+This is the detail most likely to be got wrong. The reference documentation
+**strongly prefers** the `:::diagram { id=... }` pattern for large diagrams,
+where the reference sits beside the prose and the fenced definition is collected
+at the end of the document. Numbering by definition order would therefore
+number most real documents wrongly.
+
+The existing machinery already does the right thing: `renderMarkdown` renders a
+referenced diagram at the *reference* position and increments `state.diagramIndex`
+there, so that counter already traverses in render order. Figure numbering can
+piggyback on the same traversal. A diagram may be referenced at most once, which
+the renderer already enforces, so each diagram has exactly one render position and
+therefore one number.
+
+### References
+
+`{ref=auth-flow}` resolves to:
+
+- **the number**, when the target's caption has a placeholder — so
+  `See Figure {ref=auth-flow}` renders as "See Figure 3"
+- **the caption text**, when it has no placeholder — so `See {ref=auth-flow}`
+  renders as "See Authentication flow"
+
+A reference to an unknown or uncaptioned id should be an error rather than
+silently rendering nothing, matching how the renderer already reports a missing or
+duplicated diagram definition. A silently wrong cross-reference is worse than a
+visible failure, and the source tray already keeps the last valid render while
+reporting the problem.
+
+### Known simplification
+
+A single counter across all diagrams. If flowcharts said `Figure #` and sequence
+diagrams said `Diagram #`, they would share one sequence and read oddly. A
+`captionGroup` could separate them later; not worth the complexity until someone
+wants it.
+
+### Free with the existing code
+
+`serializeDiagram` iterates the diagram's own entries and skips only known
+structural keys, so a scalar `caption` round-trips through edit and save with no
+serializer change at all.
 
 ---
 
