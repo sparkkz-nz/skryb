@@ -52,6 +52,19 @@ export function injectStyles(): void {
       overflow: auto;
       padding: 1rem;
     }
+    /* Highlighting is colour on top of the normal code text, so a block stays perfectly readable
+       in a theme that does not define these, and in print, where colour may be dropped. */
+    #rendered-document .docdiagram-token-comment { color: var(--docdiagram-token-comment); font-style: italic; }
+    #rendered-document .docdiagram-token-string { color: var(--docdiagram-token-string); }
+    #rendered-document .docdiagram-token-number { color: var(--docdiagram-token-number); }
+    #rendered-document .docdiagram-token-keyword { color: var(--docdiagram-token-keyword); font-weight: 600; }
+    #rendered-document .docdiagram-token-literal { color: var(--docdiagram-token-literal); }
+    #rendered-document .docdiagram-token-type { color: var(--docdiagram-token-type); }
+    #rendered-document .docdiagram-token-tag { color: var(--docdiagram-token-tag); }
+    #rendered-document .docdiagram-token-attribute { color: var(--docdiagram-token-attribute); }
+    #rendered-document .docdiagram-token-meta { color: var(--docdiagram-token-meta); }
+    #rendered-document .docdiagram-token-inserted { color: var(--docdiagram-token-inserted); }
+    #rendered-document .docdiagram-token-deleted { color: var(--docdiagram-token-deleted); }
     #rendered-document code,
     #rendered-document kbd,
     #rendered-document pre,
@@ -196,6 +209,17 @@ export function injectStyles(): void {
       --docdiagram-code-background: #f5f8fa;
       --docdiagram-text: #17202a;
       --docdiagram-muted: #52616b;
+      --docdiagram-token-comment: #5c6d7a;
+      --docdiagram-token-string: #0a7a52;
+      --docdiagram-token-number: #9a4d00;
+      --docdiagram-token-keyword: #9b2c8f;
+      --docdiagram-token-literal: #1b56c4;
+      --docdiagram-token-type: #0f6b93;
+      --docdiagram-token-tag: #9b2c8f;
+      --docdiagram-token-attribute: #1b56c4;
+      --docdiagram-token-meta: #9a4d00;
+      --docdiagram-token-inserted: #0a7a52;
+      --docdiagram-token-deleted: #b3261e;
     }
     #rendered-document[data-theme="dark"],
     .docdiagram-toolbar[data-theme="dark"],
@@ -207,6 +231,17 @@ export function injectStyles(): void {
       --docdiagram-code-background: #101a22;
       --docdiagram-text: #f3f8fc;
       --docdiagram-muted: #c5d5e5;
+      --docdiagram-token-comment: #90a4b4;
+      --docdiagram-token-string: #7fd7a8;
+      --docdiagram-token-number: #f0b177;
+      --docdiagram-token-keyword: #e79ae0;
+      --docdiagram-token-literal: #8fbcf7;
+      --docdiagram-token-type: #7fd0ee;
+      --docdiagram-token-tag: #e79ae0;
+      --docdiagram-token-attribute: #8fbcf7;
+      --docdiagram-token-meta: #f0b177;
+      --docdiagram-token-inserted: #7fd7a8;
+      --docdiagram-token-deleted: #f19a94;
     }
     .docdiagram-toolbar {
       align-items: center;

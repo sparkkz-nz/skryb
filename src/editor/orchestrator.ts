@@ -95,6 +95,7 @@ import {
   validateDocumentSource
 } from "../core/document";
 import { formatLintMessages, lintDocument } from "../core/lint";
+import { getHighlightLanguage, highlightCode, isHighlightableLanguage } from "../core/highlight";
 import { applyFlowchartLayout, layoutDirections } from "../core/diagrams/layout";
 import { dropRedundantPoints, findClearRoute, getDetourWaypoint, routeIsBlocked } from "../core/diagrams/routing";
 import { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "../core/markdown";
@@ -662,6 +663,9 @@ export class BrowserRuntime {
       validateDocumentSource,
       lintDocument,
       formatLintMessages,
+      highlightCode,
+      getHighlightLanguage,
+      isHighlightableLanguage,
       embedRuntimeInDocumentHtml,
       fetchRuntimeSource,
       getPortableRuntimeUrl,
