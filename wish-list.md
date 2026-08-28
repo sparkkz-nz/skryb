@@ -22,6 +22,7 @@ whether they remove the need to guess, or make a guess cheap to check.
 | 8 | Table of contents | Small | Navigation for long documents (anchors already ship) |
 | 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
 | 10 | Regeneration boundaries | Medium | Makes documents safe to maintain over time |
+| 11 | Derived canvas bounds | Small | Removes a dimension authors should not have to maintain |
 
 ---
 
@@ -32,11 +33,21 @@ The highest value for the least work. Schema errors are already covered by
 exactly what an authoring agent cannot see:
 
 - a node overlapping another node
-- a node extending past the canvas
 - a label wider or taller than its shape
 - an edge passing through an unrelated node
-- orphan edge endpoints, unreachable nodes
+- an edge naming a node that does not exist — the renderer currently drops such
+  an edge silently (`if (!sourceEntry || !targetEntry) return ""`), so the
+  connector simply vanishes with no error. Probably the most valuable rule here,
+  because the failure is invisible unless you count your arrows
 - duplicate ids (already an error, but worth surfacing early)
+
+Two rules were considered and rejected:
+
+- **"node extends past the canvas"** — see the canvas note below; the canvas
+  should grow to fit rather than the author being told to satisfy it.
+- **"unreachable node"** — a node with no connector is legitimate. `text` is a
+  first-class shape, and annotation, label and legend nodes are a normal part of
+  a diagram. This would fire constantly on correct documents.
 
 ### Where the code should live
 
@@ -266,6 +277,39 @@ also the right place to route edges around obstacles.
 When an agent regenerates a document, hand edits are clobbered. Some marker for
 generated versus hand-authored regions would make round-tripping safe, and make
 agents useful for documents that are *maintained* rather than written once.
+
+---
+
+## 11. Derived canvas bounds
+
+Now that panning is unbounded and **Zoom to fit** recovers any view, a node
+sitting outside the canvas is not a defect the author should have to correct.
+The editor already agrees: `expandCanvasForNode` grows the canvas when a node is
+dragged past its edge, pads by 40, and shifts everything when coordinates go
+negative.
+
+The canvas is not vestigial though. `canvas.width` and `canvas.height` become the
+SVG `viewBox`, which still governs two things:
+
+- **Export and print bounds.** `getStandaloneDiagramSvg` keeps the viewBox, so
+  anything outside the canvas is clipped out of a saved SVG or PDF even though it
+  renders on screen.
+- **Aspect ratio.** The SVG is `width: N%` with height derived from the viewBox,
+  so the canvas shape decides how a diagram fills its frame at 100%.
+
+So the canvas should be *derived* rather than authored:
+
+- `canvas: auto` computes bounds from content plus padding, the same rule
+  `expandCanvasForNode` already applies.
+- Keep explicit `width` / `height` for authors who want a fixed aspect ratio,
+  for instance to make several diagrams in one document share a shape.
+
+**Worth fixing regardless of `auto`:** the existing expansion only ever grows.
+Nothing shrinks a canvas, so it accumulates dead space across an editing session
+— delete a node from the right-hand edge and the canvas keeps the width. That
+dead space then shows up as empty margin in every export. A "fit canvas to
+content" action, or making **Zoom to fit** also tighten the canvas, would close
+that.
 
 ---
 
