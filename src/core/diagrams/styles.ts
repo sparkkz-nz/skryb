@@ -3,6 +3,7 @@ import {
   type EdgeStyle,
   type FlowchartEdge,
   type FlowchartNode,
+  type NamedStyle,
   type NodeStyle,
   type PaletteRole,
   type ThemeColors,
@@ -42,8 +43,12 @@ export function mergeStyle<T>(defaults: T, overrides: Partial<T> | undefined | n
   return { ...(defaults as object), ...(overrides || {}) } as T;
 }
 
+export function getNamedStyle(diagram: { styles?: Record<string, NamedStyle> }, name?: string): NamedStyle | null {
+  return name ? diagram.styles?.[name] || null : null;
+}
+
 export function getNodeEffectiveStyle(
-  diagram: { theme?: string },
+  diagram: { theme?: string; styles?: Record<string, NamedStyle> },
   node: FlowchartNode,
   documentTheme = "light",
   documentColorScheme = "classic"
@@ -53,10 +58,22 @@ export function getNodeEffectiveStyle(
   // A "text" shape node is a plain text box: its fill/stroke default to transparent while its
   // text keeps the normal readable colour, unless a palette or explicit style overrides it.
   const shapeDefaults = node.shape === "text" ? { fill: "none", stroke: "none" } : null;
+  // A named style sits between the theme and the node's own values, so a class declares the
+  // intent once and anything written on the node itself still wins.
+  const named = getNamedStyle(diagram, node.class);
+  const namedPalette = named?.palette
+    ? getNodeColorPalette(documentColorScheme, documentTheme, named.palette)
+    : null;
   const palette = node.palette
     ? getNodeColorPalette(documentColorScheme, documentTheme, node.palette)
     : null;
-  return mergeStyle(mergeStyle(mergeStyle(defaults, shapeDefaults), palette), node.style);
+  return mergeStyle(
+    mergeStyle(
+      mergeStyle(mergeStyle(mergeStyle(defaults, shapeDefaults), namedPalette), named?.style),
+      palette
+    ),
+    node.style
+  );
 }
 
 export function getSequenceElementEffectiveStyle(
@@ -72,9 +89,15 @@ export function getSequenceElementEffectiveStyle(
   return mergeStyle(mergeStyle(theme.node, palette), element.style);
 }
 
-export function getEdgeEffectiveStyle(diagram: { theme?: string }, edge: FlowchartEdge, documentTheme = "light"): EdgeStyle {
+export function getEdgeEffectiveStyle(
+  diagram: { theme?: string; styles?: Record<string, NamedStyle> },
+  edge: FlowchartEdge,
+  documentTheme = "light"
+): EdgeStyle {
   const theme = getTheme(diagram, documentTheme);
-  return mergeStyle(theme.edge, edge.style);
+  // An edge has no palette of its own, so a class contributes only its style fields.
+  const named = getNamedStyle(diagram, edge.class);
+  return mergeStyle(mergeStyle(theme.edge, named?.style), edge.style);
 }
 
 export function getEdgeMarkerStyle(edge: FlowchartEdge, endpoint: "start" | "end"): string {

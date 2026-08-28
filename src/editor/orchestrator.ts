@@ -58,6 +58,7 @@ import {
   getEdgeEffectiveStyle,
   getEdgeMarkerStyle,
   getGridSize,
+  getNamedStyle,
   getNodeColorPalette,
   getNodeEffectiveStyle,
   getTheme,
@@ -607,13 +608,14 @@ export class BrowserRuntime {
       resizeFlowchartNode,
       deleteConnector,
       deleteNode,
-      getNodeEffectiveStyle: (diagram: { theme?: string }, node: FlowchartNode) => getNodeEffectiveStyle(
+      getNamedStyle,
+      getNodeEffectiveStyle: (diagram: Parameters<typeof getNodeEffectiveStyle>[0], node: FlowchartNode) => getNodeEffectiveStyle(
         diagram,
         node,
         this.state.documentTheme,
         this.state.documentColorScheme
       ),
-      getEdgeEffectiveStyle: (diagram: { theme?: string }, edge: FlowchartEdge) => getEdgeEffectiveStyle(
+      getEdgeEffectiveStyle: (diagram: Parameters<typeof getEdgeEffectiveStyle>[0], edge: FlowchartEdge) => getEdgeEffectiveStyle(
         diagram,
         edge,
         this.state.documentTheme

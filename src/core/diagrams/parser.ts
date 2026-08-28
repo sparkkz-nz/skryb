@@ -16,8 +16,9 @@ import {
 import { fitCanvasToContent } from "./mutations";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
-const flowchartEdgeFields = ["source", "target", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
+const flowchartNodeFields = ["id", "label", "shape", "class", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
+const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
+const namedStyleFields = ["palette", "style"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
 const flowchartEdgeStyleFields = ["stroke", "strokeWidth", "text"] as const;
 const sequenceParticipantFields = ["id", "label", "kind", "palette", "style", "size"] as const;
@@ -177,7 +178,7 @@ export function parseDiagram(source: string, colorScheme = "classic"): Diagram {
       continue;
     }
     const key = line.trim().slice(0, -1);
-    if (key !== "canvas" && !diagramCollectionNames.includes(key as (typeof diagramCollectionNames)[number])) {
+    if (key !== "canvas" && key !== "styles" && !diagramCollectionNames.includes(key as (typeof diagramCollectionNames)[number])) {
       throw new Error(`Unsupported diagram section: ${key}`);
     }
   }
@@ -317,11 +318,56 @@ function assertCoordinatePair(value: unknown, description: string): void {
   assertAllowedFields(value as ParsedObject, ["x", "y"], description);
 }
 
+function validateNamedStyles(diagram: FlowchartDiagram): Set<string> {
+  if (diagram.styles === undefined) {
+    return new Set();
+  }
+
+  if (typeof diagram.styles !== "object" || Array.isArray(diagram.styles)) {
+    throw new Error("Diagram styles must be a mapping of names to style definitions.");
+  }
+
+  for (const [name, definition] of Object.entries(diagram.styles)) {
+    if (typeof definition !== "object" || definition === null || Array.isArray(definition)) {
+      throw new Error(`Style "${name}" must be a mapping.`);
+    }
+
+    assertAllowedFields(definition as unknown as Record<string, unknown>, namedStyleFields, `style "${name}"`);
+
+    if (definition.palette !== undefined &&
+      (typeof definition.palette !== "string" || !paletteRoles.includes(definition.palette as (typeof paletteRoles)[number]))) {
+      throw new Error(`Unsupported palette in style "${name}": ${String(definition.palette)}`);
+    }
+
+    if ((definition.style as { width?: unknown } | undefined)?.width !== undefined) {
+      throw new Error(`Style "${name}" style.width is not supported; use style.strokeWidth.`);
+    }
+
+    assertAllowedStyleFields(definition.style as Record<string, unknown> | undefined, flowchartNodeStyleFields, `style "${name}"`);
+
+    if (definition.palette === undefined && !Object.keys(definition.style || {}).length) {
+      throw new Error(`Style "${name}" declares no palette or style values.`);
+    }
+  }
+
+  return new Set(Object.keys(diagram.styles));
+}
+
 function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): void {
   if (diagram.participants !== undefined || diagram.messages !== undefined ||
     diagram.activations !== undefined || diagram.notes !== undefined || diagram.groups !== undefined) {
     throw new Error("Flowchart diagrams do not support sequence sections.");
   }
+
+  const styleNames = validateNamedStyles(diagram);
+  const assertKnownClass = (value: unknown, description: string): void => {
+    if (value === undefined) {
+      return;
+    }
+    if (typeof value !== "string" || !styleNames.has(value)) {
+      throw new Error(`Unknown style class on ${description}: ${String(value)}`);
+    }
+  };
 
   const nodeIds = new Set<string>();
   const validateNode = (node: FlowchartNode): void => {
@@ -359,6 +405,7 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
       throw new Error("Node style.width is not supported; use style.strokeWidth.");
     }
 
+    assertKnownClass(node.class, `node "${node.id}"`);
     assertAllowedStyleFields(node.style as Record<string, unknown> | undefined, flowchartNodeStyleFields, `node "${node.id}"`);
     if (node.arrow !== undefined) {
       assertCoordinatePair(node.arrow, `node "${node.id}" arrow`);
@@ -417,6 +464,7 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
       throw new Error("Edge style.width is not supported; use style.strokeWidth.");
     }
 
+    assertKnownClass(edge.class, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
     assertAllowedStyleFields(edge.style as Record<string, unknown> | undefined, flowchartEdgeStyleFields, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
   }
 
