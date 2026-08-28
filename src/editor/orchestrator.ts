@@ -738,6 +738,7 @@ export class BrowserRuntime {
       `<option value="diagram"${this.state.documentDoctype === "diagram" ? " selected" : ""}>Diagram</option>`,
       `</select></label>`,
       `<button type="button" class="docdiagram-edit-source">Edit source</button>`,
+      `<button type="button" class="docdiagram-print-document">Print / Save as PDF</button>`,
       `<button type="button" class="docdiagram-save">Save As</button>`,
       `<button type="button" class="docdiagram-offline-save">Save for Offline</button>`,
       `</div>`,
@@ -759,6 +760,7 @@ export class BrowserRuntime {
       menu.hidden = !open;
       menuToggle.setAttribute("aria-expanded", String(open));
     });
+    toolbar.querySelector<HTMLButtonElement>(".docdiagram-print-document")?.addEventListener("click", () => this.printDocument());
     toolbar.querySelector<HTMLButtonElement>(".docdiagram-save")?.addEventListener("click", () => this.downloadDocument());
     toolbar.querySelector<HTMLButtonElement>(".docdiagram-offline-save")?.addEventListener("click", async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
@@ -1086,6 +1088,27 @@ export class BrowserRuntime {
     link.click();
     link.remove();
     globalThis.setTimeout(() => URL.revokeObjectURL(url), 200);
+  }
+
+  /**
+   * Prints the whole document. The print stylesheet does the layout work, so this only has to put
+   * the document back into its reading state first: an expanded frame, an open editor or a stored
+   * viewport height would otherwise print as they appear on screen rather than as the document.
+   */
+  private printDocument(): void {
+    this.closeDocumentMenu();
+    this.closeDiagramExportMenus();
+    this.stopDiagramEditing();
+    this.state.expandedDiagramIndex = null;
+    // Stored heights are a record of how each frame was resized on screen, which says nothing
+    // about how tall a diagram needs to be on paper.
+    this.state.diagramViewportHeights.clear();
+    for (const diagramIndex of this.state.diagramZooms.keys()) {
+      this.state.diagramZooms.set(diagramIndex, 100);
+    }
+    this.state.diagramCameraOffsets.clear();
+    this.renderDocument();
+    globalThis.print();
   }
 
   private printDiagram(diagramIndex: number): void {

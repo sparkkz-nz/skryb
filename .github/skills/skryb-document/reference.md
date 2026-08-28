@@ -870,6 +870,36 @@ aesthetics.
 A node with no connector is never reported. A `text` shape used for annotation,
 a label, or a legend is a normal part of a diagram.
 
+## Printing a document
+
+The document menu's **Print / Save as PDF** prints the whole document, and the
+browser's own print command produces the same result: the layout is a print
+stylesheet rather than a separate export path, so nothing has to be opened or
+downloaded first.
+
+What changes on paper:
+
+- Editing chrome - the document toolbar, source tray, diagram toolbars and
+  inspectors - is not part of the document and is not printed.
+- A diagram frame becomes the diagram's own height with its camera reset. On
+  screen the frame is a fixed-height viewport that scrolls, zooms and pans; on
+  paper there is nothing to scroll, so a zoomed or panned diagram would otherwise
+  print cropped.
+- A panel, callout, diagram, table, code block or blockquote is never split
+  across a page boundary, and a heading is never left stranded at the foot of a
+  page.
+- A `:::grid` stacks into one column, because its columns are a screen-width
+  device and are too narrow to read on paper.
+- Colours are asked for explicitly, so palettes and syntax highlighting survive
+  rather than being dropped as browser backgrounds normally are.
+
+The menu action additionally puts the document back into its reading state
+first, collapsing an expanded frame, closing any editor and resetting stored
+frame heights and zoom, so what prints is the document rather than the current
+screen.
+
+A single diagram can still be printed on its own from its **Export** menu.
+
 ## Runtime channels and limitations
 
 Use `/latest/skryb-runtime.js` for normal use, `/dev/skryb-runtime.js` only for
