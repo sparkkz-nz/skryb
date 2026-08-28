@@ -95,6 +95,7 @@ import {
   validateDocumentSource
 } from "../core/document";
 import { formatLintMessages, lintDocument } from "../core/lint";
+import { applyFlowchartLayout, layoutDirections } from "../core/diagrams/layout";
 import { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "../core/markdown";
 import { renderDiagramSource } from "../renderers/diagram";
 import type { DiagramFigure } from "../renderers/types";
@@ -595,6 +596,8 @@ export class BrowserRuntime {
       getGridSize,
       expandCanvasForNode,
       fitCanvasToContent,
+      applyFlowchartLayout,
+      layoutDirections,
       flattenFlowchartNodes,
       getFlowchartNodeBounds,
       reparentFlowchartNode,

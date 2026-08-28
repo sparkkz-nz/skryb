@@ -79,6 +79,7 @@ export interface Canvas {
 export interface FlowchartDiagram {
   type: "flowchart";
   theme?: string;
+  layout?: string | { direction?: string; stageGap?: number; siblingGap?: number };
   styles?: Record<string, NamedStyle>;
   canvas: Canvas;
   nodes: FlowchartNode[];

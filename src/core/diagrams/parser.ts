@@ -14,11 +14,13 @@ import {
   supportedDiagramTypes
 } from "./schema";
 import { fitCanvasToContent } from "./mutations";
+import { applyFlowchartLayout, layoutDirections, resolveLayoutSettings } from "./layout";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
 const flowchartNodeFields = ["id", "label", "shape", "class", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
 const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
+const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
 const flowchartEdgeStyleFields = ["stroke", "strokeWidth", "text"] as const;
 const sequenceParticipantFields = ["id", "label", "kind", "palette", "style", "size"] as const;
@@ -178,7 +180,7 @@ export function parseDiagram(source: string, colorScheme = "classic"): Diagram {
       continue;
     }
     const key = line.trim().slice(0, -1);
-    if (key !== "canvas" && key !== "styles" && !diagramCollectionNames.includes(key as (typeof diagramCollectionNames)[number])) {
+    if (key !== "canvas" && key !== "styles" && key !== "layout" && !diagramCollectionNames.includes(key as (typeof diagramCollectionNames)[number])) {
       throw new Error(`Unsupported diagram section: ${key}`);
     }
   }
@@ -264,6 +266,8 @@ function parseFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic
     diagram.edges = [];
   }
   validateFlowchartDiagram(diagram, colorScheme);
+  // Layout runs before the canvas is measured, so a derived canvas fits the laid-out result.
+  applyFlowchartLayout(diagram);
   // Derived bounds are baked into the model so the renderer, exports, and the editor all read a
   // real width and height. The serializer writes `auto` back out rather than the baked numbers.
   if (diagram.canvas.auto) {
@@ -353,7 +357,31 @@ function validateNamedStyles(diagram: FlowchartDiagram): Set<string> {
   return new Set(Object.keys(diagram.styles));
 }
 
+function validateLayout(diagram: FlowchartDiagram): void {
+  if (diagram.layout === undefined) {
+    return;
+  }
+
+  if (typeof diagram.layout === "object" && !Array.isArray(diagram.layout)) {
+    assertAllowedFields(diagram.layout as Record<string, unknown>, layoutFields, "layout");
+    for (const key of ["stageGap", "siblingGap"] as const) {
+      const value = (diagram.layout as Record<string, unknown>)[key];
+      if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) {
+        throw new Error(`Layout ${key} must be a number of zero or more.`);
+      }
+    }
+  } else if (typeof diagram.layout !== "string") {
+    throw new Error("Layout must be a direction or a mapping.");
+  }
+
+  const settings = resolveLayoutSettings(diagram.layout);
+  if (!settings || !layoutDirections.includes(settings.direction)) {
+    throw new Error(`Unsupported layout direction: ${String(settings?.direction)}`);
+  }
+}
+
 function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): void {
+  validateLayout(diagram);
   if (diagram.participants !== undefined || diagram.messages !== undefined ||
     diagram.activations !== undefined || diagram.notes !== undefined || diagram.groups !== undefined) {
     throw new Error("Flowchart diagrams do not support sequence sections.");
