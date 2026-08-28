@@ -73,6 +73,8 @@ import {
   getNodeGeometry,
   renderNodeBody,
   renderTextBlock,
+  sampleEdgePath,
+  segmentIntersectsRectangle,
   splitTextLines,
   measureTextWidth,
   wrapTextLines
@@ -91,6 +93,7 @@ import {
   setFrontmatterTheme,
   validateDocumentSource
 } from "../core/document";
+import { formatLintMessages, lintDocument } from "../core/lint";
 import { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "../core/markdown";
 import { renderDiagramSource } from "../renderers/diagram";
 import { injectStyles } from "../styles";
@@ -649,6 +652,8 @@ export class BrowserRuntime {
       setEdgeMarkerStart,
       setEdgeMarkerEnd,
       validateDocumentSource,
+      lintDocument,
+      formatLintMessages,
       embedRuntimeInDocumentHtml,
       fetchRuntimeSource,
       getPortableRuntimeUrl,
@@ -662,6 +667,8 @@ export class BrowserRuntime {
       getNodeGeometry,
       renderNodeBody,
       buildEdgePath,
+      sampleEdgePath,
+      segmentIntersectsRectangle,
       buildNodeCalloutPointer,
       renderEdgeWaypointHandle,
       buildEdgeInspectorFields,
