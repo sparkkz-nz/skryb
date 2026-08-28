@@ -72,6 +72,8 @@ const {
   getPortableRuntimeUrl,
   findSourceTextRange,
   splitTextLines,
+  measureTextWidth,
+  wrapTextLines,
   renderTextBlock,
   computeNodeTextLayout,
   getNodeGeometry,
@@ -697,6 +699,62 @@ test("does not treat diagram references in fenced code as real references", () =
 
   assert.match(markup, /<pre><code class="language-text">:::diagram \{ id=flow \}<\/code><\/pre>/);
   assert.equal([...markup.matchAll(/<figure class="docdiagram"/g)].length, 1);
+});
+
+test("a void directive needs no closer and tolerates a stray one", () => {
+  const definition = [
+    "```diagram",
+    "type: flowchart",
+    "id: flow",
+    "canvas:",
+    "nodes:",
+    "edges:",
+    "```"
+  ];
+  const withoutCloser = renderMarkdown([":::diagram { id=flow }", "", ...definition].join("\n"));
+  const withStrayCloser = renderMarkdown([":::diagram { id=flow }", ":::", "", ...definition].join("\n"));
+
+  assert.equal([...withStrayCloser.matchAll(/<figure class="docdiagram"/g)].length, 1);
+  assert.doesNotMatch(withStrayCloser, /docdiagram-literal-source/);
+  assert.equal(withStrayCloser, withoutCloser);
+});
+
+test("a void directive inside a container does not consume the container's closer", () => {
+  const markup = renderMarkdown([
+    ":::panel { title=Flow }",
+    ":::diagram { id=flow }",
+    ":::",
+    "",
+    "After the panel.",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: flow",
+    "canvas:",
+    "nodes:",
+    "edges:",
+    "```"
+  ].join("\n"));
+
+  assert.match(markup, /<section class="docdiagram-component docdiagram-panel">/);
+  assert.match(markup, /<\/section><p>After the panel\.<\/p>/);
+  assert.equal([...markup.matchAll(/<figure class="docdiagram"/g)].length, 1);
+});
+
+test("a diagram directive with unknown attributes stays literal source", () => {
+  const markup = renderMarkdown([
+    ":::diagram { id=flow depth=3 }",
+    "",
+    "```diagram",
+    "type: flowchart",
+    "id: flow",
+    "canvas:",
+    "nodes:",
+    "edges:",
+    "```"
+  ].join("\n"));
+
+  assert.match(markup, /<pre class="docdiagram-literal-source">/);
 });
 
 test("resolves diagram references across block quotes", () => {
@@ -2000,8 +2058,102 @@ test("computeNodeTextLayout stacks label and subtitle lines and keeps the block 
   assert.ok(withSubtitle.labelStartY < withSubtitle.subtitleStartY);
 });
 
-test("the text shape renders a plain, square-cornered rect distinct from the rounded-rectangle default", () => {
-  const textGeometry = getNodeGeometry({ shape: "text" }, 20, 40, 200, 100);
+test("labels wrap on word boundaries inside the declared width instead of overflowing", () => {
+  const layout = computeNodeTextLayout(
+    { x: 12, y: 12, width: 166, height: 56 },
+    { label: "Payment reconciliation service", subtitle: "Matches settlement files against the ledger" }
+  );
+
+  assert.ok(layout.labelLines.length > 1, "an over-long label should wrap");
+  assert.ok(layout.subtitleLines.length > 1, "an over-long subtitle should wrap");
+  assert.equal(layout.labelLines.join(" "), "Payment reconciliation service");
+  for (const line of layout.labelLines) {
+    assert.ok(measureTextWidth(line, 16, true) <= 166, `"${line}" should fit the declared width`);
+  }
+});
+
+test("wrapping keeps explicit line breaks and never breaks a single long word", () => {
+  assert.deepEqual(wrapTextLines(["Alpha", "Beta"], 400, 16, true), ["Alpha", "Beta"]);
+  assert.deepEqual(wrapTextLines(["Supercalifragilisticexpialidocious"], 40, 16), ["Supercalifragilisticexpialidocious"]);
+  assert.deepEqual(wrapTextLines(["Alpha beta"], 0, 16), ["Alpha beta"]);
+});
+
+test("canvas: auto derives the canvas from its content and round-trips as auto", () => {
+  const source = flowchartSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: api",
+    "    label: Payments API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 100, y: 60 }",
+    "    size: { width: 190, height: 80 }",
+    "edges:"
+  ]);
+  const diagram = parseDiagram(source);
+
+  assert.equal(diagram.canvas.auto, true);
+  assert.equal(diagram.canvas.width, 100 + 190 + 40);
+  assert.equal(diagram.canvas.height, 60 + 80 + 40);
+  assert.match(serializeDiagram(diagram), /^canvas: auto$/m);
+  assert.doesNotMatch(serializeDiagram(diagram), /^ {2}width:/m);
+});
+
+test("a derived canvas keeps other canvas fields and shrinks back when content is removed", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "  auto: true",
+    "  grid: 20",
+    "nodes:",
+    "  - id: api",
+    "    label: Payments API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "    size: { width: 190, height: 80 }",
+    "  - id: ledger",
+    "    label: Ledger",
+    "    shape: database",
+    "    position: { x: 600, y: 0 }",
+    "    size: { width: 190, height: 80 }",
+    "edges:"
+  ]));
+
+  assert.equal(diagram.canvas.width, 600 + 190 + 40);
+  deleteNode(diagram, "ledger");
+  assert.equal(diagram.canvas.width, 190 + 40);
+
+  const serialized = serializeDiagram(diagram);
+  assert.match(serialized, /^ {2}auto: true$/m);
+  assert.match(serialized, /^ {2}grid: 20$/m);
+  assert.doesNotMatch(serialized, /^ {2}width:/m);
+});
+
+test("an authored canvas keeps its size when content is removed", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "canvas:",
+    "  width: 1000",
+    "  height: 560",
+    "nodes:",
+    "  - id: api",
+    "    label: Payments API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "    size: { width: 190, height: 80 }",
+    "edges:"
+  ]));
+
+  deleteNode(diagram, "api");
+  assert.equal(diagram.canvas.width, 1000);
+  assert.equal(diagram.canvas.height, 560);
+});
+
+test("canvas.auto must be a boolean", () => {
+  assert.throws(
+    () => parseDiagram(flowchartSource(["canvas:", "  auto: sometimes", "nodes:", "edges:"])),
+    /canvas.auto must be true or false/
+  );
+});
+
+test("the text shape renders a plain, square-cornered rect distinct from the rounded-rectangle default", () => {  const textGeometry = getNodeGeometry({ shape: "text" }, 20, 40, 200, 100);
   const rectGeometry = getNodeGeometry({ shape: "rounded-rectangle" }, 20, 40, 200, 100);
 
   assert.match(textGeometry.bodyMarkup, /<rect/);

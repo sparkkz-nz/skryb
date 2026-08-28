@@ -64,6 +64,7 @@ export interface Canvas {
   width?: number;
   height?: number;
   grid?: number;
+  auto?: boolean;
   [key: string]: unknown;
 }
 

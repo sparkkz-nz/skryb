@@ -124,6 +124,16 @@ graphical edits snap into the same alignment rather than drifting out of it.
 (This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
 directive.)
 
+Prefer `canvas: auto` on a flowchart (or `auto: true` alongside `grid`) so the
+canvas is derived from the content instead of being a dimension you maintain.
+Give explicit `width` and `height` only when a fixed aspect ratio matters.
+
+Node labels wrap inside the node's declared width, so a long label will not
+overflow its shape - but a wrapped label still reads better when it was sized to
+fit. Budget about 9px per label character and 7px per subtitle character, less
+24 units of horizontal inset, so a default 190-wide node holds roughly 18 label
+characters per line and two lines comfortably in the default 80 height.
+
 Prefer `orthogonal` routes for most flows. Reach for `curved` when an orthogonal
 route would be hard to follow - a long edge doubling back, several edges
 converging on one anchor, or an edge that would otherwise run along or across an

@@ -13,6 +13,7 @@ import {
   nodeShapes,
   supportedDiagramTypes
 } from "./schema";
+import { fitCanvasToContent } from "./mutations";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
 const flowchartNodeFields = ["id", "label", "shape", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
@@ -244,7 +245,17 @@ export function parseDiagram(source: string, colorScheme = "classic"): Diagram {
 }
 
 function parseFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): FlowchartDiagram {
+  // `canvas: auto` is shorthand for a canvas whose size is derived from its content.
+  if ((diagram.canvas as unknown) === "auto") {
+    diagram.canvas = { auto: true };
+  }
   diagram.canvas = diagram.canvas || {};
+  if (typeof diagram.canvas !== "object" || Array.isArray(diagram.canvas)) {
+    throw new Error("Flowchart canvas must be a mapping or the value \"auto\".");
+  }
+  if (diagram.canvas.auto !== undefined && typeof diagram.canvas.auto !== "boolean") {
+    throw new Error("Flowchart canvas.auto must be true or false.");
+  }
   if (!Array.isArray(diagram.nodes)) {
     diagram.nodes = [];
   }
@@ -252,6 +263,11 @@ function parseFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic
     diagram.edges = [];
   }
   validateFlowchartDiagram(diagram, colorScheme);
+  // Derived bounds are baked into the model so the renderer, exports, and the editor all read a
+  // real width and height. The serializer writes `auto` back out rather than the baked numbers.
+  if (diagram.canvas.auto) {
+    fitCanvasToContent(diagram);
+  }
   return diagram;
 }
 
