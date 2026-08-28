@@ -197,6 +197,10 @@ diagram-reference, contents, panel, and grid templates, and **Help** opens the p
 reference. Flowchart edit mode supports node and connector presentation,
 endpoints, an optional edge waypoint, and an optional node callout pointer.
 
+**Print / Save as PDF** in the document menu prints the whole document, with
+diagrams at their natural size and without splitting panels, diagrams or tables
+across a page boundary.
+
 **Save As** keeps a hosted runtime URL in the downloaded portable document.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
 use it when the recipient must open the document without network access.

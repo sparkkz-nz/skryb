@@ -962,6 +962,106 @@ export function injectStyles(): void {
       margin: 1rem 0;
       padding: 1rem;
     }
+    /* Printing a whole document. The rules stand on their own rather than depending on the
+       document menu, so Ctrl/Cmd+P produces the same result as the menu action. */
+    @media print {
+      @page {
+        margin: 18mm;
+      }
+      /* Editing chrome is not part of the document. */
+      .docdiagram-toolbar,
+      .docdiagram-source-tray,
+      .docdiagram-diagram-toolbar,
+      .docdiagram-inspector,
+      .docdiagram-connection-port,
+      .docdiagram-callout-handle,
+      .docdiagram-edge-waypoint-handle,
+      .docdiagram-edge-endpoint {
+        display: none !important;
+      }
+      html,
+      body {
+        background: #ffffff !important;
+      }
+      #rendered-document {
+        background: #ffffff !important;
+        margin: 0 !important;
+        max-width: none !important;
+        padding: 0 !important;
+        width: auto !important;
+      }
+      /* Palettes and highlighting carry meaning, so they are asked for rather than left to the
+         browser's default of dropping backgrounds. */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      /* On screen a diagram frame is a fixed-height viewport that scrolls and can be zoomed or
+         panned. On paper there is nothing to scroll, so the frame becomes the diagram's own
+         height and the camera is reset - otherwise a pan would print as a cropped diagram. */
+      .docdiagram {
+        break-inside: avoid;
+        height: auto !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        page-break-inside: avoid;
+        position: static !important;
+        resize: none !important;
+      }
+      .docdiagram svg {
+        height: auto !important;
+        max-width: 100% !important;
+        transform: none !important;
+        width: 100% !important;
+      }
+      /* A panel, callout or table split across a page boundary reads as two broken things. */
+      .docdiagram-component,
+      .docdiagram-grid-item,
+      blockquote,
+      pre,
+      table,
+      figure {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      /* A heading stranded at the foot of a page is the most obvious print defect of all. */
+      h1, h2, h3, h4, h5, h6 {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+      p, li, blockquote {
+        orphans: 3;
+        widows: 3;
+      }
+      /* A grid is a screen-width device; on paper the columns are too narrow to read. */
+      .docdiagram-grid {
+        display: block !important;
+      }
+      .docdiagram-grid-item + .docdiagram-grid-item {
+        margin-top: 1rem;
+      }
+      .docdiagram-contents {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .docdiagram-caption {
+        bottom: auto !important;
+        left: auto !important;
+        position: static !important;
+        right: auto !important;
+      }
+      .docdiagram-captioned {
+        padding-bottom: 1rem !important;
+      }
+      /* A diagram left expanded or mid-edit still prints as an ordinary document diagram. */
+      .docdiagram[data-expanded="true"] {
+        border: 1px solid var(--docdiagram-border) !important;
+        border-radius: 12px !important;
+        inset: auto !important;
+        padding: 1rem !important;
+      }
+    }
   `;
   document.head.append(styles);
 }
