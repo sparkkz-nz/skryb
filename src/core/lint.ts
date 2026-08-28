@@ -134,19 +134,22 @@ function lintEdges(diagram: FlowchartDiagram, report: (rule: string, message: st
       .anchors[edge.sourceAnchor || "right"];
     const targetAnchor = getNodeGeometry(target.node, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height)
       .anchors[edge.targetAnchor || "left"];
+    const obstacles = flattenFlowchartNodes(diagram).filter(({ node }) =>
+      node !== source.node && node !== target.node &&
+      !isRelated(node, source.node) && !isRelated(node, target.node)
+    );
+    // The rule reports what a reader would actually see, so the path is built the same way the
+    // renderer builds it, obstacles included. What is left is a route too crowded to be cleared.
     const { path } = buildEdgePath(
       sourceAnchor,
       targetAnchor,
       edge.sourceAnchor || "right",
       edge.targetAnchor || "left",
       edge.route || "orthogonal",
-      edge.waypoint
+      edge.waypoint,
+      edge.waypoint ? undefined : obstacles.map((entry) => getFlowchartNodeBounds(diagram, entry.node))
     );
     const points = sampleEdgePath(path);
-    const obstacles = flattenFlowchartNodes(diagram).filter(({ node }) =>
-      node !== source.node && node !== target.node &&
-      !isRelated(node, source.node) && !isRelated(node, target.node)
-    );
 
     for (const obstacle of obstacles) {
       const bounds = getFlowchartNodeBounds(diagram, obstacle.node);

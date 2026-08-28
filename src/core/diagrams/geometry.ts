@@ -1,5 +1,9 @@
 import type { FlowchartNode, NodeStyle, Position } from "./schema";
 import { escapeHtml } from "./parser";
+import { type Obstacle, dropRedundantPoints, findClearRoute, getDetourWaypoint, routeIsBlocked, segmentIntersectsRectangle } from "./routing";
+
+export { segmentIntersectsRectangle };
+export type { Obstacle };
 
 type TextBounds = { x: number; y: number; width: number; height: number };
 
@@ -484,12 +488,47 @@ export function buildEdgePath(
   sourceAnchor: string,
   targetAnchor: string,
   route = "orthogonal",
-  waypoint?: Position
+  waypoint?: Position,
+  obstacles?: Obstacle[]
 ): { path: string; midpoint: Position; startTangent: Position; endTangent: Position; hitPath: string } {
   const sourceDirection = getAnchorDirection(sourceAnchor);
   const targetDirection = getAnchorDirection(targetAnchor);
   const sourceIsHorizontal = sourceDirection.x !== 0;
   const targetIsHorizontal = targetDirection.x !== 0;
+  // A straight or curved edge carries a single waypoint, so when one of those runs through a node
+  // the detour is expressed as an implicit waypoint and drawn by the machinery that already exists
+  // for an authored one. The curve then bends around the obstacle rather than being replaced by a
+  // right-angled route the author did not ask for.
+  if (!waypoint && obstacles?.length && route !== "orthogonal" &&
+    routeIsBlocked([source, target], obstacles)) {
+    // A single waypoint has to stand in for a whole detour, so a route that only just clears an
+    // obstacle can still cut back across it on the way in or out. Widening the clearance gives the
+    // waypoint more room to work with, which is usually all a stubborn one needs.
+    for (const clearance of [20, 60, 120]) {
+      const cleared = findClearRoute(
+        source,
+        target,
+        sourceDirection,
+        targetDirection,
+        obstacles,
+        minimumAnchorLead,
+        clearance
+      );
+      const detour = cleared && getDetourWaypoint(cleared, source, target);
+      if (!detour) {
+        continue;
+      }
+      // A curve's control points can bow it back into the very node the waypoint was meant to
+      // clear, so the result is checked before it is kept. Where nothing clears the obstacle the
+      // edge is left exactly as it was authored: converting it to a right-angled route would add
+      // bends the author did not ask for, and lint still reports the crossing.
+      const candidate = buildEdgePath(source, target, sourceAnchor, targetAnchor, route, detour);
+      if (!routeIsBlocked(sampleEdgePath(candidate.path), obstacles)) {
+        waypoint = detour;
+        break;
+      }
+    }
+  }
   let path: string;
   let midpoint: Position;
   let startTangent: Position;
@@ -613,6 +652,22 @@ export function buildEdgePath(
     );
     if (distinctPoints.length === 1) {
       distinctPoints = [source, target];
+    }
+    // Obstacle avoidance only engages on a route that is actually blocked, so a clear route is
+    // drawn exactly as it always was and the tidy case stays tidy.
+    if (obstacles?.length && routeIsBlocked(distinctPoints, obstacles)) {
+      const cleared = findClearRoute(
+        source,
+        target,
+        sourceDirection,
+        targetDirection,
+        obstacles,
+        minimumAnchorLead
+      );
+      // A route that cannot be cleared keeps its original path rather than being drawn worse.
+      if (cleared) {
+        distinctPoints = dropRedundantPoints(cleared);
+      }
     }
     path = `M ${formatPathPoint(distinctPoints[0])}${distinctPoints.slice(1).map((point) => ` L ${formatPathPoint(point)}`).join("")}`;
     midpoint = getPolylineMidpoint(distinctPoints);
@@ -838,32 +893,3 @@ export function sampleEdgePath(path: string, curveSamples = 12): Position[] {
   return points;
 }
 
-export function segmentIntersectsRectangle(
-  start: Position,
-  end: Position,
-  rectangle: { x: number; y: number; width: number; height: number }
-): boolean {
-  const minimumX = Math.min(start.x, end.x);
-  const maximumX = Math.max(start.x, end.x);
-  const minimumY = Math.min(start.y, end.y);
-  const maximumY = Math.max(start.y, end.y);
-  if (maximumX <= rectangle.x || minimumX >= rectangle.x + rectangle.width ||
-    maximumY <= rectangle.y || minimumY >= rectangle.y + rectangle.height) {
-    return false;
-  }
-
-  // Axis-aligned segments are already resolved by the overlap test above; only a sloped segment can
-  // straddle the box without entering it, which the corner-side test below settles.
-  if (start.x === end.x || start.y === end.y) {
-    return true;
-  }
-
-  const side = (point: Position) => (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x);
-  const corners = [
-    { x: rectangle.x, y: rectangle.y },
-    { x: rectangle.x + rectangle.width, y: rectangle.y },
-    { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height },
-    { x: rectangle.x, y: rectangle.y + rectangle.height }
-  ].map(side);
-  return corners.some((value) => value > 0) && corners.some((value) => value < 0);
-}

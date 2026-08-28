@@ -96,6 +96,7 @@ import {
 } from "../core/document";
 import { formatLintMessages, lintDocument } from "../core/lint";
 import { applyFlowchartLayout, layoutDirections } from "../core/diagrams/layout";
+import { dropRedundantPoints, findClearRoute, getDetourWaypoint, routeIsBlocked } from "../core/diagrams/routing";
 import { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "../core/markdown";
 import { renderDiagramSource } from "../renderers/diagram";
 import type { DiagramFigure } from "../renderers/types";
@@ -676,6 +677,10 @@ export class BrowserRuntime {
       buildEdgePath,
       sampleEdgePath,
       segmentIntersectsRectangle,
+      findClearRoute,
+      routeIsBlocked,
+      getDetourWaypoint,
+      dropRedundantPoints,
       buildNodeCalloutPointer,
       renderEdgeWaypointHandle,
       buildEdgeInspectorFields,

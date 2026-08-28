@@ -11,6 +11,7 @@ import { escapeHtml } from "../core/diagrams/parser";
 import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
 import { getNamedStyle, getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
+import type { Obstacle } from "../core/diagrams/routing";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
 import { renderFigureAttributes, renderFigureCaption } from "./types";
@@ -75,6 +76,22 @@ export function renderFlowchartDiagram(
   const nodeEntries = flattenFlowchartNodes(diagram);
   const nodes = new Map(nodeEntries.map((entry) => [entry.node.id, entry]));
 
+  // A container legitimately contains its own children, and an edge to or from one has to pass
+  // through its box, so only nodes unrelated to an edge's endpoints count as obstacles for it.
+  const isRelated = (first: FlowchartNode, second: FlowchartNode): boolean => {
+    const contains = (parent: FlowchartNode, candidate: FlowchartNode): boolean =>
+      (parent.children || []).some((child) => child === candidate || contains(child, candidate));
+    return first === second || contains(first, second) || contains(second, first);
+  };
+  const obstaclesFor = (sourceNode: FlowchartNode, targetNode: FlowchartNode): Obstacle[] => nodeEntries
+    .filter(({ node }) => !isRelated(node, sourceNode) && !isRelated(node, targetNode))
+    .map(({ node, position }) => ({
+      x: position.x,
+      y: position.y,
+      width: Number(node.size?.width) || defaultNode.width,
+      height: Number(node.size?.height) || defaultNode.height
+    }));
+
   const edgeLabelLineHeight = 16;
   const edgeMarkerDefs: string[] = [];
   const edgeEndpointMarkup: string[] = [];
@@ -114,7 +131,17 @@ export function renderFlowchartDiagram(
     const sourceAnchor = sourceGeometry.anchors[sourceAnchorName];
     const targetAnchor = targetGeometry.anchors[targetAnchorName];
     const route = edge.route || "orthogonal";
-    const edgePath = buildEdgePath(sourceAnchor, targetAnchor, sourceAnchorName, targetAnchorName, route, edge.waypoint);
+    // An author who placed a waypoint has already said where the edge should go, so routing does
+    // not second-guess it.
+    const edgePath = buildEdgePath(
+      sourceAnchor,
+      targetAnchor,
+      sourceAnchorName,
+      targetAnchorName,
+      route,
+      edge.waypoint,
+      edge.waypoint ? undefined : obstaclesFor(sourceNode, targetNode)
+    );
     const labelX = edgePath.midpoint.x;
     const labelY = edgePath.midpoint.y - 10;
 

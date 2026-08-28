@@ -156,6 +156,12 @@ unrelated node. A curve separates from its neighbours and reads as one
 continuous line, so it can resolve a crowded layout that would otherwise need
 another right-angled detour.
 
+An edge that would cut through an unrelated node is routed around it
+automatically, keeping its route style. Where the geometry makes that impossible
+- most often a curve leaving an anchor that points straight at another node -
+the edge is left as authored and lint reports it; change the anchors rather than
+adding a waypoint.
+
 An edge may include one optional `waypoint: { x: number, y: number }` in canvas
 coordinates, which every route honours: orthogonal legs, a two-segment polyline
 for `straight`, and a smooth curve through the point for `curved`. The graphical
