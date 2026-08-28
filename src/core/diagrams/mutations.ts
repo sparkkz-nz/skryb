@@ -23,11 +23,23 @@ function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: numb
 }
 
 export function expandCanvasForNode(diagram: FlowchartDiagram, node: FlowchartNode, padding = 40): FlowchartDiagram {
+  return resizeCanvas(diagram, node, padding);
+}
+
+// A derived canvas (`canvas: auto`) tracks its content in both directions, so deleting a node from
+// the right-hand edge no longer leaves dead space behind in every export. An authored canvas keeps
+// the historical grow-only behaviour so a deliberate fixed aspect ratio is never taken away.
+export function fitCanvasToContent(diagram: FlowchartDiagram, padding = 40): FlowchartDiagram {
+  return resizeCanvas(diagram, null, padding, true);
+}
+
+function resizeCanvas(diagram: FlowchartDiagram, node: FlowchartNode | null, padding = 40, forceShrink = false): FlowchartDiagram {
   const width = Number(diagram.canvas?.width) || 1000;
   const height = Number(diagram.canvas?.height) || 560;
+  const shrinks = forceShrink || Boolean(diagram.canvas?.auto);
   const knownNodes = new Set(flattenFlowchartNodes(diagram).map((entry) => entry.node));
   const nodes = [...knownNodes];
-  if (!nodes.includes(node)) {
+  if (node && !nodes.includes(node)) {
     nodes.push(node);
   }
   const boundsFor = (candidate: FlowchartNode) => knownNodes.has(candidate)
@@ -40,6 +52,12 @@ export function expandCanvasForNode(diagram: FlowchartDiagram, node: FlowchartNo
     ...nodes.filter((candidate) => candidate.arrow).map((candidate) => ({
       x: candidate.arrow!.x,
       y: candidate.arrow!.y,
+      width: 0,
+      height: 0
+    })),
+    ...(diagram.edges || []).filter((edge) => edge.waypoint).map((edge) => ({
+      x: edge.waypoint!.x,
+      y: edge.waypoint!.y,
       width: 0,
       height: 0
     }))
@@ -74,10 +92,12 @@ export function expandCanvasForNode(diagram: FlowchartDiagram, node: FlowchartNo
   }
 
   const expandedBounds = occupiedBounds();
+  const contentWidth = Math.max(2 * padding, ...expandedBounds.map((candidate) => candidate.x + candidate.width + padding));
+  const contentHeight = Math.max(2 * padding, ...expandedBounds.map((candidate) => candidate.y + candidate.height + padding));
   diagram.canvas = {
     ...diagram.canvas,
-    width: Math.max(width + shiftX, ...expandedBounds.map((candidate) => candidate.x + candidate.width + padding)),
-    height: Math.max(height + shiftY, ...expandedBounds.map((candidate) => candidate.y + candidate.height + padding))
+    width: shrinks && expandedBounds.length ? contentWidth : Math.max(width + shiftX, contentWidth),
+    height: shrinks && expandedBounds.length ? contentHeight : Math.max(height + shiftY, contentHeight)
   };
   return diagram;
 }
@@ -293,6 +313,9 @@ export function deleteNode(diagram: FlowchartDiagram, nodeId: string): { node: s
   const deletedEdges = diagram.edges.filter((edge) => deletedNodeIds.has(edge.source) || deletedNodeIds.has(edge.target));
   entry.siblings.splice(entry.siblings.indexOf(entry.node), 1);
   diagram.edges = diagram.edges.filter((edge) => !deletedNodeIds.has(edge.source) && !deletedNodeIds.has(edge.target));
+  if (diagram.canvas?.auto) {
+    fitCanvasToContent(diagram);
+  }
   return { node: nodeId, deletedEdges };
 }
 

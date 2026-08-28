@@ -3,12 +3,29 @@ import { escapeHtml } from "./diagrams/parser";
 import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
 
-type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack";
+type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram";
 
 type DirectiveOpen = {
   name: DirectiveName;
   attributes: Record<string, string>;
 };
+
+// Arity is a property of the directive name, so the parser never needs lookahead to know whether a
+// `:::` further down belongs to this directive. Void directives hold no content and take no closer.
+const directiveDefinitions: Record<DirectiveName, { attributes: string[]; void?: boolean }> = {
+  section: { attributes: ["title", "palette", "fill", "stroke", "text"] },
+  panel: { attributes: ["title", "palette", "fill", "stroke", "text"] },
+  callout: { attributes: ["kind", "title", "palette", "fill", "stroke", "text"] },
+  grid: { attributes: ["columns"] },
+  stack: { attributes: [] },
+  diagram: { attributes: ["id"], void: true }
+};
+
+const directiveNames = Object.keys(directiveDefinitions) as DirectiveName[];
+
+function isVoidDirective(name: DirectiveName): boolean {
+  return Boolean(directiveDefinitions[name].void);
+}
 
 type DiagramDefinition = {
   source: string;
@@ -96,7 +113,7 @@ function getListMatch(line: string): RegExpMatchArray | null {
 }
 
 function parseDirectiveOpen(line: string): DirectiveOpen | null {
-  const match = line.match(/^:::(section|panel|callout|grid|stack)(?:\s+\{(.*)\})?\s*$/);
+  const match = line.match(new RegExp(`^:::(${directiveNames.join("|")})(?:\\s+\\{(.*)\\})?\\s*$`));
   if (!match) {
     return null;
   }
@@ -123,9 +140,13 @@ function parseDirectiveOpen(line: string): DirectiveOpen | null {
 }
 
 function parseDiagramReference(line: string): { id: string } | null {
-  const match = line.match(/^:::diagram\s+\{\s*id=(?:"([^"]+)"|([^\s}]+))\s*\}\s*$/);
-  const id = match?.[1] ?? match?.[2];
-  return id ? { id } : null;
+  const directive = parseDirectiveOpen(line);
+  if (!directive || directive.name !== "diagram") {
+    return null;
+  }
+  const keys = Object.keys(directive.attributes);
+  const id = directive.attributes.id;
+  return keys.length === 1 && id ? { id } : null;
 }
 
 function getDiagramId(source: string): string | null {
@@ -157,8 +178,11 @@ function findDirectiveClose(lines: string[], start: number, end: number): number
       fenceMarker = fence.marker;
       continue;
     }
-    if (parseDirectiveOpen(line)) {
-      depth += 1;
+    const directive = parseDirectiveOpen(line);
+    if (directive) {
+      if (!isVoidDirective(directive.name)) {
+        depth += 1;
+      }
     } else if (isDirectiveClose(line)) {
       depth -= 1;
       if (!depth) {
@@ -381,20 +405,16 @@ export function renderMarkdown(
 
   function renderDirective(start: number, end: number): { html: string; next: number } | null {
     const directive = parseDirectiveOpen(lines[start]);
-    const close = directive ? findDirectiveClose(lines, start, end) : -1;
-    if (!directive || close === -1) {
+    if (!directive || isVoidDirective(directive.name)) {
+      return null;
+    }
+    const close = findDirectiveClose(lines, start, end);
+    if (close === -1) {
       return null;
     }
 
     const { name, attributes } = directive;
-    const allowedAttributes: Record<DirectiveName, string[]> = {
-      section: ["title", "palette", "fill", "stroke", "text"],
-      panel: ["title", "palette", "fill", "stroke", "text"],
-      callout: ["kind", "title", "palette", "fill", "stroke", "text"],
-      grid: ["columns"],
-      stack: []
-    };
-    if (Object.keys(attributes).some((key) => !allowedAttributes[name].includes(key))) {
+    if (Object.keys(attributes).some((key) => !directiveDefinitions[name].attributes.includes(key))) {
       return null;
     }
 
@@ -486,6 +506,11 @@ export function renderMarkdown(
             state.diagramIndex += 1;
           }
           index += 1;
+          // A void directive needs no closer, but one written out of habit is swallowed rather than
+          // left on the page as a stray `:::`.
+          if (index < end && isDirectiveClose(lines[index])) {
+            index += 1;
+          }
           continue;
         }
         const rendered = renderDirective(index, end);

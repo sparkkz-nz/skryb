@@ -106,9 +106,18 @@ export function serializeDiagram(diagram: Diagram): string {
     return lines.join("\n");
   }
 
-  lines.push("canvas:");
-  for (const [key, value] of Object.entries(diagram.canvas || {})) {
-    lines.push(...formatField(key, value, 2, 4));
+  // A derived canvas round-trips as `canvas: auto`: its width and height are computed from the
+  // content on every parse, so writing the baked numbers back would freeze them into the source.
+  const canvas = diagram.canvas || {};
+  const canvasEntries = Object.entries(canvas)
+    .filter(([key]) => !canvas.auto || (key !== "width" && key !== "height"));
+  if (canvas.auto && canvasEntries.length === 1) {
+    lines.push("canvas: auto");
+  } else {
+    lines.push("canvas:");
+    for (const [key, value] of canvasEntries) {
+      lines.push(...formatField(key, value, 2, 4));
+    }
   }
 
   lines.push("nodes:");

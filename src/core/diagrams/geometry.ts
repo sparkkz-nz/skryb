@@ -7,6 +7,73 @@ export function splitTextLines(value: string | null | undefined): string[] {
   return String(value ?? "").replace(/\r\n/g, "\n").split("\n");
 }
 
+// Approximate advance widths as a fraction of the font size, for the runtime's own sans-serif
+// stack. Measuring properly needs a canvas or a laid-out DOM, neither of which is available when
+// the SVG string is built, so wrapping uses this table instead. It is calibrated so that typical
+// technical English comes out near the documented ~8.4px per character at the 16px label size.
+const narrowCharacters = "iljI|!.,;:'`()[]{}/\\";
+const semiNarrowCharacters = "tfr";
+const wideCharacters = "mwMW";
+
+function getCharacterWidthRatio(character: string): number {
+  if (character === " ") {
+    return 0.26;
+  }
+  if (narrowCharacters.includes(character)) {
+    return 0.28;
+  }
+  if (semiNarrowCharacters.includes(character)) {
+    return 0.33;
+  }
+  if (wideCharacters.includes(character)) {
+    return 0.85;
+  }
+  if (character >= "0" && character <= "9") {
+    return 0.56;
+  }
+  if (character >= "A" && character <= "Z") {
+    return 0.66;
+  }
+  return 0.55;
+}
+
+export function measureTextWidth(text: string, fontSize: number, bold = false): number {
+  let ratio = 0;
+  for (const character of String(text ?? "")) {
+    ratio += getCharacterWidthRatio(character);
+  }
+  return ratio * fontSize * (bold ? 1.03 : 1);
+}
+
+// Wraps on word boundaries inside the width the author already declared, so a long label no longer
+// silently overflows its shape. Widths stay uniform: nothing here resizes a node to fit its text.
+// A single word wider than the line is left whole rather than broken mid-token.
+export function wrapTextLines(lines: string[], maxWidth: number, fontSize: number, bold = false): string[] {
+  if (!(maxWidth > 0)) {
+    return lines;
+  }
+
+  return lines.flatMap((line) => {
+    if (measureTextWidth(line, fontSize, bold) <= maxWidth) {
+      return [line];
+    }
+
+    const wrapped: string[] = [];
+    let current = "";
+    for (const word of line.split(/(?<=\s)/)) {
+      const candidate = current + word;
+      if (current && measureTextWidth(candidate.trimEnd(), fontSize, bold) > maxWidth) {
+        wrapped.push(current.trimEnd());
+        current = word.trimStart();
+      } else {
+        current = candidate;
+      }
+    }
+    wrapped.push(current.trimEnd());
+    return wrapped.filter((entry, index) => entry || !index);
+  });
+}
+
 export function renderTextBlock(
   centerX: number,
   startY: number,
@@ -146,8 +213,10 @@ export function computeNodeTextLayout(
 
   const labelLineHeight = 20;
   const subtitleLineHeight = 15;
-  const labelLines = splitTextLines(resolvedNode.label);
-  const subtitleLines = resolvedNode.subtitle ? splitTextLines(resolvedNode.subtitle) : [];
+  const labelLines = wrapTextLines(splitTextLines(resolvedNode.label), resolvedBounds.width, 16, true);
+  const subtitleLines = resolvedNode.subtitle
+    ? wrapTextLines(splitTextLines(resolvedNode.subtitle), resolvedBounds.width, 13)
+    : [];
   const subtitleGap = subtitleLines.length ? 6 : 0;
   const labelBlockHeight = labelLines.length * labelLineHeight;
   const subtitleBlockHeight = subtitleLines.length * subtitleLineHeight;

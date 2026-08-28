@@ -24,6 +24,7 @@ import {
   getWheelZoom,
   createNode,
   expandCanvasForNode,
+  fitCanvasToContent,
   getResizeNodeOrigin,
   createUniqueNodeId,
   getDefaultNodePosition,
@@ -72,7 +73,9 @@ import {
   getNodeGeometry,
   renderNodeBody,
   renderTextBlock,
-  splitTextLines
+  splitTextLines,
+  measureTextWidth,
+  wrapTextLines
 } from "../core/diagrams/geometry";
 import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
@@ -585,6 +588,7 @@ export class BrowserRuntime {
       getTheme: (diagram: { theme?: string }) => getTheme(diagram, this.state.documentTheme),
       getGridSize,
       expandCanvasForNode,
+      fitCanvasToContent,
       flattenFlowchartNodes,
       getFlowchartNodeBounds,
       reparentFlowchartNode,
@@ -651,6 +655,8 @@ export class BrowserRuntime {
       findSourceTextRange,
       scrollSourceEditorToRange,
       splitTextLines,
+      measureTextWidth,
+      wrapTextLines,
       renderTextBlock,
       computeNodeTextLayout,
       getNodeGeometry,
