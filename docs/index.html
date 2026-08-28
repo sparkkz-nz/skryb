@@ -133,7 +133,8 @@ figure number, so `"Figure #: ..."` renumbers itself when you add a figure above
 
 Every node in that first diagram has a `position`, because someone chose where
 to put it. You do not have to. Add `layout: right` - or `down`, `left`, `up` -
-leave the positions out, and Skryb works out the arrangement from the connectors:
+leave the positions and the connector anchors out, and Skryb works out the
+arrangement from the connectors:
 
 ```yaml
 type: flowchart
@@ -149,13 +150,28 @@ nodes:
 edges:
   - source: browser
     target: api
-    sourceAnchor: right
-    targetAnchor: left
 ```
 
-This happens when the document opens, and only to nodes with no `position`. Drag
-one and it stays where you put it. Leave the `layout` line in afterwards and the
-next node you add without coordinates gets placed too.
+This happens when the document opens, and only to what you left out. Drag a node
+and it stays where you put it; write an anchor down and it is kept. Leave the
+`layout` line in afterwards and the next node you add without coordinates gets
+placed too.
+
+The `layout` line is also what marks the diagram as Skryb's to arrange. Leave it
+off and every node needs a `position` and every edge both anchors - which is what
+you want for a diagram you have arranged yourself, because then a missing
+coordinate is reported rather than quietly drawn in the corner.
+
+Those positions only exist while the document is open, though: the file still
+says nothing about where anything is. To get them into the file - so you can
+nudge a number - bake it:
+
+```sh
+node scripts/bake.mjs doc.html
+```
+
+That writes the positions and anchors into the diagram's own source, and leaves
+any diagram without a `layout` line completely alone.
 
 You also do not need to nudge connectors around obstacles or hand-break long
 labels. An edge that would cut through an unrelated node goes around it, and a

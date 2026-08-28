@@ -329,7 +329,7 @@ The directive may appear anywhere, including before the headings it lists.
 | `version` | No | A document-defined diagram version, commonly `1`. |
 | `id` | No | A document-defined diagram identifier. It is also the diagram's anchor and the target of `{ref=}`. |
 | `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
-| `layout` | No | Flowchart only. Places nodes that have no `position`. |
+| `layout` | No | Flowchart only. Marks the diagram machine-managed: nodes may omit `position` and edges may omit anchors, and the engine fills in what is missing. |
 | `styles` | No | Flowchart only. Named styles applied to nodes and edges with `class`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
 | `nodes` | Flowchart | List of flowchart nodes. |
@@ -404,25 +404,38 @@ edges:
 
 `layout` takes `right`, `down`, `left`, or `up`.
 
-**This is a seeding step, not a layout mode.** Layout runs when a diagram is
-loaded and some node has no position, assigns positions to exactly those nodes,
-and the result is baked into the model immediately. Saving writes the actual
-current positions, so there is nothing left to do on a second open, layout can
-never fight a hand edit, and there is no `layout: manual` and no state to track.
-In practice it matters exactly once: the first time an agent-authored file is
-opened.
+**`layout` is what makes a diagram machine-managed, and that is the whole of the
+difference.** With it, nodes may omit `position` and edges may omit either
+anchor, and the engine fills in whatever is missing. Without it, a node with no
+`position` or an edge with no anchors is an error - because a drawing that
+silently stacks every node at the origin is worse than one that refuses to
+render.
 
-**Keep the `layout` key after baking.** It becomes a no-op for a fully
-positioned diagram, but it declares *how to place anything unpositioned*, so a
-node appended later with no coordinates is placed on the next open. That is what
-makes incremental edits work without re-laying out the whole diagram.
+**This is a seeding step, not a layout mode.** Layout runs when a diagram is
+loaded and something is missing, fills in exactly what is missing, and the
+result goes into the model immediately. Serialisation always writes the current
+positions, so layout can never fight a hand edit, and there is no
+`layout: manual` and no state to track.
+
+**Bake it into the source before you review it.** Until you do, the positions
+exist only while the document is open and the file still says nothing about
+where anything is - so there is nothing in the source to adjust. `npm run bake
+doc.html` writes the positions and anchors into the fence. Only fences declaring
+a `layout` are rewritten; a diagram without one is copied through untouched,
+comments and all. See "Working on a document" below.
+
+**Keep the `layout` key after baking.** It becomes a no-op for a fully specified
+diagram, but it declares *how to place anything left unspecified*, so a node
+appended later with no coordinates is placed on the next bake. That is what
+makes incremental edits work without re-laying out the whole diagram. Delete it
+only to freeze a diagram deliberately.
 
 The rules:
 
-- **`layout` absent is exactly today's behaviour.** Every existing document is
-  unaffected, and a node with no position keeps the current fallback rather than
-  being laid out.
 - **An existing `position` always wins.** It is never moved and never re-flowed.
+- **An anchor written down always wins.** Only the side left out is derived, so
+  an edge can pin the anchor that carries intent - a deliberate back-edge - and
+  leave the other to be worked out.
 - Containers lay out recursively inside their parent's box. A container with no
   `size` grows to hold the result; a container with a `size` keeps it.
 - Layout runs before the canvas is measured, so `canvas: auto` fits the result.
@@ -437,16 +450,23 @@ stage is drawn perpendicular to the flow, so `right` gives columns and `down`
 gives rows. Nodes within a stage are then ordered to reduce edge crossings.
 
 **Some nodes have positions** - a diagram that has been appended to. Nothing is
-re-flowed. Every edge carries both anchors, so it already states a spatial
-relationship, and a node sits on the side its own anchor faces away from: a
-connector entering the new node's `left` means the neighbour is to its left, so
-the node goes to that neighbour's right, centred on it and one stage gap clear.
-Several connectors are reconciled by clearing every neighbour along the flow and
-sitting between them across it.
+re-flowed. An edge that carries anchors already states a spatial relationship,
+and a node sits on the side its own anchor faces away from: a connector entering
+the new node's `left` means the neighbour is to its left, so the node goes to
+that neighbour's right, centred on it and one stage gap clear. An edge with no
+anchors has the diagram's own direction as its stated intent instead, so the new
+node lands downstream of its neighbour. Several connectors are reconciled by
+clearing every neighbour along the flow and sitting between them across it.
 
 **A node with no connectors at all** - a standalone text or legend node - is the
 only case with nothing to infer from, and takes the first free, grid-snapped slot
 that clears everything already placed.
+
+**Anchors left out are derived from where the nodes ended up**, once placement
+has finished - not from the declared direction. Two nodes side by side face
+`right` to `left`; a node above another faces `bottom` to `top`. A pair with no
+geometry to read, a self connector or a node overlapping its neighbour, falls
+back to the declared direction.
 
 An edge whose anchors contradict the declared direction is a hint, not an error:
 it is read as a deliberate back-edge and left out of stage assignment so it
@@ -541,7 +561,7 @@ child nodes at any depth:
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Its values sit below the node's own `palette` and `style`. |
 | `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, or `text`. The `document` shape is a sheet of paper with a folded top-right corner. The `text` shape is a plain text box: it renders its (multiline) `label` with a native-SVG Markdown subset, and its fill and stroke default to transparent unless a `palette` or `style` override is set. |
-| `position` | `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
+| `position` | **Required unless the diagram declares a `layout`.** `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
 | `size` | `{ width: number, height: number }`. Nodes have a minimum size; circles remain square. |
 | `palette` | Optional semantic palette role; selects the scheme-aware node treatment and clears explicit node colour overrides. |
 | `style` | Optional overrides: `fill`, `stroke`, `text`, and `strokeWidth`. `style.width` is rejected. |
@@ -637,7 +657,7 @@ Every edge requires both explicit endpoint anchors:
 | Field | Values / behaviour |
 | --- | --- |
 | `source`, `target` | IDs of the connected nodes. |
-| `sourceAnchor`, `targetAnchor` | **Required.** `top`, `right`, `bottom`, or `left`. |
+| `sourceAnchor`, `targetAnchor` | **Required unless the diagram declares a `layout`**, in which case either may be left out and is derived from where the nodes end up. `top`, `right`, `bottom`, or `left`. |
 | `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Only its `style` values apply to an edge. |
@@ -896,6 +916,72 @@ aesthetics.
 
 A node with no connector is never reported. A `text` shape used for annotation,
 a label, or a legend is a normal part of a diagram.
+
+## Baking a document
+
+A document laid out by the auto-layout engine renders from positions that exist
+only while it is open. The source still says nothing about where anything is, so
+there is nothing in the file to adjust when the review says a node is in the
+wrong place. Baking closes that gap by writing the engine's work into the
+document's own source.
+
+`bakeDocumentSource(source)` on the runtime's core API returns
+`{ source, baked, preserved, fences }`. A `scripts/bake.mjs` wrapper runs it
+headlessly against a saved file, the same way the lint command does:
+
+```sh
+node scripts/bake.mjs doc.html           # positions and anchors written in
+node scripts/bake.mjs doc.html --check   # non-zero if baking would change it
+```
+
+**Only fences that declare a `layout` are touched.** That key marks a diagram as
+machine-managed, so it is also the licence to rewrite the fence into canonical
+form. A diagram without one is hand-managed and is copied through exactly as it
+was, comments and field order intact. Nothing outside the diagram fences is
+rewritten, and a file with no layout-managed diagram is left byte for byte as it
+was.
+
+Every fence is parsed on the way through, so an invalid diagram fails the bake
+rather than being quietly skipped, and baking is idempotent: the second run
+reparses what the first wrote and produces the same text.
+
+New fence bodies are spliced into the document's own lines rather than the text
+being rebuilt, so prose, frontmatter, and line endings survive exactly, and a
+document with nothing to bake comes back byte for byte identical. `fences`
+carries the line range of each rewritten fence for the same reason: the source
+embedded in a `template` is HTML-escaped, and decoding is lossy across entities
+like `&amp;nbsp;`, so the wrapper splices the same line ranges into the escaped text
+instead of re-encoding a whole document it has no business rewriting.
+
+For the same reason, `scripts/bake.mjs` refuses a fence containing an HTML
+entity other than `&amp;lt;`, `&amp;gt;`, `&amp;quot;`, `&amp;#39;`, and `&amp;amp;`, and writes
+nothing for that file. A browser decodes every entity when it reads the embedded
+source, so a fence holding `&amp;nbsp;` - or worse, a numeric `&amp;#10;` that the
+browser reads as a line break - is not the diagram the command would be writing
+back. Replace the entity with the character it stands for, or drop the `layout`
+to hand-manage that diagram. Entities elsewhere in the document are never
+touched and never a problem.
+
+### The authoring loop
+
+The browser cannot write to its own path, so a document open in a browser can
+only ever be downloaded. Bake is what lets the file on disk stay the thing that
+renders:
+
+1. Draft the diagram with a `layout` and no positions or anchors.
+2. `node scripts/bake.mjs doc.html` to write in what the engine worked out.
+3. `node scripts/lint.mjs doc.html` and, if it helps, open the file to look at it.
+4. Adjust the numbers in the source, and lint again.
+
+Because the engine only ever fills in what is missing, the baked source stays
+workable:
+
+- **Re-place one node** - delete its `position` and bake again. It is placed
+  from its connectors, in the context of the nodes around it, which do not move.
+- **Add a node** - give it no `position` and bake. Same again.
+- **Lay the whole thing out afresh** - strip every `position` and bake. This
+  discards any hand tuning, which is why it is a deliberate edit rather than a
+  flag on the command.
 
 ## Printing a document
 
