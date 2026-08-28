@@ -692,8 +692,43 @@ export function injectStyles(): void {
       position: relative;
       resize: vertical;
     }
-    .docdiagram[data-expanded="true"] {
-      border-radius: 0;
+    .docdiagram-captioned {
+      padding-bottom: 2.75rem;
+    }
+    .docdiagram-caption {
+      bottom: .9rem;
+      color: var(--docdiagram-muted);
+      font-size: .9rem;
+      left: 1rem;
+      position: absolute;
+      right: 1rem;
+      text-align: center;
+    }
+    /* An expanded frame is a working view rather than a document view, so the caption steps aside
+       along with the space reserved for it. */
+    .docdiagram[data-expanded="true"] .docdiagram-caption {
+      display: none;
+    }
+    .docdiagram-captioned[data-expanded="true"] {
+      padding-bottom: 1rem;
+    }
+    .docdiagram-contents ul {
+      margin: .25rem 0;
+      padding-left: 1.25rem;
+    }
+    .docdiagram-contents > ul {
+      padding-left: 0;
+    }
+    .docdiagram-contents li {
+      list-style: none;
+    }
+    .docdiagram-contents-figure > a {
+      font-style: italic;
+    }
+    .docdiagram-error-inline {
+      color: #8b1c1c;
+    }
+    .docdiagram[data-expanded="true"] {      border-radius: 0;
       border-width: 0;
       box-shadow: none;
       height: auto;

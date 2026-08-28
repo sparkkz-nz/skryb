@@ -1,9 +1,9 @@
 import { calloutKinds, paletteRoles, gridColumns } from "./diagrams/schema";
-import { escapeHtml } from "./diagrams/parser";
+import { escapeHtml, parseScalar } from "./diagrams/parser";
 import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
 
-type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram";
+type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram" | "toc";
 
 type DirectiveOpen = {
   name: DirectiveName;
@@ -18,7 +18,8 @@ const directiveDefinitions: Record<DirectiveName, { attributes: string[]; void?:
   callout: { attributes: ["kind", "title", "palette", "fill", "stroke", "text"] },
   grid: { attributes: ["columns"] },
   stack: { attributes: [] },
-  diagram: { attributes: ["id"], void: true }
+  diagram: { attributes: ["id"], void: true },
+  toc: { attributes: ["depth", "diagrams"], void: true }
 };
 
 const directiveNames = Object.keys(directiveDefinitions) as DirectiveName[];
@@ -36,13 +37,57 @@ type DiagramReferenceRegistry = {
   definitions: Map<string, DiagramDefinition>;
   duplicateDefinitionIds: Set<string>;
   referenceCounts: Map<string, number>;
+  diagramIds: Set<string>;
+};
+
+/** A rendered figure, recorded in render order so numbering and the contents agree. */
+type FigureEntry = {
+  id: string | null;
+  number: number | null;
+  text: string;
+};
+
+/** A heading or captioned figure, collected in render order for `:::toc`. */
+type ContentsEntry = {
+  kind: "heading" | "figure";
+  level: number;
+  id: string;
+  text: string;
 };
 
 type MarkdownRenderState = {
   diagramIndex: number;
   headingOccurrences?: Map<string, number>;
   usedHeadingIds?: Set<string>;
+  figureNumber?: number;
+  figures?: Map<string, FigureEntry>;
+  contents?: ContentsEntry[];
 };
+
+// Deferred substitutions. A cross-reference or a contents listing can point forwards, so both are
+// emitted as a placeholder during the render pass and resolved once every figure and heading is
+// known. Resolving from what the render actually produced is what keeps numbering, anchors and the
+// contents in agreement, rather than a second pass that has to reproduce the same id arithmetic.
+const referencePlaceholderPattern = /\u0001ref:([^\u0001]*)\u0001/g;
+const contentsPlaceholderPattern = /\u0001toc:([^\u0001]*)\u0001/g;
+
+/** Splits a caption into its parts around the figure-number placeholder, honouring `\#`. */
+function parseCaption(caption: string): { hasPlaceholder: boolean; before: string; after: string; text: string } {
+  const unescaped = caption.replace(/\\#/g, "\u0002");
+  const placeholder = unescaped.indexOf("#");
+  const restore = (value: string) => value.replace(/\u0002/g, "#");
+
+  if (placeholder === -1) {
+    return { hasPlaceholder: false, before: restore(unescaped), after: "", text: restore(unescaped) };
+  }
+
+  return {
+    hasPlaceholder: true,
+    before: restore(unescaped.slice(0, placeholder)),
+    after: restore(unescaped.slice(placeholder + 1)),
+    text: restore(unescaped.slice(0, placeholder) + unescaped.slice(placeholder + 1))
+  };
+}
 
 function createHeadingSlug(value: string): string {
   return value
@@ -154,6 +199,14 @@ function getDiagramId(source: string): string | null {
   return match?.[1] ?? match?.[2] ?? null;
 }
 
+function getDiagramCaption(source: string): string | null {
+  const match = source.match(/^caption:[ \t]*(\S.*?)\s*$/m);
+  // Quoting and escaping follow the diagram parser's own scalar rules, so a caption reads the same
+  // way here as it does when the diagram is parsed.
+  const caption = match ? parseScalar(match[1]) : null;
+  return typeof caption === "string" && caption ? caption : null;
+}
+
 function stripBlockQuotePrefix(line: string): string {
   return line.replace(/^(?: {0,3}> ?)+/, "");
 }
@@ -252,6 +305,11 @@ export function renderInline(source: string): string {
     return token;
   });
 
+  // A cross-reference can point at a figure that has not been rendered yet, so it becomes a
+  // placeholder here and is resolved once the whole document has been traversed.
+  value = value.replace(/\{ref=(?:"([^"}]+)"|([^\s}]+))\}/g, (_, quoted: string, bare: string) =>
+    `\u0001ref:${quoted ?? bare}\u0001`);
+
   value = escapeHtml(value);
   value = value.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (_, alt: string, url: string) => {
     const decodedUrl = url.replace(/&amp;/g, "&");
@@ -278,7 +336,7 @@ export function renderMarkdown(
   source: string,
   state: MarkdownRenderState = { diagramIndex: 0 },
   options?: {
-    renderDiagram?: (source: string, index: number) => string;
+    renderDiagram?: (source: string, index: number, figure?: { id: string | null; caption: string | null }) => string;
     documentColorScheme?: string;
     documentTheme?: string;
     diagramReferenceRegistry?: DiagramReferenceRegistry;
@@ -288,12 +346,14 @@ export function renderMarkdown(
   const renderDiagram = options?.renderDiagram ?? ((_: string, __: number) => {
     throw new Error("renderDiagram callback is required for diagram blocks.");
   });
+  const isNestedRender = Boolean(options?.diagramReferenceRegistry);
   const documentColorScheme = options?.documentColorScheme || "classic";
   const documentTheme = options?.documentTheme || "light";
   const registry = options?.diagramReferenceRegistry || (() => {
     const definitions = new Map<string, DiagramDefinition>();
     const duplicateDefinitionIds = new Set<string>();
     const referenceCounts = new Map<string, number>();
+    const diagramIds = new Set<string>();
     const normalizedLines = lines.map(stripBlockQuotePrefix);
 
     for (let index = 0; index < normalizedLines.length; index += 1) {
@@ -309,6 +369,7 @@ export function renderMarkdown(
         const definitionSource = normalizedLines.slice(index + 1, closeIndex).join("\n");
         const id = getDiagramId(definitionSource);
         if (id) {
+          diagramIds.add(id);
           if (definitions.has(id)) {
             duplicateDefinitionIds.add(id);
           } else {
@@ -338,9 +399,44 @@ export function renderMarkdown(
         referenceCounts.set(reference.id, (referenceCounts.get(reference.id) || 0) + 1);
       }
     }
-    return { definitions, duplicateDefinitionIds, referenceCounts };
+    return { definitions, duplicateDefinitionIds, referenceCounts, diagramIds };
   })();
   const { definitions: diagramDefinitions, duplicateDefinitionIds, referenceCounts } = registry;
+
+  state.figures ||= new Map<string, FigureEntry>();
+  state.contents ||= [];
+  // A diagram id is declared by the author and is load-bearing for `{ref=}` and `:::diagram`,
+  // whereas a heading slug is derived, so diagram ids are claimed first and a colliding heading
+  // takes the numeric suffix getHeadingId already applies to a repeated heading.
+  if (!isNestedRender) {
+    const usedIds = state.usedHeadingIds || (state.usedHeadingIds = new Set());
+    for (const id of registry.diagramIds) {
+      usedIds.add(id);
+    }
+  }
+
+  function renderFigure(definitionSource: string): string {
+    const id = getDiagramId(definitionSource);
+    const caption = getDiagramCaption(definitionSource);
+    const parsed = caption ? parseCaption(caption) : null;
+    // Only a caption asking for a number consumes one, which keeps numbering contiguous when a
+    // titled but unnumbered figure sits between two numbered ones.
+    const number = parsed?.hasPlaceholder
+      ? (state.figureNumber = (state.figureNumber || 0) + 1)
+      : null;
+    const text = parsed
+      ? (number === null ? parsed.text : `${parsed.before}${number}${parsed.after}`)
+      : null;
+
+    if (parsed && id) {
+      state.figures!.set(id, { id, number, text: text as string });
+      state.contents!.push({ kind: "figure", level: 0, id, text: renderInline(text as string) });
+    }
+
+    const markup = renderDiagram(definitionSource, state.diagramIndex, { id, caption: text });
+    state.diagramIndex += 1;
+    return markup;
+  }
 
   function isBlockStart(index: number): boolean {
     const line = lines[index] || "";
@@ -401,6 +497,43 @@ export function renderMarkdown(
       return `<li${task ? ' class="docdiagram-task-list-item"' : ""}>${content}${item.children.join("")}</li>`;
     }).join("");
     return { html: `<${tag}${attributes}>${markup}</${tag}>`, index };
+  }
+
+  /** Renders a directive that holds no content. Returns null when the directive is not valid. */
+  function renderVoidDirective(directive: DirectiveOpen): string | null {
+    const { name, attributes } = directive;
+    if (Object.keys(attributes).some((key) => !directiveDefinitions[name].attributes.includes(key))) {
+      return null;
+    }
+
+    if (name === "diagram") {
+      const id = attributes.id;
+      if (!id) {
+        return null;
+      }
+      const definition = diagramDefinitions.get(id);
+      if (!definition) {
+        return `<section class="docdiagram-error"><strong>Diagram "${escapeHtml(id)}" could not be found.</strong></section>`;
+      }
+      if (duplicateDefinitionIds.has(id)) {
+        return `<section class="docdiagram-error"><strong>Diagram "${escapeHtml(id)}" has multiple definitions.</strong></section>`;
+      }
+      if ((referenceCounts.get(id) || 0) > 1) {
+        return `<section class="docdiagram-error"><strong>Diagram "${escapeHtml(id)}" is referenced more than once.</strong></section>`;
+      }
+      return renderFigure(definition.source);
+    }
+
+    const depth = attributes.depth === undefined ? 3 : Number(attributes.depth);
+    if (!Number.isInteger(depth) || depth < 1 || depth > 6) {
+      return null;
+    }
+    if (attributes.diagrams !== undefined && attributes.diagrams !== "true" && attributes.diagrams !== "false") {
+      return null;
+    }
+    // The contents can only be built once every heading and figure is known, so the render pass
+    // leaves a placeholder behind and the finished document is filled in afterwards.
+    return `\u0001toc:${depth}:${attributes.diagrams === "true"}\u0001`;
   }
 
   function renderDirective(start: number, end: number): { html: string; next: number } | null {
@@ -491,24 +624,14 @@ export function renderMarkdown(
       }
 
       if (/^:::/.test(line)) {
-        const reference = parseDiagramReference(line);
-        if (reference) {
-          const definition = diagramDefinitions.get(reference.id);
-          const references = referenceCounts.get(reference.id) || 0;
-          if (!definition) {
-            output.push(`<section class="docdiagram-error"><strong>Diagram "${escapeHtml(reference.id)}" could not be found.</strong></section>`);
-          } else if (duplicateDefinitionIds.has(reference.id)) {
-            output.push(`<section class="docdiagram-error"><strong>Diagram "${escapeHtml(reference.id)}" has multiple definitions.</strong></section>`);
-          } else if (references > 1) {
-            output.push(`<section class="docdiagram-error"><strong>Diagram "${escapeHtml(reference.id)}" is referenced more than once.</strong></section>`);
-          } else {
-            output.push(renderDiagram(definition.source, state.diagramIndex));
-            state.diagramIndex += 1;
-          }
+        const directive = parseDirectiveOpen(line);
+        if (directive && isVoidDirective(directive.name)) {
+          const rendered = renderVoidDirective(directive);
+          output.push(rendered ?? `<pre class="docdiagram-literal-source"><code>${escapeHtml(line)}</code></pre>`);
           index += 1;
           // A void directive needs no closer, but one written out of habit is swallowed rather than
           // left on the page as a stray `:::`.
-          if (index < end && isDirectiveClose(lines[index])) {
+          if (rendered !== null && index < end && isDirectiveClose(lines[index])) {
             index += 1;
           }
           continue;
@@ -538,8 +661,7 @@ export function renderMarkdown(
           if (id && duplicateDefinitionIds.has(id)) {
             output.push(`<section class="docdiagram-error"><strong>Diagram "${escapeHtml(id)}" has multiple definitions.</strong></section>`);
           } else if (!id || !referenceCounts.has(id)) {
-            output.push(renderDiagram(content, state.diagramIndex));
-            state.diagramIndex += 1;
+            output.push(renderFigure(content));
           }
         } else {
           const className = fence.info ? ` class="language-${escapeHtml(fence.info)}"` : "";
@@ -551,7 +673,10 @@ export function renderMarkdown(
 
       const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
       if (heading) {
-        output.push(`<h${heading[1].length} id="${getHeadingId(heading[2], state)}">${renderInline(heading[2])}</h${heading[1].length}>`);
+        const level = heading[1].length;
+        const headingId = getHeadingId(heading[2], state);
+        state.contents!.push({ kind: "heading", level, id: headingId, text: renderInline(heading[2]) });
+        output.push(`<h${level} id="${headingId}">${renderInline(heading[2])}</h${level}>`);
         index += 1;
         continue;
       }
@@ -612,5 +737,65 @@ export function renderMarkdown(
     return output.join("");
   }
 
-  return renderBlocks();
+  const markup = renderBlocks();
+  // A nested render (a block quote) shares the outer state, so substitution is left to the
+  // outermost call, where every figure and heading has been collected.
+  return isNestedRender ? markup : resolveDeferredMarkup(markup, state);
+}
+
+function renderContentsList(entries: ContentsEntry[], depth: number, includeDiagrams: boolean): string {
+  const listed = entries.filter((entry) => entry.kind === "figure" ? includeDiagrams : entry.level <= depth);
+  if (!listed.length) {
+    return "";
+  }
+
+  // A figure is nested one level below the heading it falls within, so it reads as belonging to
+  // that section rather than as a sibling of it.
+  const headingLevels = listed.filter((entry) => entry.kind === "heading").map((entry) => entry.level);
+  const baseLevel = Math.min(...(headingLevels.length ? headingLevels : [1]));
+  type ContentsNode = { entry: ContentsEntry; level: number; children: ContentsNode[] };
+  const roots: ContentsNode[] = [];
+  const ancestors: ContentsNode[] = [];
+
+  for (const entry of listed) {
+    const level = entry.kind === "figure"
+      ? (ancestors.length ? ancestors[ancestors.length - 1].level : 0) + 1
+      : entry.level - baseLevel + 1;
+    while (ancestors.length && ancestors[ancestors.length - 1].level >= level) {
+      ancestors.pop();
+    }
+    const node: ContentsNode = { entry, level, children: [] };
+    (ancestors.length ? ancestors[ancestors.length - 1].children : roots).push(node);
+    if (entry.kind === "heading") {
+      ancestors.push(node);
+    }
+  }
+
+  const renderNodes = (nodes: ContentsNode[]): string => `<ul>${nodes.map((node) =>
+    `<li class="docdiagram-contents-${node.entry.kind}"><a href="#${escapeHtml(node.entry.id)}">${node.entry.text}</a>${
+      node.children.length ? renderNodes(node.children) : ""
+    }</li>`
+  ).join("")}</ul>`;
+
+  return `<nav class="docdiagram-contents" aria-label="Table of contents">${renderNodes(roots)}</nav>`;
+}
+
+function resolveDeferredMarkup(markup: string, state: MarkdownRenderState): string {
+  const figures = state.figures || new Map<string, FigureEntry>();
+  const contents = state.contents || [];
+
+  return markup
+    .replace(referencePlaceholderPattern, (_, id: string) => {
+      const figure = figures.get(id);
+      // A silently wrong cross-reference is worse than a visible failure, so an unknown or
+      // uncaptioned target is reported the same way a missing diagram definition already is.
+      if (!figure) {
+        return `<strong class="docdiagram-error-inline">Unknown reference "${escapeHtml(id)}"</strong>`;
+      }
+      return `<a href="#${escapeHtml(id)}">${figure.number === null ? renderInline(figure.text) : String(figure.number)}</a>`;
+    })
+    .replace(contentsPlaceholderPattern, (_, attributes: string) => {
+      const [depth, includeDiagrams] = attributes.split(":");
+      return renderContentsList(contents, Number(depth), includeDiagrams === "true");
+    });
 }

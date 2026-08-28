@@ -2,7 +2,9 @@ import { escapeHtml } from "../core/diagrams/parser";
 import { buildEdgeMarkerDef, renderTextBlock, splitTextLines } from "../core/diagrams/geometry";
 import { getSequenceElementEffectiveStyle, getTheme } from "../core/diagrams/styles";
 import type { SequenceDiagram, SequenceNote } from "../core/diagrams/schema";
-import type { DiagramRenderState, DiagramToolbarRenderer } from "./types";
+import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
+import { renderFigureAttributes, renderFigureCaption } from "./types";
+import { renderInline } from "../core/markdown";
 
 type MessageRow = {
   from: string;
@@ -28,7 +30,8 @@ export function renderSequenceDiagram(
   diagram: SequenceDiagram,
   diagramIndex: number,
   state: DiagramRenderState,
-  renderToolbar: DiagramToolbarRenderer
+  renderToolbar: DiagramToolbarRenderer,
+  figure?: DiagramFigure
 ): string {
   const theme = getTheme(diagram, state.documentTheme);
   const baseWidth = Number(diagram.canvas?.width) || 1000;
@@ -317,7 +320,7 @@ export function renderSequenceDiagram(
   }).join("");
 
   return [
-    `<figure class="docdiagram" data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}" data-expanded="${isExpanded}"${viewportStyle}>`,
+    `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "sequence", state),
     `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Sequence diagram" data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
     `<defs>${buildEdgeMarkerDef(sequenceMarkerId, "arrow", "end", theme.edge.stroke, 2)}</defs>`,
@@ -329,6 +332,7 @@ export function renderSequenceDiagram(
     messageMarkup,
     groupLabelMarkup,
     `</svg>`,
+    renderFigureCaption(figure, renderInline),
     `</figure>`
   ].join("");
 }
