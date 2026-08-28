@@ -1,5 +1,6 @@
 import { colourSchemes } from "./diagrams/schema";
 import { parseDiagram, parseScalar } from "./diagrams/parser";
+import { serializeDiagram } from "./diagrams/serializer";
 import { resolveTheme } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen, stripFencePrefix } from "./fences";
 
@@ -170,6 +171,101 @@ export function extractDiagramFences(source: string): ExtractedDiagram[] {
   }
 
   return diagrams;
+}
+
+export interface BakedFence {
+  /** Index of the first body line, and of the line after the last, in the document's own lines. */
+  start: number;
+  end: number;
+  lines: string[];
+}
+
+export interface BakeResult {
+  source: string;
+  baked: number;
+  preserved: number;
+  fences: BakedFence[];
+}
+
+/**
+ * Writes the layout engine's work back into the document's own source. Only fences that declare a
+ * `layout` are touched: that key is what marks a diagram as machine-managed, so it is also the
+ * licence to rewrite the fence into canonical form. A diagram without it is hand-managed, and is
+ * copied through untouched - comments, field order, and spacing intact.
+ *
+ * Nothing else is rewritten either, which is why this splices new fence bodies into the document's
+ * own lines rather than rebuilding the text: prose, frontmatter, and line endings come through
+ * exactly as they went in, and a document with nothing to bake comes back byte for byte identical.
+ * The line ranges travel with the result so a caller holding a differently encoded copy of the same
+ * document - the HTML-escaped body of a `template`, say - can splice the same fences into that
+ * without having to re-encode the parts it is not changing.
+ *
+ * Every fence is still parsed, so an invalid diagram fails the bake rather than being quietly
+ * skipped, and baking is idempotent: the second run reparses what the first one wrote and produces
+ * the same text.
+ */
+export function bakeDocumentSource(source: string): BakeResult {
+  const lines = source.split("\n");
+  // A line keeps its own ending because it is never rewritten; a line this makes up takes the
+  // document's, so a CRLF document does not come back with LF spliced through it. "The document's"
+  // is the majority, not merely the presence of one: a stray carriage return in an otherwise LF
+  // document should not turn a whole fence into CRLF, which is the same defect the other way round.
+  const plain = lines.map((line) => line.endsWith("\r") ? line.slice(0, -1) : line);
+  const carriageReturns = lines.filter((line) => line.endsWith("\r")).length;
+  const lineEnd = carriageReturns * 2 > lines.length - 1 ? "\r" : "";
+
+  const normalized = source.replace(/\r\n/g, "\n");
+  const { content, frontmatter } = parseDocumentFrontmatter(normalized);
+  const colourScheme = String(frontmatter.colourScheme || "classic");
+  const fences: BakedFence[] = [];
+  let index = normalized.split("\n").length - content.split("\n").length;
+  let baked = 0;
+  let preserved = 0;
+
+  while (index < lines.length) {
+    const fence = parseFenceOpen(stripFencePrefix(plain[index]));
+    if (!fence) {
+      index += 1;
+      continue;
+    }
+
+    // An unclosed fence runs to the end of the document, so there is nothing further to find.
+    const closeIndex = findFenceClose(plain, index + 1, fence.marker);
+    if (closeIndex === -1) {
+      break;
+    }
+
+    if (fence.info === "diagram") {
+      const body = plain.slice(index + 1, closeIndex).map((line) => stripFencePrefix(line)).join("\n");
+      const diagram = parseDiagram(body, colourScheme);
+      if (diagram.type === "flowchart" && diagram.layout !== undefined) {
+        // A block-quoted fence keeps its quoting, taken from the line that opened it.
+        const opener = plain[index];
+        const quote = opener.slice(0, opener.length - stripFencePrefix(opener).length);
+        fences.push({
+          start: index + 1,
+          end: closeIndex,
+          lines: serializeDiagram(diagram).split("\n").map((line) => `${quote}${line}${lineEnd}`)
+        });
+        baked += 1;
+      } else {
+        preserved += 1;
+      }
+    }
+
+    index = closeIndex + 1;
+  }
+
+  return { source: spliceBakedFences(lines, fences).join("\n"), baked, preserved, fences };
+}
+
+/** Replaces each baked fence body in a document's lines, working back so earlier indices hold. */
+export function spliceBakedFences(lines: string[], fences: BakedFence[]): string[] {
+  const output = [...lines];
+  for (const fence of [...fences].reverse()) {
+    output.splice(fence.start, fence.end - fence.start, ...fence.lines);
+  }
+  return output;
 }
 
 /** Rewrites a diagram's `id:` line, adding one when the diagram has no id yet. */

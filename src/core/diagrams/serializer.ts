@@ -125,7 +125,7 @@ export function serializeDiagram(diagram: Diagram): string {
     .filter(([key]) => !canvas.auto || (key !== "width" && key !== "height"));
   if (canvas.auto && canvasEntries.length === 1) {
     lines.push("canvas: auto");
-  } else {
+  } else if (canvasEntries.length) {
     lines.push("canvas:");
     for (const [key, value] of canvasEntries) {
       lines.push(...formatField(key, value, 2, 4));

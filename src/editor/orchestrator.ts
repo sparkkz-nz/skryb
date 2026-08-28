@@ -82,6 +82,8 @@ import {
 } from "../core/diagrams/geometry";
 import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
+  bakeDocumentSource,
+  spliceBakedFences,
   extractDiagramFences,
   findSourceTextRange,
   getDiagramId,
@@ -661,6 +663,8 @@ export class BrowserRuntime {
       setEdgeMarkerStart,
       setEdgeMarkerEnd,
       validateDocumentSource,
+      bakeDocumentSource,
+      spliceBakedFences,
       lintDocument,
       formatLintMessages,
       highlightCode,

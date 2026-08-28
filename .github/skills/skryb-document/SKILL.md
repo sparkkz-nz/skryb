@@ -119,12 +119,23 @@ diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
 Set `layout: right` (or `down`, `left`, `up`) on a flowchart and leave the nodes
-without a `position`, unless you have a specific arrangement in mind. Placing
-nodes blind is the main source of untidy generated diagrams; declaring the flow
-direction and letting the runtime place them is both shorter to write and
-reliably better looking. Layout only ever places nodes that have no `position`,
-so you can pin the few that matter and let the rest fall into stages. Keep the
-`layout` key afterwards: it is what places a node you append later.
+without a `position` and the edges without anchors, unless you have a specific
+arrangement in mind. Placing nodes blind is the main source of untidy generated
+diagrams; declaring the flow direction and letting the runtime place them is both
+shorter to write and reliably better looking. Layout only ever fills in what is
+missing, so you can pin the few nodes and anchors that matter and let the rest
+fall into stages. Keep the `layout` key afterwards: it is what places a node you
+append later.
+
+Then bake it: `node scripts/bake.mjs doc.html` writes the positions and anchors
+the engine worked out into the document's own source. Do this before you review
+the diagram, because until you do, the file says nothing about where anything is
+and there is nothing in it to adjust. Review and adjustment happen on the baked
+source; re-bake after adding a node with no position, and it is placed without
+moving anything already there.
+
+Without a `layout`, a node with no `position` or an edge with no anchors is an
+error, not a diagram drawn at the origin.
 
 Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
 nodes on multiples of that grid when you do place them by hand. Shared coordinates are what make a diagram look
@@ -244,11 +255,14 @@ Before returning a document, verify:
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
 - Every diagram declares its supported type. Every flowchart has explicit shapes
-  and edge anchors and uses only supported palette, route, marker, waypoint,
-  callout pointer, and style values.
+  and uses only supported palette, route, marker, waypoint, callout pointer, and
+  style values.
 - Flowcharts set `canvas.grid` (normally `5`) and any hand-written node positions
   and sizes are multiples of it.
-- A flowchart either declares `layout` or positions every node deliberately.
+- A flowchart either declares `layout` or gives every node a `position` and every
+  edge both anchors.
+- `node scripts/bake.mjs --check` reports nothing left to bake, so the source
+  carries the positions and anchors the document renders with.
 - `node scripts/lint.mjs` reports no errors, and every warning it reports is
   either fixed or a deliberate choice.
 - A reader can understand each diagram from its heading, labels, and nearby

@@ -382,6 +382,10 @@ function validateLayout(diagram: FlowchartDiagram): void {
 
 function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): void {
   validateLayout(diagram);
+  // The `layout` key is what makes a diagram machine-managed, and that is the whole of the
+  // difference: with it, positions and anchors may be left out for the layout engine to fill in;
+  // without it, leaving them out is an error rather than a drawing silently stacked at the origin.
+  const layoutManaged = diagram.layout !== undefined;
   if (diagram.participants !== undefined || diagram.messages !== undefined ||
     diagram.activations !== undefined || diagram.notes !== undefined || diagram.groups !== undefined) {
     throw new Error("Flowchart diagrams do not support sequence sections.");
@@ -416,6 +420,14 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
     if (!nodeShapes.includes(node.shape as (typeof nodeShapes)[number])) {
       throw new Error(`Unsupported node shape: ${node.shape}`);
     }
+    if (node.position === undefined) {
+      if (!layoutManaged) {
+        throw new Error(`Node "${node.id}" requires a position, or a "layout" on the diagram to place it.`);
+      }
+    } else {
+      assertCoordinatePair(node.position, `node "${node.id}" position`);
+    }
+
     if (node.textVAlign !== undefined && !nodeTextVAlignments.includes(node.textVAlign)) {
       throw new Error(`Unsupported node textVAlign: ${node.textVAlign}`);
     }
@@ -457,19 +469,21 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
   for (const edge of diagram.edges) {
     assertAllowedFields(edge as unknown as Record<string, unknown>, flowchartEdgeFields, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
 
-    if (!edge.sourceAnchor) {
+    // Anchors are resolved per side, so an author can pin the one that carries intent - the
+    // deliberate back-edge that steers stage assignment - and leave the other to be derived.
+    if (!edge.sourceAnchor && !layoutManaged) {
       throw new Error(`Edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}" requires a sourceAnchor.`);
     }
 
-    if (!edge.targetAnchor) {
+    if (!edge.targetAnchor && !layoutManaged) {
       throw new Error(`Edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}" requires a targetAnchor.`);
     }
 
-    if (!edgeAnchors.includes(edge.sourceAnchor as (typeof edgeAnchors)[number])) {
+    if (edge.sourceAnchor && !edgeAnchors.includes(edge.sourceAnchor as (typeof edgeAnchors)[number])) {
       throw new Error(`Unsupported edge sourceAnchor: ${edge.sourceAnchor}`);
     }
 
-    if (!edgeAnchors.includes(edge.targetAnchor as (typeof edgeAnchors)[number])) {
+    if (edge.targetAnchor && !edgeAnchors.includes(edge.targetAnchor as (typeof edgeAnchors)[number])) {
       throw new Error(`Unsupported edge targetAnchor: ${edge.targetAnchor}`);
     }
 

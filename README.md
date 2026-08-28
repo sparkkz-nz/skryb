@@ -75,13 +75,17 @@ Everything happens inside the open document; there is no separate application.
   holds the canonical Markdown and diagram YAML and live-renders valid changes.
   Drag the tray's top edge to resize it, or focus that edge and use the arrow
   keys; double-click it to restore the default height.
-- **Diagram layout** is optional work. Give a flowchart `layout: right` (or
-  `down`, `left`, `up`) and leave nodes without a `position`, and it places them
-  in stages from the connectors, ordered to avoid crossings. It runs when the
-  document opens and only touches nodes with no position of their own, so a node
-  you drag stays put. Connectors route around nodes in the way, labels wrap
-  inside the width you gave them, and `canvas: auto` keeps the drawing's bounds
-  matched to its content.
+- **Diagram layout** is optional work, and it is what makes a document worth
+  writing by hand or generating. Give a flowchart `layout: right` (or `down`,
+  `left`, `up`) and you may leave out node positions and edge anchors entirely;
+  it places the nodes in stages from the connectors, ordered to avoid crossings,
+  and gives each connector the anchors its final geometry implies. It only ever
+  fills in what is missing, so a node you drag stays put and an anchor you wrote
+  down is never overwritten. Connectors route around nodes in the way, labels
+  wrap inside the width you gave them, and `canvas: auto` keeps the drawing's
+  bounds matched to its content. Without a `layout`, every node needs a
+  `position` and every edge both anchors; leaving one out is an error rather
+  than a drawing that silently stacks at the origin.
 - **Diagram editing** selects a node to set its label, subtitle, shape, palette,
   status colour, fill, stroke, alignment, and size. Nodes can be dragged,
   resized, duplicated, and reconnected; connectors can be rerouted, given a
@@ -218,6 +222,42 @@ document is not broken for being slightly untidy.
 
 The rules live in the runtime next to the geometry they describe, so they cannot
 drift from what actually gets drawn.
+
+## Baking a document
+
+A document laid out by the layout engine renders from positions that exist only
+while it is open: the source still says nothing about where anything is. That is
+fine until you want to adjust it, because there are no numbers in the file to
+adjust. `npm run bake` writes them in:
+
+```sh
+npm run bake doc.html             # positions and anchors written into the source
+npm run bake doc.html -- --check  # non-zero if baking would change the file
+```
+
+Only fences that declare a `layout` are touched, and that is the whole of the
+rule. A diagram carrying one is machine-managed, so baking rewrites its fence
+into canonical form. A diagram without one is hand-managed, and is copied
+through exactly as it was, comments and spacing intact - which is also how you
+freeze a diagram you have finished tuning: delete its `layout` line.
+
+Baking is idempotent, and every fence is parsed on the way through, so an
+invalid diagram fails the bake rather than being quietly skipped. Nothing
+outside the diagram fences is rewritten, and a file with no layout-managed
+diagram in it is left untouched byte for byte.
+
+Because the engine only fills in what is missing, the baked source stays useful
+to edit:
+
+- delete one node's `position` and bake again to have just that node re-placed
+  in the context of the others
+- add a new node with no position, and it is placed from the connectors that
+  join it to the nodes already there, which never move
+- strip every `position` and bake again for a full re-layout from scratch
+
+Writing a document therefore goes: draft it without positions, bake, lint, look
+at it, then adjust the numbers in the source and lint again. The browser is only
+ever a viewer in that loop - the file on disk is always what renders.
 
 ## Licence
 
