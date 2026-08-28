@@ -169,6 +169,28 @@ endpoints, an optional edge waypoint, and an optional node callout pointer.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
 use it when the recipient must open the document without network access.
 
+## Checking a document
+
+An authoring agent works blind: it emits coordinates and never sees the result.
+The lint command closes that loop and is the fastest way to catch a defect a
+reader would notice immediately:
+
+```sh
+node scripts/lint.mjs doc.html            # errors and warnings
+node scripts/lint.mjs doc.html --errors   # schema only, for CI
+```
+
+It exits non-zero only on errors; warnings are advisory, so a document is never
+blocked on aesthetics. The rules are:
+
+| Rule | Severity | What it means |
+| --- | --- | --- |
+| `schema` | error | The document or a diagram fails validation. Nothing else runs until this is fixed. |
+| `unknown-edge-endpoint` | error | An edge names a node that does not exist. The renderer drops such an edge silently, so the connector simply vanishes - invisible unless you count your arrows. |
+| `node-overlap` | warning | Two unrelated nodes' boxes overlap. A child inside its own parent is not reported. |
+| `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
+| `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
+
 ## Validation checklist
 
 Before returning a document, verify:
@@ -185,6 +207,8 @@ Before returning a document, verify:
   callout pointer, and style values.
 - Flowcharts set `canvas.grid` (normally `5`) and their node positions and sizes
   are multiples of it.
+- `node scripts/lint.mjs` reports no errors, and every warning it reports is
+  either fixed or a deliberate choice.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

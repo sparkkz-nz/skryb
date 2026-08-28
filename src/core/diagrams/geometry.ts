@@ -805,3 +805,65 @@ export function renderNodeCalloutPointer(
       : ""
   ].join("");
 }
+
+// Flattens a built edge path back into points, sampling curve segments, so callers can reason about
+// where an edge actually travels rather than re-deriving each route's geometry.
+export function sampleEdgePath(path: string, curveSamples = 12): Position[] {
+  const points: Position[] = [];
+  const numbers = /-?\d+(?:\.\d+)?/g;
+  let cursor: Position = { x: 0, y: 0 };
+
+  for (const [, command, argumentSource] of path.matchAll(/([MLC])\s*([^MLC]*)/g)) {
+    const values = (argumentSource.match(numbers) || []).map(Number);
+    if (command === "C") {
+      const [firstX, firstY, secondX, secondY, endX, endY] = values;
+      for (let step = 1; step <= curveSamples; step += 1) {
+        const t = step / curveSamples;
+        const inverse = 1 - t;
+        points.push({
+          x: inverse ** 3 * cursor.x + 3 * inverse ** 2 * t * firstX + 3 * inverse * t ** 2 * secondX + t ** 3 * endX,
+          y: inverse ** 3 * cursor.y + 3 * inverse ** 2 * t * firstY + 3 * inverse * t ** 2 * secondY + t ** 3 * endY
+        });
+      }
+      cursor = { x: endX, y: endY };
+      continue;
+    }
+
+    for (let index = 0; index + 1 < values.length; index += 2) {
+      cursor = { x: values[index], y: values[index + 1] };
+      points.push(cursor);
+    }
+  }
+
+  return points;
+}
+
+export function segmentIntersectsRectangle(
+  start: Position,
+  end: Position,
+  rectangle: { x: number; y: number; width: number; height: number }
+): boolean {
+  const minimumX = Math.min(start.x, end.x);
+  const maximumX = Math.max(start.x, end.x);
+  const minimumY = Math.min(start.y, end.y);
+  const maximumY = Math.max(start.y, end.y);
+  if (maximumX <= rectangle.x || minimumX >= rectangle.x + rectangle.width ||
+    maximumY <= rectangle.y || minimumY >= rectangle.y + rectangle.height) {
+    return false;
+  }
+
+  // Axis-aligned segments are already resolved by the overlap test above; only a sloped segment can
+  // straddle the box without entering it, which the corner-side test below settles.
+  if (start.x === end.x || start.y === end.y) {
+    return true;
+  }
+
+  const side = (point: Position) => (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x);
+  const corners = [
+    { x: rectangle.x, y: rectangle.y },
+    { x: rectangle.x + rectangle.width, y: rectangle.y },
+    { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height },
+    { x: rectangle.x, y: rectangle.y + rectangle.height }
+  ].map(side);
+  return corners.some((value) => value > 0) && corners.some((value) => value < 0);
+}

@@ -1,0 +1,211 @@
+// Visual-quality rules for authored documents. Schema errors are already reported by
+// validateDocumentSource; what an authoring agent cannot see is whether the result *looks* right,
+// so these rules describe geometry. They live beside the geometry they describe, in the same
+// bundle as the renderer that draws it, so a rule cannot drift from what is actually drawn.
+import type { FlowchartDiagram, FlowchartNode } from "./diagrams/schema";
+import { defaultNode } from "./diagrams/schema";
+import { extractDiagramFences, resolveDocument, validateDocumentSource } from "./document";
+import { parseDiagram } from "./diagrams/parser";
+import { flattenFlowchartNodes, getFlowchartNodeBounds } from "./diagrams/hierarchy";
+import {
+  buildEdgePath,
+  computeNodeTextLayout,
+  getNodeGeometry,
+  measureTextWidth,
+  sampleEdgePath,
+  segmentIntersectsRectangle,
+  splitTextLines
+} from "./diagrams/geometry";
+
+export type LintSeverity = "error" | "warning";
+
+export interface LintMessage {
+  severity: LintSeverity;
+  rule: string;
+  message: string;
+  diagram?: string;
+}
+
+export interface LintResult {
+  messages: LintMessage[];
+  errorCount: number;
+  warningCount: number;
+}
+
+type Bounds = { x: number; y: number; width: number; height: number };
+
+function describeDiagram(id: string | null, index: number): string {
+  return id || `diagram ${index + 1}`;
+}
+
+function boundsOverlap(first: Bounds, second: Bounds): { width: number; height: number } | null {
+  const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
+  const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function isRelated(first: FlowchartNode, second: FlowchartNode): boolean {
+  const contains = (parent: FlowchartNode, candidate: FlowchartNode): boolean =>
+    (parent.children || []).some((child) => child === candidate || contains(child, candidate));
+  return contains(first, second) || contains(second, first);
+}
+
+function lintNodeOverlaps(diagram: FlowchartDiagram, report: (rule: string, message: string) => void): void {
+  const entries = flattenFlowchartNodes(diagram);
+  for (let index = 0; index < entries.length; index += 1) {
+    for (let other = index + 1; other < entries.length; other += 1) {
+      const first = entries[index];
+      const second = entries[other];
+      // A child is meant to sit inside its parent, and siblings of different parents are compared
+      // in absolute coordinates, so only unrelated boxes can genuinely collide.
+      if (isRelated(first.node, second.node)) {
+        continue;
+      }
+      const overlap = boundsOverlap(
+        getFlowchartNodeBounds(diagram, first.node),
+        getFlowchartNodeBounds(diagram, second.node)
+      );
+      if (overlap) {
+        report(
+          "node-overlap",
+          `Nodes "${first.node.id}" and "${second.node.id}" overlap by ${Math.round(overlap.width)} by ${Math.round(overlap.height)} units.`
+        );
+      }
+    }
+  }
+}
+
+function lintNodeLabels(diagram: FlowchartDiagram, report: (rule: string, message: string) => void): void {
+  for (const { node } of flattenFlowchartNodes(diagram)) {
+    const width = Number(node.size?.width) || defaultNode.width;
+    const height = Number(node.size?.height) || defaultNode.height;
+    const { textBounds } = getNodeGeometry(node, 0, 0, width, height);
+    const layout = computeNodeTextLayout(textBounds, node);
+    // Text is inset from the shape by 12 units on each side. Spilling into that padding is a
+    // tidiness question rather than a defect, so the rule fires only once the text can no longer
+    // fit the shape at all, even with its padding given up.
+    const padding = 24;
+
+    // The text shape renders its label verbatim, one source line per rendered line, so it is the
+    // one shape where a too-wide line is not wrapped for you.
+    if (node.shape === "text") {
+      const overflowing = splitTextLines(node.label)
+        .find((line) => measureTextWidth(line.replace(/^#{1,2}\s+/, ""), /^#{1,2}\s/.test(line) ? 24 : 16) > textBounds.width + padding);
+      if (overflowing !== undefined) {
+        report("label-overflow", `Node "${node.id}" has a line wider than its shape: "${overflowing.trim()}".`);
+      }
+    }
+
+    const contentHeight = layout.labelLines.length * layout.labelLineHeight +
+      (layout.subtitleLines.length ? 6 + layout.subtitleLines.length * layout.subtitleLineHeight : 0);
+    if (contentHeight > textBounds.height + padding) {
+      report(
+        "label-overflow",
+        `Node "${node.id}" needs ${Math.ceil(contentHeight)} units of text height but its shape offers ${Math.floor(textBounds.height + padding)}.`
+      );
+    }
+  }
+}
+
+function lintEdges(diagram: FlowchartDiagram, report: (rule: string, message: string, severity?: LintSeverity) => void): void {
+  const entries = new Map(flattenFlowchartNodes(diagram).map((entry) => [entry.node.id, entry]));
+
+  for (const edge of diagram.edges || []) {
+    const source = entries.get(edge.source);
+    const target = entries.get(edge.target);
+    // The renderer drops an edge naming an unknown node without a word, so the connector simply
+    // vanishes. That is invisible unless you count your arrows, which makes it an error.
+    for (const [role, id, entry] of [["source", edge.source, source], ["target", edge.target, target]] as const) {
+      if (!entry) {
+        report(
+          "unknown-edge-endpoint",
+          `Edge "${edge.source}" -> "${edge.target}" names a ${role} node "${id}" that does not exist, so it is not drawn.`,
+          "error"
+        );
+      }
+    }
+    if (!source || !target) {
+      continue;
+    }
+
+    const sourceBounds = getFlowchartNodeBounds(diagram, source.node);
+    const targetBounds = getFlowchartNodeBounds(diagram, target.node);
+    const sourceAnchor = getNodeGeometry(source.node, sourceBounds.x, sourceBounds.y, sourceBounds.width, sourceBounds.height)
+      .anchors[edge.sourceAnchor || "right"];
+    const targetAnchor = getNodeGeometry(target.node, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height)
+      .anchors[edge.targetAnchor || "left"];
+    const { path } = buildEdgePath(
+      sourceAnchor,
+      targetAnchor,
+      edge.sourceAnchor || "right",
+      edge.targetAnchor || "left",
+      edge.route || "orthogonal",
+      edge.waypoint
+    );
+    const points = sampleEdgePath(path);
+    const obstacles = flattenFlowchartNodes(diagram).filter(({ node }) =>
+      node !== source.node && node !== target.node &&
+      !isRelated(node, source.node) && !isRelated(node, target.node)
+    );
+
+    for (const obstacle of obstacles) {
+      const bounds = getFlowchartNodeBounds(diagram, obstacle.node);
+      const crossed = points.slice(1).some((point, index) => segmentIntersectsRectangle(points[index], point, bounds));
+      if (crossed) {
+        report(
+          "edge-crosses-node",
+          `Edge "${edge.source}" -> "${edge.target}" passes through unrelated node "${obstacle.node.id}".`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Lints a whole Skryb document: schema errors first, then the visual-quality rules an authoring
+ * agent cannot check by eye. Warnings are advisory; only errors mean the document is wrong.
+ */
+export function lintDocument(source: string): LintResult {
+  const messages: LintMessage[] = [];
+
+  try {
+    validateDocumentSource(source);
+  } catch (error) {
+    messages.push({ severity: "error", rule: "schema", message: (error as Error).message });
+    return { messages, errorCount: 1, warningCount: 0 };
+  }
+
+  const colourScheme = resolveDocument(source).colourScheme;
+  extractDiagramFences(source).forEach(({ id, source: diagramSource }, index) => {
+    const diagram = parseDiagram(diagramSource, colourScheme);
+    if (diagram.type !== "flowchart") {
+      return;
+    }
+
+    const name = describeDiagram(id, index);
+    const report = (rule: string, message: string, severity: LintSeverity = "warning") => {
+      messages.push({ severity, rule, message, diagram: name });
+    };
+
+    lintEdges(diagram, report);
+    lintNodeOverlaps(diagram, report);
+    lintNodeLabels(diagram, report);
+  });
+
+  return {
+    messages,
+    errorCount: messages.filter((message) => message.severity === "error").length,
+    warningCount: messages.filter((message) => message.severity === "warning").length
+  };
+}
+
+export function formatLintMessages(result: LintResult): string {
+  return result.messages
+    .map((message) => [
+      message.severity,
+      message.diagram ? `[${message.diagram}]` : null,
+      message.message,
+      `(${message.rule})`
+    ].filter(Boolean).join(" "))
+    .join("\n");
+}
