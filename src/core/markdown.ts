@@ -2,6 +2,7 @@ import { calloutKinds, paletteRoles, gridColumns } from "./diagrams/schema";
 import { escapeHtml, parseScalar } from "./diagrams/parser";
 import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
+import { highlightCode } from "./highlight";
 
 type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram" | "toc";
 
@@ -665,7 +666,7 @@ export function renderMarkdown(
           }
         } else {
           const className = fence.info ? ` class="language-${escapeHtml(fence.info)}"` : "";
-          output.push(`<pre><code${className}>${escapeHtml(content)}</code></pre>`);
+          output.push(`<pre><code${className}>${highlightCode(content, fence.info)}</code></pre>`);
         }
         index = closeIndex + 1;
         continue;

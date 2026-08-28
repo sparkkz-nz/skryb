@@ -201,6 +201,9 @@ endpoints, an optional edge waypoint, and an optional node callout pointer.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
 use it when the recipient must open the document without network access.
 
+Label every fenced code block with its language. A recognised language is syntax
+highlighted, and the label costs nothing when it is not.
+
 ## Checking a document
 
 An authoring agent works blind: it emits coordinates and never sees the result.
