@@ -32,10 +32,17 @@ export const paletteRoles = [
 
 export type PaletteRole = (typeof paletteRoles)[number];
 
+/** A reusable presentation declared once in the diagram's `styles:` block and applied with `class`. */
+export interface NamedStyle {
+  palette?: PaletteRole;
+  style?: NodeStyle;
+}
+
 export interface FlowchartNode {
   id: string;
   label: string;
   shape: string;
+  class?: string;
   position?: Position;
   size?: Size;
   style?: NodeStyle;
@@ -50,6 +57,7 @@ export interface FlowchartNode {
 export interface FlowchartEdge {
   source: string;
   target: string;
+  class?: string;
   sourceAnchor?: string;
   targetAnchor?: string;
   route?: string;
@@ -71,6 +79,7 @@ export interface Canvas {
 export interface FlowchartDiagram {
   type: "flowchart";
   theme?: string;
+  styles?: Record<string, NamedStyle>;
   canvas: Canvas;
   nodes: FlowchartNode[];
   edges: FlowchartEdge[];

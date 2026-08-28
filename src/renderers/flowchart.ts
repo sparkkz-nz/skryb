@@ -9,7 +9,7 @@ import {
 } from "../core/diagrams/schema";
 import { escapeHtml } from "../core/diagrams/parser";
 import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
-import { getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
+import { getNamedStyle, getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
@@ -179,7 +179,9 @@ export function renderFlowchartDiagram(
       state.documentTheme,
       state.documentColorScheme
     );
-    const paletteRole = node.palette;
+    // A palette reached through a class has to drive the gradient too, or a classed node would
+    // render flat while an identically painted inline-palette node kept its gradient.
+    const paletteRole = node.palette || getNamedStyle(diagram, node.class)?.palette;
     const gradientEntry = paletteRole ? palette?.[paletteRole] : undefined;
     const calloutPointer = node.arrow
       ? buildNodeCalloutPointer({ x, y, width: nodeWidth, height: nodeHeight }, node.arrow)

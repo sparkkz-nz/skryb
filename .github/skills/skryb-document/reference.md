@@ -325,6 +325,7 @@ The directive may appear anywhere, including before the headings it lists.
 | `version` | No | A document-defined diagram version, commonly `1`. |
 | `id` | No | A document-defined diagram identifier. It is also the diagram's anchor and the target of `{ref=}`. |
 | `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
+| `styles` | No | Flowchart only. Named styles applied to nodes and edges with `class`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
 | `nodes` | Flowchart | List of flowchart nodes. |
 | `edges` | Flowchart | List of flowchart connectors. |
@@ -372,6 +373,53 @@ ratio — it is not a boundary nodes must sit inside. Give explicit `width` and
 `height` when a fixed aspect ratio matters, for instance so several diagrams in
 one document share a shape.
 
+### Named styles
+
+Repeating the same inline `style: { ... }` across many nodes is where a large
+diagram's consistency drifts - one node ends up a shade off. A flowchart may
+declare a presentation once in a `styles:` block and apply it by name:
+
+```yaml
+type: flowchart
+styles:
+  external:
+    palette: neutral
+    style: { strokeWidth: 3 }
+  store:
+    palette: accent-strong
+canvas: auto
+nodes:
+  - id: bank
+    label: Partner bank
+    shape: rounded-rectangle
+    class: external
+edges:
+  - source: bank
+    target: ledger
+    sourceAnchor: right
+    targetAnchor: left
+    class: external
+```
+
+A style definition takes the same two presentation keys a node does, `palette`
+and `style`, so it needs no new mental model. It must declare at least one of
+them.
+
+A class sits **between the theme and the element's own values**: it overrides
+the theme defaults, and anything written directly on the node or edge overrides
+it. So `class` declares the intent once and a one-off exception is still written
+where the exception is.
+
+A node reached through a class renders exactly as if the same palette had been
+written inline, gradients included.
+
+An edge has no palette of its own, so a class contributes only its `style`
+values to an edge; a `palette` in that class is ignored there.
+
+Naming a class that is not declared is an error, not a silent no-op. Named
+styles are a flowchart feature; sequence diagrams keep `palette` and `style` on
+their elements.
+
 ### Nodes
 
 Every node requires `id` and `shape`; `label` must be present but may be empty.
@@ -402,6 +450,7 @@ child nodes at any depth:
 | `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
+| `class` | Optional name of a style declared in the diagram's `styles:` block. Its values sit below the node's own `palette` and `style`. |
 | `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, or `text`. The `document` shape is a sheet of paper with a folded top-right corner. The `text` shape is a plain text box: it renders its (multiline) `label` with a native-SVG Markdown subset, and its fill and stroke default to transparent unless a `palette` or `style` override is set. |
 | `position` | `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
 | `size` | `{ width: number, height: number }`. Nodes have a minimum size; circles remain square. |
@@ -502,6 +551,7 @@ Every edge requires both explicit endpoint anchors:
 | `sourceAnchor`, `targetAnchor` | **Required.** `top`, `right`, `bottom`, or `left`. |
 | `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
+| `class` | Optional name of a style declared in the diagram's `styles:` block. Only its `style` values apply to an edge. |
 | `waypoint` | Optional `{ x: number, y: number }` canvas coordinate. The flowchart editor exposes one draggable waypoint for a selected edge; it splits the route into two segments via that point, honouring the edge's `route`: orthogonal legs, a two-segment polyline for `straight`, and two smoothly joined cubic curves for `curved`. |
 | `start`, `end` | `none`, `arrow`, or `circle`. Omit `start` for `none`; omit `end` for `arrow`. |
 | `style` | Optional `stroke`, `strokeWidth`, and `text` overrides. `style.width` is rejected. |

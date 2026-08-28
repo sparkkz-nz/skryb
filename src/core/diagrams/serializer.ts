@@ -57,7 +57,7 @@ export function serializeDiagram(diagram: Diagram): string {
   const lines = [`type: ${formatScalar(diagram.type)}`];
 
   for (const [key, value] of Object.entries(diagram as unknown as Record<string, unknown>)) {
-    if (key === "type" || key === "canvas" || key === "nodes" || key === "edges" ||
+    if (key === "type" || key === "canvas" || key === "styles" || key === "nodes" || key === "edges" ||
       key === "participants" || key === "messages" || key === "activations" || key === "notes" || key === "groups") {
       continue;
     }
@@ -104,6 +104,18 @@ export function serializeDiagram(diagram: Diagram): string {
     }
 
     return lines.join("\n");
+  }
+
+  // Named styles are written as a block rather than an inline mapping, both so the canonical
+  // source stays readable and because an inline mapping does not survive being parsed back.
+  if (diagram.styles !== undefined) {
+    lines.push("styles:");
+    for (const [name, definition] of Object.entries(diagram.styles)) {
+      lines.push(`  ${name}:`);
+      for (const [key, value] of Object.entries(definition)) {
+        lines.push(...formatField(key, value, 4, 6));
+      }
+    }
   }
 
   // A derived canvas round-trips as `canvas: auto`: its width and height are computed from the

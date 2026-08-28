@@ -134,6 +134,13 @@ fit. Budget about 9px per label character and 7px per subtitle character, less
 24 units of horizontal inset, so a default 190-wide node holds roughly 18 label
 characters per line and two lines comfortably in the default 80 height.
 
+When several nodes share a presentation, declare it once in the flowchart's
+`styles:` block and apply it with `class:` rather than repeating an inline
+`style: { ... }`. It keeps a large diagram consistent and makes the source
+materially shorter, which matters when regenerating a whole document. A class
+overrides the theme, and anything written on the node itself overrides the
+class.
+
 Prefer `orthogonal` routes for most flows. Reach for `curved` when an orthogonal
 route would be hard to follow - a long edge doubling back, several edges
 converging on one anchor, or an edge that would otherwise run along or across an
