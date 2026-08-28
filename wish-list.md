@@ -200,7 +200,7 @@ its keep only rarely. If it is ever wanted, the scalar can widen to
 `layout: { direction: right, stageGap: 120, siblingGap: 60 }` without breaking
 the short form. No `engine` key until a second algorithm exists to choose between.
 
-### Two paths, and only one of them is hard
+### Three cases, in decreasing order of difficulty
 
 **No node has a position** — a fresh agent-authored diagram. Lay out the whole
 graph. Nodes fall into **stages** by how deep they sit in the dependency chain,
@@ -217,15 +217,41 @@ here in favour of "stage", which describes the result rather than the algorithm.
    median-heuristic passes. Most of the visual quality comes from this step.
 3. Assign coordinates from the stage and sibling gaps, snapped to `canvas.grid`.
 
-**Some nodes have positions** — a baked diagram an agent has appended to. This is
-*not* a layout problem: re-flowing would move nodes the author placed. It is
-"drop this node somewhere sensible and free", which `getDefaultNodePosition`
-already solves — it walks outward from the centre for a non-overlapping,
-grid-snapped slot. Biasing that search toward the new node's neighbours would be
-a worthwhile refinement, but the existing helper is a reasonable starting point.
+**Some nodes have positions** — a baked diagram an agent has appended to. Never
+re-flow: that would move nodes someone placed deliberately. But this is not
+simply "find a free slot" either, because a new node usually arrives *with
+connectors*, and those say where it belongs.
 
-Splitting these keeps the hard algorithm confined to the case where the diagram
-is empty of layout decisions, where it cannot damage anything.
+The parser requires both `sourceAnchor` and `targetAnchor` on every edge — it
+throws without them — so every connector already declares its spatial
+relationship. `A.right → B.left` states that B sits to the right of A. The author
+has written the intent down; placement only has to honour it.
+
+That gives a simple rule: **a node sits on the side its own anchor faces away
+from.** A connector entering the new node's `left` anchor means the neighbour is
+to its left, so the node goes to the neighbour's right, vertically centred on it
+and one gap clear.
+
+Placing one appended node then becomes:
+
+1. Take the edges joining it to already-positioned nodes. Each yields a candidate
+   position from its anchor pair and that neighbour's box.
+2. Reconcile several candidates by taking the extreme along the flow axis, so the
+   node clears every neighbour, and the mean across it, so it sits between them.
+3. Snap to `canvas.grid`, then resolve any overlap by sliding along the cross
+   axis, falling back to the free-slot search.
+4. **No connectors at all** — a standalone text or legend node — is the only case
+   with nothing to infer from. `getDefaultNodePosition` already handles it,
+   walking outward from the centre for a non-overlapping, grid-snapped slot.
+
+Anchors are worth exploiting in the whole-graph case too. Because they are
+mandatory, every edge carries a direction hint, which can order siblings within a
+stage rather than leaving it to the crossing heuristic alone. An edge whose
+anchors disagree with the declared `layout` direction is a hint rather than an
+error — a deliberate back-edge or side branch.
+
+Splitting these still keeps the hard graph algorithm confined to the case where
+the diagram holds no layout decisions, where it cannot damage anything.
 
 ### Determinism is load-bearing
 
