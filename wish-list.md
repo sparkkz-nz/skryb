@@ -17,9 +17,9 @@ whether they remove the need to guess, or make a guess cheap to check.
 | 3 | Flowchart auto-layout | Medium | Biggest single quality win; a one-off seeding step, not a layout mode |
 | 4 | Code syntax highlighting | Medium | Largest gap in document polish |
 | 5 | Whole-document print/PDF | Medium | Shareability outside the browser |
-| 6 | Captions and cross-references | Small | Table stakes for technical writing; caption round-trips free |
+| 6 | Captions, anchors and cross-references | Small | Table stakes for technical writing; caption round-trips free |
 | 7 | Named styles | Small | Stops style drift across a large diagram |
-| 8 | Table of contents | Small | Navigation for long documents (anchors already ship) |
+| 8 | Table of contents | Small | Navigation for long documents; lists headings and captioned diagrams |
 | 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
 | 10 | Regeneration boundaries | Medium | Makes documents safe to maintain over time |
 | 11 | Derived canvas bounds | Small | Removes a dimension authors should not have to maintain |
@@ -294,7 +294,7 @@ contexts where HTML is not accepted.
 
 ---
 
-## 6. Captions and cross-references
+## 6. Captions, anchors and cross-references
 
 ### Captions
 
@@ -356,6 +356,29 @@ duplicated diagram definition. A silently wrong cross-reference is worse than a
 visible failure, and the source tray already keeps the last valid render while
 reporting the problem.
 
+### Anchors
+
+A diagram's `id` should also be its anchor, so `#auth-flow` deep-links to it
+exactly as `#some-heading` links to a title. The `id` goes on the existing
+`<figure class="docdiagram">`, which is already the scroll target.
+
+**Collisions with heading anchors need resolving.** `createHeadingSlug` produces
+lowercase kebab-case, so a heading "Auth flow" becomes `auth-flow` — precisely
+the id an author would give the diagram in that section. Two elements sharing a
+DOM id is invalid HTML and makes the link ambiguous.
+
+Diagram ids should win. They are explicitly declared by the author and already
+load-bearing for `{ref=}` and `:::diagram { id=... }`, whereas a heading slug is
+derived and has no other meaning; suffixing the derived one costs less. In
+practice: pre-seed `usedHeadingIds` with every diagram id before the render pass,
+so a colliding heading takes the `-2` suffix that `getHeadingId` already applies
+for repeated headings. This is straightforward because the diagram registry, with
+every definition and id, is built before rendering begins.
+
+Worth noting in the skill: diagram ids are only barred from containing whitespace
+or `#`, so they can hold characters that need percent-encoding in a URL fragment.
+They will still work, but kebab-case ids keep links readable.
+
 ### Known simplification
 
 A single counter across all diagrams. If flowcharts said `Figure #` and sequence
@@ -389,6 +412,30 @@ the reference, which is worth fixing on its own.
 
 What is missing is navigation for long documents: an opt-in `:::toc` directive
 that builds from the heading tree, with a depth attribute.
+
+```markdown
+:::toc { depth=3 diagrams=true }
+:::
+```
+
+### Including diagrams
+
+Once diagrams carry anchors (item 6), they can appear in the contents alongside
+headings, nested under the heading they fall within.
+
+- **Only captioned diagrams.** The caption is the human-facing name, with its
+  number resolved; a diagram without one would otherwise surface a raw id like
+  `auth-flow` as a reading-list entry.
+- **Render order, not definition order** — the same rule numbering follows, and
+  for the same reason: the recommended pattern keeps definitions at the end of
+  the document behind a reference.
+- Opt-in via an attribute, since a contents listing every diagram is not always
+  wanted.
+
+An alternative worth weighing is a separate `:::figures` block producing a list
+of figures, which is the established convention in longer technical documents and
+keeps the contents purely structural. Both build from the same collected data, so
+the choice is presentational rather than architectural.
 
 ---
 
