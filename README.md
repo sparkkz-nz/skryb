@@ -10,10 +10,11 @@ document can be opened locally, edited, saved as a new copy, and reopened
 without a server or build tool.
 
 - **Fully Markdown compatible** - the canonical source stays in the file
-- **Beautiful diagrams** with full control over layout and colour
+- **Beautiful diagrams** that lay themselves out, or take exact coordinates
 - **A single portable HTML file** that needs only a browser
 - **Built-in diagram editor** - no other tools needed
 - **Easy for agents to write**, easy for humans to edit
+- **Prints properly**, so a document survives leaving the browser
 
 See [the project page](https://sparkkz-nz.github.io/skryb/) for a walkthrough
 of source editing, the diagram editor, themes, and zoom.
@@ -74,6 +75,13 @@ Everything happens inside the open document; there is no separate application.
   holds the canonical Markdown and diagram YAML and live-renders valid changes.
   Drag the tray's top edge to resize it, or focus that edge and use the arrow
   keys; double-click it to restore the default height.
+- **Diagram layout** is optional work. Give a flowchart `layout: right` (or
+  `down`, `left`, `up`) and leave nodes without a `position`, and it places them
+  in stages from the connectors, ordered to avoid crossings. It runs when the
+  document opens and only touches nodes with no position of their own, so a node
+  you drag stays put. Connectors route around nodes in the way, labels wrap
+  inside the width you gave them, and `canvas: auto` keeps the drawing's bounds
+  matched to its content.
 - **Diagram editing** selects a node to set its label, subtitle, shape, palette,
   status colour, fill, stroke, alignment, and size. Nodes can be dragged,
   resized, duplicated, and reconnected; connectors can be rerouted, given a
@@ -100,6 +108,14 @@ Everything happens inside the open document; there is no separate application.
   `doctype: diagram` in frontmatter for a file whose point is a single diagram:
   it opens with that diagram already expanded, while remaining an ordinary
   Skryb document in every other respect.
+- **Longer documents** get a `:::toc` contents list, diagram captions that
+  number themselves, `{ref=...}` cross-references that stay right when figures
+  move, and diagram ids that work as anchors. Fenced code is syntax highlighted
+  in about forty languages, and `styles:` lets a diagram declare a look once and
+  apply it with `class:`.
+- **Printing** covers the whole document, not just one diagram. Toolbars are
+  dropped, diagrams print at full size regardless of how their frame is sized on
+  screen, and panels, diagrams and tables are kept off page breaks.
 - **Move diagrams between documents** with **Save as Skryb diagram** in a
   diagram's export menu, which writes that one diagram as its own `doctype:
   diagram` file, and **Import diagram…** in the source tray menu, which reads a
@@ -178,6 +194,30 @@ npm test
 
 `npm test` builds and tests the minified browser artifact. Use `npm run check`
 to type-check the TypeScript build entry independently.
+
+## Checking a document
+
+Nobody writing a document can see it while they write it, which is where most
+untidy diagrams come from. `npm run lint` catches what the source will not show
+you:
+
+```sh
+npm run lint doc.html             # errors and warnings
+npm run lint doc.html -- --errors # schema only, for CI
+```
+
+- an edge naming a node that does not exist. Worth having on its own: the
+  renderer drops these without a word, so the connector simply is not there and
+  nothing tells you.
+- nodes that overlap
+- an edge crossing an unrelated node
+- a label too big for its shape
+
+Only the first is an error and fails the exit status. The rest are advisory - a
+document is not broken for being slightly untidy.
+
+The rules live in the runtime next to the geometry they describe, so they cannot
+drift from what actually gets drawn.
 
 ## Licence
 
