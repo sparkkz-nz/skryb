@@ -171,9 +171,7 @@ The primary explanation and diagram go here.
 
 ```diagram
 type: flowchart
-canvas:
-  width: 600
-  height: 300
+canvas: auto
 nodes: []
 edges: []
 ```
@@ -204,9 +202,7 @@ its canonical YAML model:
 type: flowchart
 version: 1
 id: payment-flow
-canvas:
-  width: 1080
-  height: 560
+canvas: auto
 nodes: []
 edges: []
 ```
@@ -229,9 +225,7 @@ preserving one canonical source:
 ```diagram
 id: payment-flow
 type: flowchart
-canvas:
-  width: 600
-  height: 300
+canvas: auto
 nodes: []
 edges: []
 ```
@@ -336,9 +330,10 @@ The directive may appear anywhere, including before the headings it lists.
 | `notes` | Sequence | Optional notes anchored after a message. |
 | `groups` | Sequence | Optional labelled ranges of messages. |
 
-`canvas.width` and `canvas.height` are numeric SVG canvas dimensions. A positive
-numeric `canvas.grid` enables snapping while moving or resizing; omit it or use
-`0` to disable snapping.
+`canvas.width` and `canvas.height` are numeric SVG canvas dimensions. Prefer
+`canvas: auto` on a flowchart and let them be derived; write them out only when
+a fixed aspect ratio matters. A positive numeric `canvas.grid` enables snapping
+while moving or resizing; omit it or use `0` to disable snapping.
 
 Set `grid: 5` on a flowchart unless there is a reason not to. Snapping keeps
 dragged nodes, resized nodes, waypoints, and callout targets on shared
@@ -650,6 +645,28 @@ follow: a long edge that doubles back, several edges converging on one anchor,
 or an edge that would otherwise run along or across an unrelated node. A curve
 separates from its neighbours and reads as one continuous line, which is often
 clearer than adding another right-angled detour.
+
+#### Routing around obstacles
+
+An edge that would run through a node which is neither its source nor its target
+is routed around it. This only engages on a route that is actually blocked, so a
+clear edge is drawn exactly as it always was.
+
+Routing charges for a turn as well as for distance, so it prefers a straight run
+and adds a bend only where one is needed. An `orthogonal` edge steps around the
+obstacle; a `straight` or `curved` edge detours through an implicit waypoint,
+keeping its character rather than being replaced by a right-angled route.
+
+Two cases are deliberately left alone:
+
+- **An edge with an authored `waypoint`.** The author has already said where the
+  edge should go.
+- **An edge that cannot be cleared.** Where no route clears the obstacle - for
+  instance a curve leaving an anchor with a node directly beyond it - the edge
+  keeps the path it was authored with rather than being redrawn worse, and lint
+  still reports the crossing so the anchors can be changed instead. A node
+  containing, or contained by, an edge's own endpoints is never an obstacle for
+  that edge.
 
 ### Sequence diagrams
 

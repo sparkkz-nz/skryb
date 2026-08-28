@@ -26,6 +26,8 @@ document.
    that lets a reader understand a diagram without relying only on its visuals.
 6. Validate the HTML shell, frontmatter, Markdown subset, and every diagram
    field before returning the document.
+7. Run the lint command over the finished file. You cannot see what you have
+   written, and it catches the defects that do not show up in the source.
 
 ```html
 <!doctype html>

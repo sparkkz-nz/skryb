@@ -74,9 +74,9 @@ inspector gives a node a callout pointer you can drag at its target.
 type: flowchart
 version: 1
 id: first-flowchart
+caption: "Figure #: A browser submitting an order"
 canvas:
-  width: 720
-  height: 300
+  auto: true
   grid: 5
 nodes:
   - id: browser
@@ -115,11 +115,51 @@ change that height, or press **Zoom to fit** to restore it. Choose **Edit** to
 make flowchart changes, then keep the edit to serialize them back into the
 matching diagram fence.
 
-Note the `grid: 5` on the canvas. It is worth setting on every flowchart:
-dragging and resizing then snap to multiples of five, so node edges line up and
-connectors meet anchors squarely instead of missing by a pixel or two. Five is
-fine enough to place anything exactly while still doing the alignment work for
-you. Omit it, or set `0`, to turn snapping off.
+`auto: true` on the canvas means you never have to work out how big the drawing
+is. It sizes itself to whatever is in it, growing and shrinking as you edit, and
+it will not leave a band of empty margin in a saved SVG or PDF the way a
+hand-written size does once you delete something. Set an explicit `width` and
+`height` when you want several diagrams to come out the same shape.
+
+`grid: 5` snaps dragging and resizing to multiples of five. It is the difference
+between a diagram that looks deliberate and one where node edges miss each other
+by a pixel and connectors meet anchors slightly off. Five is small enough to
+place anything exactly. Leave it out, or set `0`, if you would rather it did not.
+
+The `caption` shows under the diagram. Put a `#` in it and that becomes the
+figure number, so `"Figure #: ..."` renumbers itself when you add a figure above.
+
+### Let Skryb place the nodes
+
+Every node in that first diagram has a `position`, because someone chose where
+to put it. You do not have to. Add `layout: right` - or `down`, `left`, `up` -
+leave the positions out, and Skryb works out the arrangement from the connectors:
+
+```yaml
+type: flowchart
+layout: right
+canvas: auto
+nodes:
+  - id: browser
+    label: Browser
+    shape: rounded-rectangle
+  - id: api
+    label: Orders API
+    shape: oval
+edges:
+  - source: browser
+    target: api
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+This happens when the document opens, and only to nodes with no `position`. Drag
+one and it stays where you put it. Leave the `layout` line in afterwards and the
+next node you add without coordinates gets placed too.
+
+You also do not need to nudge connectors around obstacles or hand-break long
+labels. An edge that would cut through an unrelated node goes around it, and a
+label too wide for its shape wraps.
 
 Most connectors read best as the default `orthogonal` route. Switch one to
 `curved` when a right-angled route is hard to follow, such as a long edge that
@@ -131,6 +171,51 @@ _italic_, and ``code`` formatting. A text shape is transparent by default;
 apply any palette, including **None**, to change or remove a shape's fill and
 stroke. See the [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#the-text-shape-and-its-markdown-subset)
 for the complete text-node syntax.
+
+## Write a longer document
+
+Add `:::toc { depth=2 diagrams=true }` near the top and you get a contents list
+built from your headings. There is no closing `:::` on that one. Drop
+`diagrams=true` if you would rather it listed only headings.
+
+Give a diagram an `id` and a `caption` and you can refer to it from your prose:
+
+```markdown
+See Figure {ref=first-flowchart} for the order path.
+```
+
+That renders as a link. If the caption is numbered, the link reads as the
+number; if not, it reads as the caption text. Either way you never have to
+renumber anything when you add a figure higher up the page. The `id` doubles as
+an anchor, so `#first-flowchart` links straight to the diagram.
+
+Label your code fences with a language and they come out highlighted:
+
+    ```typescript
+    export const total = items.length;
+    ```
+
+Around forty names work, including `typescript`, `python`, `sql`, `bash`,
+`json`, `yaml`, `html`, `css` and `diff`. If a name is not recognised the block
+just renders plain, so nothing breaks.
+
+When several nodes should look the same, name the look once and point at it
+instead of repeating yourself:
+
+```yaml
+styles:
+  external:
+    palette: neutral
+    style: { strokeWidth: 3 }
+nodes:
+  - id: bank
+    label: Partner bank
+    shape: rounded-rectangle
+    class: external
+```
+
+Anything set on the node itself still beats the class, so you can make one node
+an exception without inventing a second style for it.
 
 ## Export a diagram
 
@@ -155,12 +240,16 @@ invalid draft. Double-click rendered text to open the tray at its matching
 source. Double-click and drag a text selection for more search precision.
 
 The tray menu inserts valid templates for a flowchart, sequence, diagram
-reference, panel, or grid. Use it for document structure and all sequence
+reference, contents, panel, or grid. Use it for document structure and all sequence
 diagram changes; sequence participants appear left to right and messages appear
 top to bottom in source order.
 
 ## Save the result
 
+- **Print / Save as PDF** prints the whole document. Toolbars are left out,
+  diagrams print at their full size rather than the size of the frame you are
+  looking at, and nothing gets split across a page break. Ctrl/Cmd+P does the
+  same. Pick *Save as PDF* in the print dialog if you want a file.
 - **Save As** downloads an updated portable HTML document and retains its hosted
   runtime URL.
 - **Save for Offline** downloads a self-contained HTML document with the

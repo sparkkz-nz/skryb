@@ -291,8 +291,10 @@
       <div class="why">
         <article class="card"><h3>Correct it yourself</h3><p>Spotted a wrong label or a missing step? Fix it in the source tray or drag the node. You do not need the original agent, its context, or its environment.</p></article>
         <article class="card"><h3>Keep it in version control</h3><p>The document is text: Markdown plus YAML inside one HTML file. Diffs are readable, reviews are meaningful, and history stays honest.</p></article>
-        <article class="card"><h3>Share it anywhere</h3><p><strong>Save As</strong> keeps the file small against the hosted runtime. <strong>Save for Offline</strong> embeds a pinned runtime so the document works with no network at all.</p></article>
+        <article class="card"><h3>Share it anywhere</h3><p><strong>Save As</strong> keeps the file small against the hosted runtime. <strong>Save for Offline</strong> embeds a pinned runtime so the document works with no network at all. <strong>Print / Save as PDF</strong> covers the whole document for the places that still want a PDF.</p></article>
         <article class="card"><h3>Cheap for agents to produce</h3><p>Agents write plain Markdown and explicit diagram YAML - no image generation, no headless browser, no rendering service. <a href="#agents">One install</a> keeps them on-contract.</p></article>
+        <article class="card"><h3>Tidy without being told</h3><p>An agent writing a diagram cannot see it. So give a flowchart a direction and it places its own nodes, connectors go around whatever is in the way, and long labels wrap instead of spilling out of the shape.</p></article>
+        <article class="card"><h3>Built for long documents</h3><p>A contents list, figure numbers that renumber themselves, cross-references that stay right when things move, and syntax highlighting in about forty languages.</p></article>
       </div>
     </section>
 
@@ -317,14 +319,21 @@
           <p>The same file is structured enough for an agent to write and pleasant enough for a person to read.</p>
         </div>
         <div class="comparison">
-          <article class="card"><h3>What agents write</h3><code>type: sequence
-participants:
+          <article class="card"><h3>What agents write</h3><code>type: flowchart
+layout: right
+canvas: auto
+nodes:
   - id: customer
     label: Customer
-messages:
-  - from: customer
-    to: orders
-    label: Place order</code></article>
+    shape: rounded-rectangle
+  - id: orders
+    label: Orders API
+    shape: oval
+edges:
+  - source: customer
+    target: orders
+    sourceAnchor: right
+    targetAnchor: left</code><p>No coordinates, no canvas size. The layout is worked out from the connectors when the document opens.</p></article>
           <article class="card"><h3>What people receive</h3><p>A polished document with deterministic diagrams, semantic components, portable source, and an editing path that does not require the original agent, an external app, or its environment.</p><a class="button secondary" href="./docs/quickstart.html">See a working document</a></article>
         </div>
       </div>
