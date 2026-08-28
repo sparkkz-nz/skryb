@@ -23,6 +23,7 @@ whether they remove the need to guess, or make a guess cheap to check.
 | 9 | Edge obstacle avoidance | Large | Edges still cross unrelated nodes |
 | 10 | Regeneration boundaries | Medium | Makes documents safe to maintain over time |
 | 11 | Derived canvas bounds | Small | Removes a dimension authors should not have to maintain |
+| 12 | Void directives take no closing fence | Small | Formalises what `:::diagram` already does; removes a special case |
 
 ---
 
@@ -411,11 +412,11 @@ Headings already carry slugged, de-duplicated `id` attributes (`getHeadingId` in
 the reference, which is worth fixing on its own.
 
 What is missing is navigation for long documents: an opt-in `:::toc` directive
-that builds from the heading tree, with a depth attribute.
+that builds from the heading tree, with a depth attribute. It holds no content,
+so it needs no closing fence (item 12):
 
 ```markdown
 :::toc { depth=3 diagrams=true }
-:::
 ```
 
 ### Including diagrams
@@ -486,6 +487,59 @@ Nothing shrinks a canvas, so it accumulates dead space across an editing session
 dead space then shows up as empty margin in every export. A "fit canvas to
 content" action, or making **Zoom to fit** also tighten the canvas, would close
 that.
+
+---
+
+## 12. Void directives take no closing fence
+
+Directives that hold no content — `:::diagram`, and the proposed `:::toc` and
+`:::figures` — do not need a closing `:::`. It is pure noise on the page and one
+more line for an agent to emit and get wrong.
+
+**This is already how `:::diagram` behaves.** It is a single line with no closer,
+as the source tray's own insert template shows:
+
+```js
+"diagram-reference": ":::diagram { id=diagram-id }",
+```
+
+What is missing is that the rule is never *stated*. The reference documents only
+the five container names — `section`, `panel`, `callout`, `grid`, `stack` — and
+`:::diagram` is special-cased ahead of the directive parser rather than being
+part of the family.
+
+### It removes code rather than adding it
+
+Directives are already name-driven, with a per-name attribute table:
+
+```js
+section: ["title", "palette", "fill", "stroke", "text"],
+grid: ["columns"],
+stack: []
+```
+
+Arity belongs in that same table. Making it a property of the name lets
+`:::diagram` be handled by the general mechanism instead of a special case tried
+before it, so this is a net simplification of `markdown.ts`, not an extra branch.
+
+It also means arity never depends on lookahead: the parser knows from the name
+alone whether to expect content, so there is no ambiguity about whether a `:::`
+further down belongs to this directive or another.
+
+### Points to settle
+
+- **A stray closer after a void directive.** An author writing `:::toc` then
+  `:::` out of habit would otherwise leave a literal `:::` in the rendered page.
+  Suggest tolerating an immediately following `:::` as an optional closer, the
+  same leniency already applied to closing annotations like `::: (panel)`. The
+  alternative — leaving it as visible source — is self-correcting but looks like
+  a bug.
+- **Unknown directive names** keep today's behaviour and stay literal source.
+- Void directives take attributes exactly as container ones do:
+  `:::toc { depth=3 diagrams=true }`.
+
+Worth doing alongside item 8, since `:::toc` would be the first new void
+directive and would otherwise entrench the inconsistency.
 
 ---
 
