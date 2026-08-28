@@ -614,6 +614,32 @@ browser print dialog for the diagram alone. All three SVG actions preserve the
 diagram's current theme background and system sans-serif font stack. The
 standalone export never includes editing controls, current zoom, or pan state.
 
+## Linting a document
+
+`lintDocument(source)` on the runtime's core API returns the schema errors and
+visual-quality warnings for a whole document, and `formatLintMessages(result)`
+renders them as text. The rules live in the runtime bundle beside the geometry
+they describe, so they cannot drift from the renderer that draws the diagram,
+and the same lint is available in the browser.
+
+A `scripts/lint.mjs` wrapper runs them headlessly against a saved file, loading
+the bundle into a Node `vm` with no browser or service involved:
+
+```sh
+node scripts/lint.mjs doc.html            # errors and warnings
+node scripts/lint.mjs doc.html --errors   # schema only, for CI
+```
+
+Each message carries a `severity` (`error` or `warning`), a `rule`, a
+`message`, and the `diagram` it belongs to. The rules are `schema`,
+`unknown-edge-endpoint`, `node-overlap`, `edge-crosses-node`, and
+`label-overflow`. Only errors set a non-zero exit status: warnings describe
+things a reader would notice, but a generated document is not blocked on
+aesthetics.
+
+A node with no connector is never reported. A `text` shape used for annotation,
+a label, or a legend is a normal part of a diagram.
+
 ## Runtime channels and limitations
 
 Use `/latest/skryb-runtime.js` for normal use, `/dev/skryb-runtime.js` only for
