@@ -162,16 +162,17 @@ off and every node needs a `position` and every edge both anchors - which is wha
 you want for a diagram you have arranged yourself, because then a missing
 coordinate is reported rather than quietly drawn in the corner.
 
-Those positions only exist while the document is open, though: the file still
-says nothing about where anything is. To get them into the file - so you can
-nudge a number - bake it:
+Those positions are written straight back into the document's own source when it
+opens, so there are real coordinates there to nudge. That also means the document
+now has unsaved changes: save it, and the geometry is on disk. Only diagrams that
+needed placing are rewritten - one you have already arranged is left exactly as
+you wrote it, comments and all.
 
-```sh
-node scripts/bake.mjs doc.html
-```
-
-That writes the positions and anchors into the diagram's own source, and leaves
-any diagram without a `layout` line completely alone.
+Skryb checks the document at the same time. **Check document** in the document
+menu runs the checks whenever you want and shows what it found: a connector
+pointing at a node that does not exist, nodes overlapping, an edge crossing
+something unrelated, a label too big for its shape. Only the first is an error;
+the rest are advice you can take or leave.
 
 You also do not need to nudge connectors around obstacles or hand-break long
 labels. An edge that would cut through an unrelated node goes around it, and a

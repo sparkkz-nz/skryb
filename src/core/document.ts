@@ -1,5 +1,6 @@
 import { colourSchemes } from "./diagrams/schema";
 import { parseDiagram, parseScalar } from "./diagrams/parser";
+import { layoutFilledDiagram } from "./diagrams/layout";
 import { serializeDiagram } from "./diagrams/serializer";
 import { resolveTheme } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen, stripFencePrefix } from "./fences";
@@ -173,6 +174,20 @@ export function extractDiagramFences(source: string): ExtractedDiagram[] {
   return diagrams;
 }
 
+/**
+ * A short stable digest of a document's source, used to mark which source a lint report describes.
+ * It only has to detect change, not resist tampering, so this is FNV-1a rather than a real hash: no
+ * dependency, no async crypto API, and the same answer in a browser and in Node.
+ */
+export function hashSource(source: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
 export interface BakedFence {
   /** Index of the first body line, and of the line after the last, in the document's own lines. */
   start: number;
@@ -188,10 +203,11 @@ export interface BakeResult {
 }
 
 /**
- * Writes the layout engine's work back into the document's own source. Only fences that declare a
- * `layout` are touched: that key is what marks a diagram as machine-managed, so it is also the
- * licence to rewrite the fence into canonical form. A diagram without it is hand-managed, and is
- * copied through untouched - comments, field order, and spacing intact.
+ * Writes the layout engine's work back into the document's own source. Only a fence the engine
+ * actually filled something in for is touched: declaring a `layout` is what makes a diagram
+ * machine-managed and so licences rewriting it into canonical form, but a diagram that is already
+ * complete has nothing to write, and one with no `layout` at all is hand-managed. Both are copied
+ * through untouched - comments, field order, and spacing intact.
  *
  * Nothing else is rewritten either, which is why this splices new fence bodies into the document's
  * own lines rather than rebuilding the text: prose, frontmatter, and line endings come through
@@ -238,7 +254,10 @@ export function bakeDocumentSource(source: string): BakeResult {
     if (fence.info === "diagram") {
       const body = plain.slice(index + 1, closeIndex).map((line) => stripFencePrefix(line)).join("\n");
       const diagram = parseDiagram(body, colourScheme);
-      if (diagram.type === "flowchart" && diagram.layout !== undefined) {
+      // Only a diagram the engine had to fill something in for is rewritten. A `layout` diagram that
+      // already carries every position and anchor is complete, so reserialising it would churn its
+      // formatting and drop its comments to no purpose.
+      if (diagram.type === "flowchart" && layoutFilledDiagram(diagram)) {
         // A block-quoted fence keeps its quoting, taken from the line that opened it.
         const opener = plain[index];
         const quote = opener.slice(0, opener.length - stripFencePrefix(opener).length);

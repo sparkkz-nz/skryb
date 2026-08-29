@@ -15,6 +15,18 @@ import { getGridSize, snapToGrid } from "./styles";
 
 export const layoutDirections = ["right", "down", "left", "up"] as const;
 
+/**
+ * Diagrams the engine actually had to fill something in for. "Needed laying out" is not something a
+ * caller can work out from the result - a filled position looks exactly like an authored one - so it
+ * is recorded here as the layout runs. Baking uses it to leave a diagram that was already complete
+ * exactly as its author wrote it, and opening a document uses it to know whether anything changed.
+ */
+const filledDiagrams = new WeakSet<FlowchartDiagram>();
+
+export function layoutFilledDiagram(diagram: FlowchartDiagram): boolean {
+  return filledDiagrams.has(diagram);
+}
+
 export type LayoutDirection = (typeof layoutDirections)[number];
 
 export interface LayoutSettings {
@@ -417,15 +429,15 @@ function layoutSiblings(
   settings: LayoutSettings,
   origin: Position,
   grid: number
-): void {
+): boolean {
   const unpositioned = nodes.filter((node) => !hasPosition(node));
   if (!unpositioned.length) {
-    return;
+    return false;
   }
 
   if (unpositioned.length === nodes.length) {
     layoutWholeGraph(nodes, edges, settings, origin, grid);
-    return;
+    return true;
   }
 
   // An existing position always wins, so a diagram someone has appended to is never re-flowed;
@@ -441,6 +453,7 @@ function layoutSiblings(
       ? resolveOverlap(fromConnectors.position, size, occupied, fromConnectors.acrossAxis, grid, settings.siblingGap)
       : findFreeSlot(size, occupied, origin, grid, settings.siblingGap);
   }
+  return true;
 }
 
 /**
@@ -471,10 +484,10 @@ function facingAnchors(source: Bounds, target: Bounds): { source: string; target
  * expressed exactly this way - so it is never overwritten. A pair with no geometry to read, a self
  * connector or a node that overlaps its neighbour, falls back to the diagram's own direction.
  */
-function deriveEdgeAnchors(diagram: FlowchartDiagram, settings: LayoutSettings): void {
+function deriveEdgeAnchors(diagram: FlowchartDiagram, settings: LayoutSettings): boolean {
   const edges = diagram.edges || [];
   if (!edges.some((edge) => !edge.sourceAnchor || !edge.targetAnchor)) {
-    return;
+    return false;
   }
 
   const forward = getForwardAnchors(settings.direction);
@@ -491,6 +504,7 @@ function deriveEdgeAnchors(diagram: FlowchartDiagram, settings: LayoutSettings):
     edge.sourceAnchor = edge.sourceAnchor || facing?.source || forward.source;
     edge.targetAnchor = edge.targetAnchor || facing?.target || forward.target;
   }
+  return true;
 }
 
 /**
@@ -506,6 +520,7 @@ export function applyFlowchartLayout(diagram: FlowchartDiagram): FlowchartDiagra
 
   const grid = getGridSize(diagram);
   const padding = 40;
+  let filled = false;
   const visit = (nodes: FlowchartNode[], origin: Position): void => {
     for (const node of nodes) {
       if (node.children?.length) {
@@ -529,10 +544,13 @@ export function applyFlowchartLayout(diagram: FlowchartDiagram): FlowchartDiagra
     }
     // Siblings are placed after their own children, so a container already knows how big it is by
     // the time its position and its neighbours' positions are worked out.
-    layoutSiblings(nodes, diagram.edges || [], settings, origin, grid);
+    filled = layoutSiblings(nodes, diagram.edges || [], settings, origin, grid) || filled;
   };
 
   visit(diagram.nodes || [], { x: padding, y: padding });
-  deriveEdgeAnchors(diagram, settings);
+  filled = deriveEdgeAnchors(diagram, settings) || filled;
+  if (filled) {
+    filledDiagrams.add(diagram);
+  }
   return diagram;
 }

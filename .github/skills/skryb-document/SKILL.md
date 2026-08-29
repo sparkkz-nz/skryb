@@ -26,9 +26,9 @@ document.
    that lets a reader understand a diagram without relying only on its visuals.
 6. Validate the HTML shell, frontmatter, Markdown subset, and every diagram
    field before returning the document.
-7. Bake the file, then lint it, then adjust and lint again. You cannot see what
-   you have written; this is the loop that closes that gap, and it is described
-   under "Reviewing a document" below.
+7. Open the document to bake and check it, adjust the source, and open it again.
+   You cannot see what you have written; this is the loop that closes that gap,
+   and it is described under "Reviewing a document" below.
 
 ```html
 <!doctype html>
@@ -148,9 +148,9 @@ edges:
     target: db
 ```
 
-That is the whole diagram. Baking it fills in the geometry - nodes in stages
-along the flow, ordered to avoid crossings, and each connector given the anchors
-its final geometry implies:
+That is the whole diagram. Opening it fills in the geometry and writes it back
+into the source - nodes in stages along the flow, ordered to avoid crossings, and
+each connector given the anchors its final geometry implies:
 
 ```yaml
 nodes:
@@ -189,10 +189,10 @@ Choose the direction from the content: `right` for a pipeline or request path,
 `down` for a decision tree or a sequence of steps. A diagram wider than about
 five stages usually reads better as `down`.
 
-Keep the `layout` key in the baked source. It is a no-op for a fully placed
-diagram, but it is what places the next node you add, and it is what marks the
-diagram as yours to regenerate. Removing it is how a human freezes a diagram
-they have hand-tuned, so do not remove it on their behalf.
+Keep the `layout` key in the baked source. A fully placed diagram is left
+untouched - it is not even rewritten - but the key is what places the next node
+you add, and what marks the diagram as yours to regenerate. Removing it is how a
+person freezes a diagram they have hand-tuned, so do not remove it for them.
 
 Without a `layout`, every node needs a `position` and every edge both anchors;
 leaving one out is an error, not a diagram drawn at the origin.
@@ -285,35 +285,90 @@ highlighted, and the label costs nothing when it is not.
 ## Reviewing a document
 
 An authoring agent works blind: it emits a document and never sees the result.
-Two commands close that loop, and they are used in order.
+Opening the document is what closes that loop, because the runtime does the work
+itself the moment it loads:
 
-**Bake first.** A diagram you left to the layout engine renders from positions
-that exist only while the document is open - the file still says nothing about
-where anything is, so there is nothing in it to adjust when something needs
-moving. Baking writes the engine's work into the document's own source:
+- if any diagram needed laying out, the result is **baked into the document's own
+  source** there and then, so the source and the screen can never disagree;
+- **the checks are then run**, and the report is written into a
+  `template[data-skryb-lint]` beside the source;
+- the document now counts as changed, so a reader is asked to save it on the way
+  out.
+
+Both results therefore live in the document, and every route below returns the
+same two elements: `template#source` (the baked Markdown) and
+`template[data-skryb-lint]` (a JSON report). Both are HTML-escaped, so decode entities when reading them.
+
+The lint report carries a `sourceHash` of the source it describes. Compare it
+against the source you hold: if they differ, the report predates your edits and
+must not be trusted.
+
+Use the first of these routes available to you.
+
+### 1. Browser automation
+
+Open the document and call into it. Nothing is installed and nothing is
+downloaded; the runtime executes in the browser's sandbox.
+
+```js
+await page.goto("file:///abs/path/doc.html");
+const { source, lint } = await page.evaluate(() => ({
+  source: document.querySelector("#source").content.textContent,
+  lint: JSON.parse(document.querySelector("template[data-skryb-lint]")?.content.textContent || "null")
+}));
+```
+
+Write `source` back over the original file. Add `?skryb-lint` to the URL to force
+a check even when nothing needed baking.
+
+### 2. Any Chromium browser, no automation library
+
+Chrome, Edge, Brave, or Chromium can render the document and print the resulting
+DOM, which contains both templates:
+
+```sh
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --virtual-time-budget=5000 \
+  --dump-dom "file:///abs/path/doc.html?skryb-lint" > dom.html
+```
+
+Extract `template#source` and `template[data-skryb-lint]` from `dom.html`, decode the
+entities, and write the source back over the original file. Use the browser's
+own path on the platform you are running on. `--virtual-time-budget` matters:
+without it the DOM may be dumped before the runtime has finished.
+
+### 3. Ask a person
+
+With no browser at all, ask whoever you are working for to open the document,
+choose **Check document** from the document menu, and save it over the original.
+That single action bakes the layout, runs the checks, and hands both back to you.
+Batch your edits before asking: each request costs them an open and a save.
+
+### 4. Working inside the skryb repository
+
+Only when you are in a checkout of skryb itself:
 
 ```sh
 node scripts/bake.mjs doc.html            # positions and anchors written in
 node scripts/bake.mjs doc.html --check    # non-zero if baking would change it
-```
-
-Only fences declaring a `layout` are rewritten, and they are rewritten into
-canonical form: fields are reordered and reformatted, and comments inside that
-fence are dropped. That is expected - a diagram carrying a `layout` is generated
-output. A diagram without one is someone's own work and is copied through
-untouched, as is everything outside the diagram fences. Baking is idempotent,
-and a diagram that fails to parse fails the bake rather than being skipped.
-
-**Then lint**, which is the fastest way to catch a defect a reader would notice
-immediately:
-
-```sh
 node scripts/lint.mjs doc.html            # errors and warnings
 node scripts/lint.mjs doc.html --errors   # schema only, for CI
 ```
 
-It exits non-zero only on errors; warnings are advisory, so a document is never
-blocked on aesthetics. The rules are:
+Do not download a runtime and run it outside the browser, and do not ask anyone
+to. In a browser the runtime is sandboxed; under Node it would have the same
+access to the machine as you do, and the URL it came from is a value taken from
+a document that may not be trustworthy.
+
+### What baking touches
+
+Only a fence that declares a `layout` **and** had something missing is rewritten,
+and it is rewritten into canonical form: fields reordered, comments inside that
+fence dropped. That is expected - such a diagram is generated output. A fence
+that is already complete, or has no `layout`, is copied through byte for byte,
+comments and all. Nothing outside the diagram fences is ever rewritten.
+
+### The rules the checks apply
 
 | Rule | Severity | What it means |
 | --- | --- | --- |
@@ -323,8 +378,14 @@ blocked on aesthetics. The rules are:
 | `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
 | `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
 
-**Then adjust the baked source and lint again.** Because the engine only fills
-in what is missing, the baked source stays workable without any extra machinery:
+Only errors are blocking; warnings are advisory, so a document is never held up
+on aesthetics. A node with no connector is never reported - a `text` shape used
+for annotation or a legend is a normal part of a diagram.
+
+### Then adjust the baked source and check again
+
+Because the engine only fills in what is missing, the baked source stays workable
+without any extra machinery:
 
 | To do this | Do this |
 | --- | --- |
@@ -334,9 +395,9 @@ in what is missing, the baked source stays workable without any extra machinery:
 | Lay the whole diagram out afresh | Strip every `position` and bake. This discards any hand tuning, so be sure. |
 | Change where a connector leaves or lands | Edit that edge's anchors, or delete them and bake to have them derived again. |
 
-Rendering the document in a browser for a screenshot is worth doing for a
-diagram that matters, but do it on the baked file, so what you are looking at is
-what the source says.
+If you have none of the routes above and nobody to ask, place every node and
+anchor by hand and leave the `layout` key off. The document is then complete as
+written, and the schema will tell you if it is not.
 
 ## Validation checklist
 
@@ -356,10 +417,10 @@ Before returning a document, verify:
   and sizes are multiples of it.
 - A flowchart either declares `layout` or gives every node a `position` and every
   edge both anchors.
-- `node scripts/bake.mjs --check` reports nothing left to bake, so the source
-  carries the positions and anchors the document renders with.
-- `node scripts/lint.mjs` reports no errors, and every warning it reports is
-  either fixed or a deliberate choice.
+- The document has been opened once since the last change, so its source carries
+  the positions and anchors it renders with, and the diagrams have been checked.
+- The checks report no errors, and every warning is either fixed or a deliberate
+  choice.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

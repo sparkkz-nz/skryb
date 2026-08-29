@@ -83,6 +83,7 @@ import {
 import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
   bakeDocumentSource,
+  hashSource,
   spliceBakedFences,
   extractDiagramFences,
   findSourceTextRange,
@@ -97,6 +98,7 @@ import {
   validateDocumentSource
 } from "../core/document";
 import { formatLintMessages, lintDocument } from "../core/lint";
+import type { LintResult } from "../core/lint";
 import { getHighlightLanguage, highlightCode, isHighlightableLanguage } from "../core/highlight";
 import { applyFlowchartLayout, layoutDirections } from "../core/diagrams/layout";
 import { dropRedundantPoints, findClearRoute, getDetourWaypoint, routeIsBlocked } from "../core/diagrams/routing";
@@ -162,6 +164,9 @@ function measureDiagramContentHeight(figure: HTMLElement): number | null {
   return Math.min(fittedHeight, figure.offsetHeight);
 }
 
+/** The lint report is addressed by attribute so it can never collide with a document's own ids. */
+const lintReportSelector = "template[data-skryb-lint]";
+
 export class BrowserRuntime {
   public readonly state: EditorState = createEditorState();
   private readonly pendingViewportFits = new Set<number>();
@@ -190,6 +195,13 @@ export class BrowserRuntime {
       renderDocument: () => this.renderDocument()
     }) : null;
   }
+
+  /**
+   * A lint report lives outside the document's Markdown, so writing one does not change the source
+   * and would not otherwise register as an unsaved change. It has to, because saving the file is
+   * exactly how a reader hands the report back to whoever asked for it.
+   */
+  private lintReportUnsaved = false;
 
   public getSource(): string {
     return this.sourceElement?.content.textContent || "";
@@ -414,6 +426,108 @@ export class BrowserRuntime {
     toggle.setAttribute("aria-expanded", "false");
   }
 
+  /**
+   * Lays out and bakes the document the moment it opens, then reports on the result. Layout has
+   * always run on open; what changes here is that its work is written back into the document's own
+   * source rather than staying in memory, so what the source says and what the screen shows can
+   * never disagree. A document that needed nothing is left exactly as it was, and stays clean.
+   */
+  private bakeOnOpen(): void {
+    let baked = 0;
+    let failed = false;
+    try {
+      const result = bakeDocumentSource(this.getSource());
+      baked = result.baked;
+      if (baked) {
+        this.setSource(result.source);
+      }
+    } catch {
+      // A document that cannot be baked is a document with something wrong in it, which is exactly
+      // when a report is worth having, so the failure is remembered rather than swallowed. What is
+      // actually wrong is left to lint to say properly.
+      failed = true;
+    }
+    // Linting follows a bake because the geometry has just changed and nobody has seen the result.
+    // It is also available on demand, for a reader who wants it without having changed anything.
+    if (baked || failed || this.lintRequestedByUrl()) {
+      this.writeLintReport();
+    }
+  }
+
+  private lintRequestedByUrl(): boolean {
+    const search = globalThis.location?.search || "";
+    return /(^|[?&])skryb-lint(=|&|$)/.test(search);
+  }
+
+  /**
+   * Publishes lint results as a `template#lint` beside the document's source. A template is inert,
+   * so this cannot disturb the document, and it survives Save As - which makes it the one way a
+   * reader with no tooling can hand a report back: open, save, send the file. An agent driving a
+   * browser, or dumping the DOM from a headless one, reads exactly the same element.
+   */
+  public writeLintReport(): LintResult | null {
+    const source = this.getSource();
+    let result: LintResult;
+    try {
+      result = lintDocument(source);
+    } catch (error) {
+      result = {
+        messages: [{ severity: "error", rule: "schema", message: error instanceof Error ? error.message : String(error) }],
+        errorCount: 1,
+        warningCount: 0
+      };
+    }
+
+    // Found by attribute rather than by id: ids belong to the document's own anchor namespace, and a
+    // heading called "Lint" or a diagram with that id would otherwise be picked up instead.
+    const report = document.querySelector<HTMLTemplateElement>(lintReportSelector) ||
+      document.createElement("template");
+    report.dataset.skrybLint = "";
+    // The hash says which source the report describes, so a later reader can tell whether it still
+    // applies rather than trusting a report that predates an edit.
+    report.content.replaceChildren(document.createTextNode(JSON.stringify({
+      errors: result.errorCount,
+      warnings: result.warningCount,
+      sourceHash: hashSource(source),
+      messages: result.messages
+    }, null, 2)));
+    if (!report.isConnected) {
+      document.body.append(report);
+    }
+    this.lintReportUnsaved = true;
+    return result;
+  }
+
+  /**
+   * Runs the checks and shows what they found. The report is written into the document as well as
+   * shown, so a reader asked for one by an author who cannot see the document can simply save the
+   * file and send it back.
+   */
+  public showLintReport(): void {
+    const result = this.writeLintReport();
+    if (!result) {
+      return;
+    }
+    const summary = `${result.errorCount} error${result.errorCount === 1 ? "" : "s"}, ` +
+      `${result.warningCount} warning${result.warningCount === 1 ? "" : "s"}`;
+    const detail = formatLintMessages(result);
+    const dialog = document.querySelector<HTMLDialogElement>(".docdiagram-lint-dialog") ||
+      document.body.appendChild(document.createElement("dialog"));
+    dialog.className = "docdiagram-lint-dialog";
+    dialog.replaceChildren();
+
+    const heading = document.createElement("h2");
+    heading.textContent = `Document check: ${summary}`;
+    const body = document.createElement("pre");
+    body.textContent = detail || "Nothing to report. Every check passed.";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Close";
+    close.addEventListener("click", () => dialog.close());
+    dialog.append(heading, body, close);
+    dialog.showModal();
+  }
+
   public downloadDocument(): void {
     this.sourceEditor?.flushRender();
     if (this.sourceEditor?.hasError && this.sourceEditor.hasUnsavedDraft &&
@@ -431,6 +545,7 @@ export class BrowserRuntime {
     }
     this.downloadHtml(copy.outerHTML, "-edited");
     this.state.savedSource = this.getSource();
+    this.lintReportUnsaved = false;
   }
 
   public async downloadOfflineDocument(): Promise<void> {
@@ -443,6 +558,7 @@ export class BrowserRuntime {
     const runtime = await getRuntimeSourceForOfflineExport(copy);
     this.downloadHtml(embedRuntimeInDocumentHtml(copy.outerHTML, runtime.source, runtime.runtimeUrl), "-offline");
     this.state.savedSource = this.getSource();
+    this.lintReportUnsaved = false;
   }
 
   private createDocumentCopy(source = this.getSource()): HTMLElement {
@@ -453,6 +569,10 @@ export class BrowserRuntime {
     const output = copy.querySelector<HTMLElement>("#rendered-document");
     const body = copy.querySelector("body");
     sourceCopy?.content.replaceChildren(document.createTextNode(source));
+    // The lint report is deliberately kept: it is the document's own answer to "what is wrong with
+    // me", and saving is how a reader hands that answer back. The dialog that displayed it is
+    // editing chrome and goes, like the toolbar.
+    copy.querySelector(".docdiagram-lint-dialog")?.remove();
     toolbar?.remove();
     sourceTray?.remove();
     for (const style of copy.querySelectorAll<HTMLStyleElement>("style")) {
@@ -494,7 +614,11 @@ export class BrowserRuntime {
       return;
     }
     injectStyles();
+    // The saved mark is taken before baking, so a document that had to be laid out reads as changed
+    // and the reader is asked to save it on the way out. That is the whole of how a positionless
+    // document gets its geometry back onto disk when nobody is driving a browser.
     this.state.savedSource = this.getSource();
+    this.bakeOnOpen();
     globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener("change", () => {
       if (this.state.documentThemeSetting === "auto") {
         this.renderDocument();
@@ -510,7 +634,8 @@ export class BrowserRuntime {
       }, 150);
     });
     globalThis.addEventListener("beforeunload", (event) => {
-      if (this.getSource() === this.state.savedSource && !this.sourceEditor?.hasUnsavedDraft) {
+      if (this.getSource() === this.state.savedSource && !this.sourceEditor?.hasUnsavedDraft &&
+        !this.lintReportUnsaved) {
         return;
       }
       event.preventDefault();
@@ -665,6 +790,7 @@ export class BrowserRuntime {
       validateDocumentSource,
       bakeDocumentSource,
       spliceBakedFences,
+      hashSource,
       lintDocument,
       formatLintMessages,
       highlightCode,
@@ -742,6 +868,7 @@ export class BrowserRuntime {
       `<option value="diagram"${this.state.documentDoctype === "diagram" ? " selected" : ""}>Diagram</option>`,
       `</select></label>`,
       `<button type="button" class="docdiagram-edit-source">Edit source</button>`,
+      `<button type="button" class="docdiagram-lint">Check document</button>`,
       `<button type="button" class="docdiagram-print-document">Print / Save as PDF</button>`,
       `<button type="button" class="docdiagram-save">Save As</button>`,
       `<button type="button" class="docdiagram-offline-save">Save for Offline</button>`,
@@ -782,6 +909,10 @@ export class BrowserRuntime {
     toolbar.querySelector<HTMLButtonElement>(".docdiagram-edit-source")?.addEventListener("click", () => {
       this.closeDocumentMenu();
       this.sourceEditor?.open();
+    });
+    toolbar.querySelector<HTMLButtonElement>(".docdiagram-lint")?.addEventListener("click", () => {
+      this.closeDocumentMenu();
+      this.showLintReport();
     });
     toolbar.querySelector<HTMLSelectElement>(".docdiagram-theme-select")?.addEventListener("change", (event) => {
       this.setSource(setFrontmatterTheme(this.getSource(), (event.currentTarget as HTMLSelectElement).value));

@@ -881,97 +881,91 @@ perceived quality comes from. The C-like family shares one keyword list rather
 than carrying a dozen near-identical tables, so a keyword may occasionally be
 highlighted in a language of that family which does not have it.
 
-## Linting a document
+## Baking and checking a document
 
-`lintDocument(source)` on the runtime's core API returns the schema errors and
-visual-quality warnings for a whole document, and `formatLintMessages(result)`
-renders them as text. The rules live in the runtime bundle beside the geometry
-they describe, so they cannot drift from the renderer that draws the diagram,
-and the same lint is available in the browser.
+Opening a document is what does both. When the runtime loads it lays out any
+diagram that needs it, writes the result back into the document's own source,
+runs the checks, and publishes the report. The document then counts as changed,
+so a reader is prompted to save it on the way out - which is how the results get
+back to whoever asked for them.
 
-A `scripts/lint.mjs` wrapper runs them headlessly against a saved file, loading
-the bundle into a Node `vm` with no browser or service involved:
+Two elements carry the result, and every route returns the same two:
 
-```sh
-node scripts/lint.mjs doc.html            # errors and warnings
-node scripts/lint.mjs doc.html --errors   # schema only, for CI
-```
+| Element | Contents |
+| --- | --- |
+| `template#source` | The document's Markdown, with diagram geometry baked in. |
+| `template[data-skryb-lint]` | A JSON report: `errors`, `warnings`, `sourceHash`, and `messages`. |
 
-Each message carries a `severity` (`error` or `warning`), a `rule`, a
-`message`, and the `diagram` it belongs to. The rules are `schema`,
+The report is addressed by attribute rather than by id, because ids belong to the
+document's own anchor namespace - a heading called "Lint" would take `#lint`.
+Both elements are HTML-escaped inside the file, so decode entities when reading
+them.
+`sourceHash` is a digest of the source the report describes: if it does not match
+the source you are holding, the report predates your edits.
+
+The report is written only when there was something to report on - a bake
+happened, `?skryb-lint` was on the URL, or a reader chose **Check document** from
+the document menu. A document that needed nothing is left completely alone.
+
+### What baking touches
+
+Only a fence that declares a `layout` **and** had a position or anchor missing is
+rewritten, into canonical form: fields reordered, comments inside that fence
+dropped. A fence that is already complete is left exactly as its author wrote it,
+comments intact, and so is any fence with no `layout`. Nothing outside the
+diagram fences is rewritten, and line endings are preserved.
+
+Baking is idempotent, and a diagram that fails to parse fails the bake rather
+than being skipped quietly.
+
+### The rules
+
+Each message carries a `severity` (`error` or `warning`), a `rule`, a `message`,
+and the `diagram` it belongs to. The rules are `schema`,
 `unknown-edge-endpoint`, `node-overlap`, `edge-crosses-node`, and
-`label-overflow`. Only errors set a non-zero exit status: warnings describe
-things a reader would notice, but a generated document is not blocked on
-aesthetics.
+`label-overflow`. Only errors are blocking: warnings describe things a reader
+would notice, but a generated document is not held up on aesthetics.
 
-A node with no connector is never reported. A `text` shape used for annotation,
-a label, or a legend is a normal part of a diagram.
+A node with no connector is never reported. A `text` shape used for annotation, a
+label, or a legend is a normal part of a diagram.
 
-## Baking a document
+The rules live in the runtime beside the geometry they describe, so they cannot
+drift from the renderer that draws the diagram.
 
-A document laid out by the auto-layout engine renders from positions that exist
-only while it is open. The source still says nothing about where anything is, so
-there is nothing in the file to adjust when the review says a node is in the
-wrong place. Baking closes that gap by writing the engine's work into the
-document's own source.
+### The core API
 
-`bakeDocumentSource(source)` on the runtime's core API returns
-`{ source, baked, preserved, fences }`. A `scripts/bake.mjs` wrapper runs it
-headlessly against a saved file, the same way the lint command does:
+`bakeDocumentSource(source)` returns `{ source, baked, preserved, fences }` and
+`lintDocument(source)` returns `{ messages, errorCount, warningCount }`, with
+`formatLintMessages(result)` rendering the latter as text. `hashSource(source)`
+produces the digest used in the report. New fence bodies are spliced into the
+document's own lines rather than the text being rebuilt, and `fences` carries the
+line range of each rewritten fence so a caller holding a differently encoded copy
+- the HTML-escaped body of a `template`, say - can splice the same ranges without
+re-encoding the parts it is not changing.
+
+### Running it outside a browser
+
+A checkout of skryb has `scripts/bake.mjs` and `scripts/lint.mjs`, which run the
+same code headlessly against a saved file:
 
 ```sh
 node scripts/bake.mjs doc.html           # positions and anchors written in
 node scripts/bake.mjs doc.html --check   # non-zero if baking would change it
+node scripts/lint.mjs doc.html           # errors and warnings
+node scripts/lint.mjs doc.html --errors  # schema only, for CI
 ```
 
-**Only fences that declare a `layout` are touched.** That key marks a diagram as
-machine-managed, so it is also the licence to rewrite the fence into canonical
-form. A diagram without one is hand-managed and is copied through exactly as it
-was, comments and field order intact. Nothing outside the diagram fences is
-rewritten, and a file with no layout-managed diagram is left byte for byte as it
-was.
+`scripts/bake.mjs` refuses a fence containing an HTML entity other than `&lt;`,
+`&gt;`, `&quot;`, `&#39;`, and `&amp;`, and writes nothing for that file: a
+browser decodes every entity when it reads the embedded source, so a fence
+holding `&nbsp;` - or a numeric `&#10;` the browser reads as a line break - is not
+the diagram the command would be writing back.
 
-Every fence is parsed on the way through, so an invalid diagram fails the bake
-rather than being quietly skipped, and baking is idempotent: the second run
-reparses what the first wrote and produces the same text.
-
-New fence bodies are spliced into the document's own lines rather than the text
-being rebuilt, so prose, frontmatter, and line endings survive exactly, and a
-document with nothing to bake comes back byte for byte identical. `fences`
-carries the line range of each rewritten fence for the same reason: the source
-embedded in a `template` is HTML-escaped, and decoding is lossy across entities
-like `&nbsp;`, so the wrapper splices the same line ranges into the escaped text
-instead of re-encoding a whole document it has no business rewriting.
-
-For the same reason, `scripts/bake.mjs` refuses a fence containing an HTML
-entity other than `&lt;`, `&gt;`, `&quot;`, `&#39;`, and `&amp;`, and writes
-nothing for that file. A browser decodes every entity when it reads the embedded
-source, so a fence holding `&nbsp;` - or worse, a numeric `&#10;` that the
-browser reads as a line break - is not the diagram the command would be writing
-back. Replace the entity with the character it stands for, or drop the `layout`
-to hand-manage that diagram. Entities elsewhere in the document are never
-touched and never a problem.
-
-### The authoring loop
-
-The browser cannot write to its own path, so a document open in a browser can
-only ever be downloaded. Bake is what lets the file on disk stay the thing that
-renders:
-
-1. Draft the diagram with a `layout` and no positions or anchors.
-2. `node scripts/bake.mjs doc.html` to write in what the engine worked out.
-3. `node scripts/lint.mjs doc.html` and, if it helps, open the file to look at it.
-4. Adjust the numbers in the source, and lint again.
-
-Because the engine only ever fills in what is missing, the baked source stays
-workable:
-
-- **Re-place one node** - delete its `position` and bake again. It is placed
-  from its connectors, in the context of the nodes around it, which do not move.
-- **Add a node** - give it no `position` and bake. Same again.
-- **Lay the whole thing out afresh** - strip every `position` and bake. This
-  discards any hand tuning, which is why it is a deliberate edit rather than a
-  flag on the command.
+These are conveniences for people working in the repository. The runtime is not
+meant to be downloaded and run outside a browser: in a browser it is sandboxed,
+whereas under Node it would have whatever access the person running it has, and
+the URL it came from is a value read out of a document that may not be
+trustworthy.
 
 ## Printing a document
 

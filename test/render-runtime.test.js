@@ -69,6 +69,7 @@ const {
   validateDocumentSource,
   bakeDocumentSource,
   spliceBakedFences,
+  hashSource,
   lintDocument,
   formatLintMessages,
   highlightCode,
@@ -5239,4 +5240,56 @@ test("stripping every position and rebaking is how a diagram is laid out again f
   const stripped = baked.split("\n").filter((line) => !line.trim().startsWith("position:")).join("\n");
 
   assert.equal(bakeDocumentSource(stripped).source, baked);
+});
+
+
+test("a layout diagram that is already complete is left exactly as its author wrote it", () => {
+  const source = fence([
+    "# why these coordinates",
+    "type: flowchart",
+    "layout: right",
+    "nodes:",
+    "  - id: a",
+    "    label: A",
+    "    shape: circle",
+    "    position: { x: 0, y: 0 }",
+    "  - id: b",
+    "    label: B",
+    "    shape: circle",
+    "    position: { x: 200, y: 0 }",
+    "edges:",
+    "  - source: a",
+    "    target: b",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ]);
+  const result = bakeDocumentSource(source);
+
+  assert.equal(result.baked, 0, "there was nothing to fill in, so nothing is rewritten");
+  assert.equal(result.source, source, "including the comment and the author's own formatting");
+});
+
+test("baking counts only the fences the layout engine actually had to fill", () => {
+  const complete = fence([
+    "type: flowchart",
+    "layout: right",
+    "nodes:",
+    "  - id: x",
+    "    label: X",
+    "    shape: circle",
+    "    position: { x: 0, y: 0 }",
+    "edges: []"
+  ]);
+  const result = bakeDocumentSource([complete, "", bakeableFence, ""].join("\n"));
+
+  assert.equal(result.baked, 1);
+  assert.equal(result.preserved, 1);
+});
+
+test("the source hash tells a stale lint report from a current one", () => {
+  const source = "# One\n";
+
+  assert.equal(hashSource(source), hashSource("# One\n"));
+  assert.notEqual(hashSource(source), hashSource("# Two\n"));
+  assert.match(hashSource(source), /^[0-9a-f]{8}$/);
 });
