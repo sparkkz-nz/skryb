@@ -26,8 +26,9 @@ document.
    that lets a reader understand a diagram without relying only on its visuals.
 6. Validate the HTML shell, frontmatter, Markdown subset, and every diagram
    field before returning the document.
-7. Run the lint command over the finished file. You cannot see what you have
-   written, and it catches the defects that do not show up in the source.
+7. Open the document to bake and check it, adjust the source, and open it again.
+   You cannot see what you have written; this is the loop that closes that gap,
+   and it is described under "Reviewing a document" below.
 
 ```html
 <!doctype html>
@@ -98,9 +99,10 @@ annotation for nesting readability, such as `::: (supporting stack)`.
 ## Diagram rules
 
 Every fenced `diagram` YAML block must declare `type: flowchart` or
-`type: sequence`. Flowchart nodes must have a supported `shape`, and every
-flowchart edge must include both `sourceAnchor` and `targetAnchor`. Use only
-the values in the syntax reference, including:
+`type: sequence`. Flowchart nodes must have a supported `shape`. Node positions
+and edge anchors are required only when the flowchart has no `layout` - see
+"Let the layout engine place the diagram" below. Use only the values in the
+syntax reference, including:
 
 - node shapes: `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`,
   `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, and
@@ -118,19 +120,89 @@ diagram compact and include adjacent prose that explains the flow. Sequence
 diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
-Set `layout: right` (or `down`, `left`, `up`) on a flowchart and leave the nodes
-without a `position`, unless you have a specific arrangement in mind. Placing
-nodes blind is the main source of untidy generated diagrams; declaring the flow
-direction and letting the runtime place them is both shorter to write and
-reliably better looking. Layout only ever places nodes that have no `position`,
-so you can pin the few that matter and let the rest fall into stages. Keep the
-`layout` key afterwards: it is what places a node you append later.
+### Let the layout engine place the diagram
 
-Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
-nodes on multiples of that grid when you do place them by hand. Shared coordinates are what make a diagram look
-deliberate: node edges line up, rows and columns align, and connectors meet
-anchors squarely instead of missing by a pixel or two. It also makes later
-graphical edits snap into the same alignment rather than drifting out of it.
+Placing nodes blind is the single largest source of untidy generated diagrams.
+Do not do it. Set `layout: right` (or `down`, `left`, `up`), leave every
+`position` and both anchors off every edge, and describe only the graph:
+
+```yaml
+type: flowchart
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: client
+    label: Client
+    shape: rounded-rectangle
+  - id: api
+    label: Orders API
+    shape: rounded-rectangle
+  - id: db
+    label: Order store
+    shape: database
+edges:
+  - source: client
+    target: api
+    label: POST /orders
+  - source: api
+    target: db
+```
+
+That is the whole diagram. Opening it fills in the geometry and writes it back
+into the source - nodes in stages along the flow, ordered to avoid crossings, and
+each connector given the anchors its final geometry implies:
+
+```yaml
+nodes:
+  - id: client
+    label: Client
+    shape: rounded-rectangle
+    position: { x: 40, y: 40 }
+  - id: api
+    label: Orders API
+    shape: rounded-rectangle
+    position: { x: 350, y: 40 }
+  - id: db
+    label: Order store
+    shape: database
+    position: { x: 660, y: 40 }
+edges:
+  - source: client
+    target: api
+    label: POST /orders
+    sourceAnchor: right
+    targetAnchor: left
+  - source: api
+    target: db
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+The engine only ever fills in what is missing, so it composes with whatever you
+do want to control. Pin the one node whose placement carries meaning and let the
+rest fall into stages around it. Write an anchor on the one edge that needs to
+leave a particular side - a feedback edge doubling back, which the engine also
+reads as a deliberate back-edge and keeps out of the stage assignment - and
+leave the other edges alone.
+
+Choose the direction from the content: `right` for a pipeline or request path,
+`down` for a decision tree or a sequence of steps. A diagram wider than about
+five stages usually reads better as `down`.
+
+Keep the `layout` key in the baked source. A fully placed diagram is left
+untouched - it is not even rewritten - but the key is what places the next node
+you add, and what marks the diagram as yours to regenerate. Removing it is how a
+person freezes a diagram they have hand-tuned, so do not remove it for them.
+
+Without a `layout`, every node needs a `position` and every edge both anchors;
+leaving one out is an error, not a diagram drawn at the origin.
+
+Set `canvas.grid: 5` on a flowchart unless there is a reason not to. The layout
+engine snaps to it, and you should too on the nodes you place by hand. Shared
+coordinates are what make a diagram look deliberate: node edges line up, rows
+and columns align, and connectors meet anchors squarely instead of missing by a
+pixel or two. It also makes later graphical edits snap into the same alignment
+rather than drifting out of it.
 (This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
 directive.)
 
@@ -210,19 +282,93 @@ use it when the recipient must open the document without network access.
 Label every fenced code block with its language. A recognised language is syntax
 highlighted, and the label costs nothing when it is not.
 
-## Checking a document
+## Reviewing a document
 
-An authoring agent works blind: it emits coordinates and never sees the result.
-The lint command closes that loop and is the fastest way to catch a defect a
-reader would notice immediately:
+An authoring agent works blind: it emits a document and never sees the result.
+Opening the document is what closes that loop, because the runtime does the work
+itself the moment it loads:
+
+- if any diagram needed laying out, the result is **baked into the document's own
+  source** there and then, so the source and the screen can never disagree;
+- **the checks are then run**, and the report is written into a
+  `template[data-skryb-lint]` beside the source;
+- the document now counts as changed, so a reader is asked to save it on the way
+  out.
+
+Both results therefore live in the document, and every route below returns the
+same two elements: `template#source` (the baked Markdown) and
+`template[data-skryb-lint]` (a JSON report). Both are HTML-escaped, so decode entities when reading them.
+
+The lint report carries a `sourceHash` of the source it describes. Compare it
+against the source you hold: if they differ, the report predates your edits and
+must not be trusted.
+
+Use the first of these routes available to you.
+
+### 1. Browser automation
+
+Open the document and call into it. Nothing is installed and nothing is
+downloaded; the runtime executes in the browser's sandbox.
+
+```js
+await page.goto("file:///abs/path/doc.html");
+const { source, lint } = await page.evaluate(() => ({
+  source: document.querySelector("#source").content.textContent,
+  lint: JSON.parse(document.querySelector("template[data-skryb-lint]")?.content.textContent || "null")
+}));
+```
+
+Write `source` back over the original file. Add `?skryb-lint` to the URL to force
+a check even when nothing needed baking.
+
+### 2. Any Chromium browser, no automation library
+
+Chrome, Edge, Brave, or Chromium can render the document and print the resulting
+DOM, which contains both templates:
 
 ```sh
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --virtual-time-budget=5000 \
+  --dump-dom "file:///abs/path/doc.html?skryb-lint" > dom.html
+```
+
+Extract `template#source` and `template[data-skryb-lint]` from `dom.html`, decode the
+entities, and write the source back over the original file. Use the browser's
+own path on the platform you are running on. `--virtual-time-budget` matters:
+without it the DOM may be dumped before the runtime has finished.
+
+### 3. Ask a person
+
+With no browser at all, ask whoever you are working for to open the document,
+choose **Check document** from the document menu, and save it over the original.
+That single action bakes the layout, runs the checks, and hands both back to you.
+Batch your edits before asking: each request costs them an open and a save.
+
+### 4. Working inside the skryb repository
+
+Only when you are in a checkout of skryb itself:
+
+```sh
+node scripts/bake.mjs doc.html            # positions and anchors written in
+node scripts/bake.mjs doc.html --check    # non-zero if baking would change it
 node scripts/lint.mjs doc.html            # errors and warnings
 node scripts/lint.mjs doc.html --errors   # schema only, for CI
 ```
 
-It exits non-zero only on errors; warnings are advisory, so a document is never
-blocked on aesthetics. The rules are:
+Do not download a runtime and run it outside the browser, and do not ask anyone
+to. In a browser the runtime is sandboxed; under Node it would have the same
+access to the machine as you do, and the URL it came from is a value taken from
+a document that may not be trustworthy.
+
+### What baking touches
+
+Only a fence that declares a `layout` **and** had something missing is rewritten,
+and it is rewritten into canonical form: fields reordered, comments inside that
+fence dropped. That is expected - such a diagram is generated output. A fence
+that is already complete, or has no `layout`, is copied through byte for byte,
+comments and all. Nothing outside the diagram fences is ever rewritten.
+
+### The rules the checks apply
 
 | Rule | Severity | What it means |
 | --- | --- | --- |
@@ -231,6 +377,27 @@ blocked on aesthetics. The rules are:
 | `node-overlap` | warning | Two unrelated nodes' boxes overlap. A child inside its own parent is not reported. |
 | `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
 | `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
+
+Only errors are blocking; warnings are advisory, so a document is never held up
+on aesthetics. A node with no connector is never reported - a `text` shape used
+for annotation or a legend is a normal part of a diagram.
+
+### Then adjust the baked source and check again
+
+Because the engine only fills in what is missing, the baked source stays workable
+without any extra machinery:
+
+| To do this | Do this |
+| --- | --- |
+| Move a node | Edit its `position`, keeping to the `canvas.grid` multiple. |
+| Have one node re-placed in context | Delete its `position` and bake again. |
+| Add a node | Add it with no `position` and bake. Nothing already placed moves. |
+| Lay the whole diagram out afresh | Strip every `position` and bake. This discards any hand tuning, so be sure. |
+| Change where a connector leaves or lands | Edit that edge's anchors, or delete them and bake to have them derived again. |
+
+If you have none of the routes above and nobody to ask, place every node and
+anchor by hand and leave the `layout` key off. The document is then complete as
+written, and the schema will tell you if it is not.
 
 ## Validation checklist
 
@@ -244,13 +411,16 @@ Before returning a document, verify:
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
 - Every diagram declares its supported type. Every flowchart has explicit shapes
-  and edge anchors and uses only supported palette, route, marker, waypoint,
-  callout pointer, and style values.
+  and uses only supported palette, route, marker, waypoint, callout pointer, and
+  style values.
 - Flowcharts set `canvas.grid` (normally `5`) and any hand-written node positions
   and sizes are multiples of it.
-- A flowchart either declares `layout` or positions every node deliberately.
-- `node scripts/lint.mjs` reports no errors, and every warning it reports is
-  either fixed or a deliberate choice.
+- A flowchart either declares `layout` or gives every node a `position` and every
+  edge both anchors.
+- The document has been opened once since the last change, so its source carries
+  the positions and anchors it renders with, and the diagrams have been checked.
+- The checks report no errors, and every warning is either fixed or a deliberate
+  choice.
 - A reader can understand each diagram from its heading, labels, and nearby
   prose.
 - The finished file can be opened in a browser directly from the local file

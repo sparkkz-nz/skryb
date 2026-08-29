@@ -75,13 +75,19 @@ Everything happens inside the open document; there is no separate application.
   holds the canonical Markdown and diagram YAML and live-renders valid changes.
   Drag the tray's top edge to resize it, or focus that edge and use the arrow
   keys; double-click it to restore the default height.
-- **Diagram layout** is optional work. Give a flowchart `layout: right` (or
-  `down`, `left`, `up`) and leave nodes without a `position`, and it places them
-  in stages from the connectors, ordered to avoid crossings. It runs when the
-  document opens and only touches nodes with no position of their own, so a node
-  you drag stays put. Connectors route around nodes in the way, labels wrap
-  inside the width you gave them, and `canvas: auto` keeps the drawing's bounds
-  matched to its content.
+- **Diagram layout** is optional work, and it is what makes a document worth
+  writing by hand or generating. Give a flowchart `layout: right` (or `down`,
+  `left`, `up`) and you may leave out node positions and edge anchors entirely;
+  it places the nodes in stages from the connectors, ordered to avoid crossings,
+  and gives each connector the anchors its final geometry implies. It only ever
+  fills in what is missing, so a node you drag stays put and an anchor you wrote
+  down is never overwritten. The result is written back into the document's own
+  source when it opens, so there are real coordinates there to adjust.
+  Connectors route around nodes in the way, labels
+  wrap inside the width you gave them, and `canvas: auto` keeps the drawing's
+  bounds matched to its content. Without a `layout`, every node needs a
+  `position` and every edge both anchors; leaving one out is an error rather
+  than a drawing that silently stacks at the origin.
 - **Diagram editing** selects a node to set its label, subtitle, shape, palette,
   status colour, fill, stroke, alignment, and size. Nodes can be dragged,
   resized, duplicated, and reconnected; connectors can be rerouted, given a
@@ -198,13 +204,18 @@ to type-check the TypeScript build entry independently.
 ## Checking a document
 
 Nobody writing a document can see it while they write it, which is where most
-untidy diagrams come from. `npm run lint` catches what the source will not show
-you:
+untidy diagrams come from. The document checks itself instead, when it opens.
 
-```sh
-npm run lint doc.html             # errors and warnings
-npm run lint doc.html -- --errors # schema only, for CI
-```
+If a diagram needed laying out, the geometry is written back into the document's
+own source there and then, so what the source says and what the screen shows can
+never disagree. The checks then run, and the report goes into a
+`template[data-skryb-lint]`
+beside the source. The document counts as changed at that point, so you are
+asked to save it on the way out - and saving is how the result reaches whoever
+asked for it. **Check document** in the document menu runs the checks any time
+and shows them in a dialog.
+
+The checks catch what the source will not show you:
 
 - an edge naming a node that does not exist. Worth having on its own: the
   renderer drops these without a word, so the connector simply is not there and
@@ -213,11 +224,51 @@ npm run lint doc.html -- --errors # schema only, for CI
 - an edge crossing an unrelated node
 - a label too big for its shape
 
-Only the first is an error and fails the exit status. The rest are advisory - a
-document is not broken for being slightly untidy.
+Only the first is an error. The rest are advisory - a document is not broken for
+being slightly untidy. The rules live in the runtime next to the geometry they
+describe, so they cannot drift from what actually gets drawn.
 
-The rules live in the runtime next to the geometry they describe, so they cannot
-drift from what actually gets drawn.
+Because this all happens in the browser, it needs nothing installed and runs in
+the browser's sandbox. An agent with browser automation reads the two templates
+directly; with only a Chromium binary, `--headless --dump-dom` prints a DOM
+containing both. See the
+[syntax reference](https://sparkkz-nz.github.io/skryb/docs/reference.html) for
+the details.
+
+## Baking from the command line
+
+A checkout of this repository can run the same code headlessly, which is
+convenient when you are working on skryb itself or checking documents in CI:
+
+```sh
+npm run bake doc.html             # positions and anchors written into the source
+npm run bake doc.html -- --check  # non-zero if baking would change the file
+npm run lint doc.html             # errors and warnings
+npm run lint doc.html -- --errors # schema only, for CI
+```
+
+Only a fence that declares a `layout` **and** had something missing is rewritten,
+into canonical form. A fence that is already complete is left exactly as its
+author wrote it, comments and spacing intact, and so is any fence without a
+`layout` - which is also how you freeze a diagram you have finished tuning:
+delete its `layout` line.
+
+Baking is idempotent, and every fence is parsed on the way through, so an
+invalid diagram fails the bake rather than being quietly skipped. Nothing
+outside the diagram fences is rewritten, and line endings survive.
+
+These commands load the runtime from this repository's own `dist/`. Downloading
+a runtime and running it outside a browser is not supported: in a browser it is
+sandboxed, whereas under Node it would have whatever access you have.
+
+Because the engine only fills in what is missing, the baked source stays useful
+to edit:
+
+- delete one node's `position` and bake again to have just that node re-placed
+  in the context of the others
+- add a new node with no position, and it is placed from the connectors that
+  join it to the nodes already there, which never move
+- strip every `position` and bake again for a full re-layout from scratch
 
 ## Licence
 

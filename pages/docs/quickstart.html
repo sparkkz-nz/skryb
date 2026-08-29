@@ -133,7 +133,8 @@ figure number, so `"Figure #: ..."` renumbers itself when you add a figure above
 
 Every node in that first diagram has a `position`, because someone chose where
 to put it. You do not have to. Add `layout: right` - or `down`, `left`, `up` -
-leave the positions out, and Skryb works out the arrangement from the connectors:
+leave the positions and the connector anchors out, and Skryb works out the
+arrangement from the connectors:
 
 ```yaml
 type: flowchart
@@ -149,13 +150,29 @@ nodes:
 edges:
   - source: browser
     target: api
-    sourceAnchor: right
-    targetAnchor: left
 ```
 
-This happens when the document opens, and only to nodes with no `position`. Drag
-one and it stays where you put it. Leave the `layout` line in afterwards and the
-next node you add without coordinates gets placed too.
+This happens when the document opens, and only to what you left out. Drag a node
+and it stays where you put it; write an anchor down and it is kept. Leave the
+`layout` line in afterwards and the next node you add without coordinates gets
+placed too.
+
+The `layout` line is also what marks the diagram as Skryb's to arrange. Leave it
+off and every node needs a `position` and every edge both anchors - which is what
+you want for a diagram you have arranged yourself, because then a missing
+coordinate is reported rather than quietly drawn in the corner.
+
+Those positions are written straight back into the document's own source when it
+opens, so there are real coordinates there to nudge. That also means the document
+now has unsaved changes: save it, and the geometry is on disk. Only diagrams that
+needed placing are rewritten - one you have already arranged is left exactly as
+you wrote it, comments and all.
+
+Skryb checks the document at the same time. **Check document** in the document
+menu runs the checks whenever you want and shows what it found: a connector
+pointing at a node that does not exist, nodes overlapping, an edge crossing
+something unrelated, a label too big for its shape. Only the first is an error;
+the rest are advice you can take or leave.
 
 You also do not need to nudge connectors around obstacles or hand-break long
 labels. An edge that would cut through an unrelated node goes around it, and a

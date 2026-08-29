@@ -302,6 +302,29 @@ export function injectStyles(): void {
     .docdiagram-menu[hidden] {
       display: none;
     }
+    .docdiagram-lint-dialog {
+      background: var(--docdiagram-page-background, #fff);
+      border: 1px solid currentColor;
+      border-radius: 8px;
+      color: var(--docdiagram-page-text, #111);
+      max-height: 70vh;
+      max-width: min(90vw, 70ch);
+      padding: 16px 20px;
+    }
+    .docdiagram-lint-dialog::backdrop {
+      background: rgb(0 0 0 / 40%);
+    }
+    .docdiagram-lint-dialog h2 {
+      font-size: 1rem;
+      margin: 0 0 12px;
+    }
+    .docdiagram-lint-dialog pre {
+      font-size: 0.85rem;
+      margin: 0 0 12px;
+      max-height: 50vh;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
     .docdiagram-source-tray {
       background: var(--docdiagram-background);
       border: 1px solid var(--docdiagram-border);

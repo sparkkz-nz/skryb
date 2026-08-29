@@ -10,9 +10,22 @@
 // source order.
 import type { FlowchartDiagram, FlowchartEdge, FlowchartNode, Position } from "./schema";
 import { defaultNode } from "./schema";
+import { flattenFlowchartNodes } from "./hierarchy";
 import { getGridSize, snapToGrid } from "./styles";
 
 export const layoutDirections = ["right", "down", "left", "up"] as const;
+
+/**
+ * Diagrams the engine actually had to fill something in for. "Needed laying out" is not something a
+ * caller can work out from the result - a filled position looks exactly like an authored one - so it
+ * is recorded here as the layout runs. Baking uses it to leave a diagram that was already complete
+ * exactly as its author wrote it, and opening a document uses it to know whether anything changed.
+ */
+const filledDiagrams = new WeakSet<FlowchartDiagram>();
+
+export function layoutFilledDiagram(diagram: FlowchartDiagram): boolean {
+  return filledDiagrams.has(diagram);
+}
 
 export type LayoutDirection = (typeof layoutDirections)[number];
 
@@ -263,10 +276,11 @@ function rectanglesOverlap(first: Bounds, second: Bounds, clearance = 0): boolea
 }
 
 /**
- * Places one appended node from the connectors that join it to nodes already placed. Every edge
- * carries both anchors, so it already declares a spatial relationship: a connector entering this
- * node's `left` means the neighbour is to its left, so the node belongs to that neighbour's right.
- * The author has written the intent down; placement only has to honour it.
+ * Places one appended node from the connectors that join it to nodes already placed. An edge that
+ * carries anchors already declares a spatial relationship: a connector entering this node's `left`
+ * means the neighbour is to its left, so the node belongs to that neighbour's right. Where the
+ * author has written that intent down, placement only has to honour it; where the anchors were left
+ * out, the diagram's own direction is the stated intent instead, so the node lands downstream.
  */
 function placeFromConnectors(
   node: FlowchartNode,
@@ -277,6 +291,7 @@ function placeFromConnectors(
 ): { position: Position; acrossAxis: "x" | "y" } | null {
   const placed = new Map(siblings.filter(hasPosition).map((sibling) => [sibling.id, sibling]));
   const size = nodeSize(node);
+  const forward = getForwardAnchors(settings.direction);
   const candidates: Array<{ position: Position; axis: "x" | "y"; sign: number }> = [];
 
   for (const edge of edges) {
@@ -290,7 +305,8 @@ function placeFromConnectors(
       continue;
     }
 
-    const ownAnchor = isSource ? edge.sourceAnchor : edge.targetAnchor;
+    const ownAnchor = (isSource ? edge.sourceAnchor : edge.targetAnchor) ||
+      (isSource ? forward.source : forward.target);
     const neighbourBounds = { ...(neighbour.position as Position), ...nodeSize(neighbour) };
     // The node sits on the side its own anchor faces away from, vertically or horizontally centred
     // on the neighbour and one stage gap clear of it.
@@ -413,15 +429,15 @@ function layoutSiblings(
   settings: LayoutSettings,
   origin: Position,
   grid: number
-): void {
+): boolean {
   const unpositioned = nodes.filter((node) => !hasPosition(node));
   if (!unpositioned.length) {
-    return;
+    return false;
   }
 
   if (unpositioned.length === nodes.length) {
     layoutWholeGraph(nodes, edges, settings, origin, grid);
-    return;
+    return true;
   }
 
   // An existing position always wins, so a diagram someone has appended to is never re-flowed;
@@ -437,10 +453,63 @@ function layoutSiblings(
       ? resolveOverlap(fromConnectors.position, size, occupied, fromConnectors.acrossAxis, grid, settings.siblingGap)
       : findFreeSlot(size, occupied, origin, grid, settings.siblingGap);
   }
+  return true;
 }
 
 /**
- * Places every node that has no position, leaving every node that has one exactly where it is.
+ * The pair of anchors a connector between these two boxes would be drawn with, or null when they
+ * overlap and neither faces the other. The comparison is of the clear space between the boxes on
+ * each axis rather than of their centre offsets, which is what makes it agree with the eye: two
+ * wide nodes stacked with a small horizontal offset face bottom to top, not right to left.
+ */
+function facingAnchors(source: Bounds, target: Bounds): { source: string; target: string } | null {
+  const dx = (target.x + target.width / 2) - (source.x + source.width / 2);
+  const dy = (target.y + target.height / 2) - (source.y + source.height / 2);
+  const reachX = Math.abs(dx) - (source.width + target.width) / 2;
+  const reachY = Math.abs(dy) - (source.height + target.height) / 2;
+
+  if (reachX <= 0 && reachY <= 0) {
+    return null;
+  }
+  if (reachX >= reachY) {
+    return dx >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
+  }
+  return dy >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
+}
+
+/**
+ * Gives an anchor to every side that was left without one, reading the positions the nodes actually
+ * ended up at. It runs after placement for that reason, and it fills each side independently: an
+ * anchor that was written down is intent - the deliberate back-edge that steers stage assignment is
+ * expressed exactly this way - so it is never overwritten. A pair with no geometry to read, a self
+ * connector or a node that overlaps its neighbour, falls back to the diagram's own direction.
+ */
+function deriveEdgeAnchors(diagram: FlowchartDiagram, settings: LayoutSettings): boolean {
+  const edges = diagram.edges || [];
+  if (!edges.some((edge) => !edge.sourceAnchor || !edge.targetAnchor)) {
+    return false;
+  }
+
+  const forward = getForwardAnchors(settings.direction);
+  const bounds = new Map(flattenFlowchartNodes(diagram)
+    .map((entry) => [entry.node.id, { ...entry.position, ...nodeSize(entry.node) }] as const));
+
+  for (const edge of edges) {
+    if (edge.sourceAnchor && edge.targetAnchor) {
+      continue;
+    }
+    const source = bounds.get(edge.source);
+    const target = bounds.get(edge.target);
+    const facing = source && target && edge.source !== edge.target ? facingAnchors(source, target) : null;
+    edge.sourceAnchor = edge.sourceAnchor || facing?.source || forward.source;
+    edge.targetAnchor = edge.targetAnchor || facing?.target || forward.target;
+  }
+  return true;
+}
+
+/**
+ * Places every node that has no position, leaving every node that has one exactly where it is, and
+ * gives every connector left without anchors the ones its final geometry implies.
  * Containers lay out recursively inside their parent's box.
  */
 export function applyFlowchartLayout(diagram: FlowchartDiagram): FlowchartDiagram {
@@ -451,6 +520,7 @@ export function applyFlowchartLayout(diagram: FlowchartDiagram): FlowchartDiagra
 
   const grid = getGridSize(diagram);
   const padding = 40;
+  let filled = false;
   const visit = (nodes: FlowchartNode[], origin: Position): void => {
     for (const node of nodes) {
       if (node.children?.length) {
@@ -474,9 +544,13 @@ export function applyFlowchartLayout(diagram: FlowchartDiagram): FlowchartDiagra
     }
     // Siblings are placed after their own children, so a container already knows how big it is by
     // the time its position and its neighbours' positions are worked out.
-    layoutSiblings(nodes, diagram.edges || [], settings, origin, grid);
+    filled = layoutSiblings(nodes, diagram.edges || [], settings, origin, grid) || filled;
   };
 
   visit(diagram.nodes || [], { x: padding, y: padding });
+  filled = deriveEdgeAnchors(diagram, settings) || filled;
+  if (filled) {
+    filledDiagrams.add(diagram);
+  }
   return diagram;
 }
