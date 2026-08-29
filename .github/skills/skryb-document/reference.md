@@ -409,10 +409,10 @@ positions, so layout can never fight a hand edit, and there is no
 
 **Bake it into the source before you review it.** Until you do, the positions
 exist only while the document is open and the file still says nothing about
-where anything is - so there is nothing in the source to adjust. `npm run bake
-doc.html` writes the positions and anchors into the fence. Only fences declaring
-a `layout` are rewritten; a diagram without one is copied through untouched,
-comments and all. See "Working on a document" below.
+where anything is - so there is nothing in the source to adjust. Use one of the
+browser review routes to read the baked `template#source` and write it back over
+the original file. Only fences declaring a `layout` are rewritten; a diagram
+without one is copied through untouched, comments and all.
 
 **Keep the `layout` key after baking.** It becomes a no-op for a fully specified
 diagram, but it declares *how to place anything left unspecified*, so a node
@@ -471,6 +471,26 @@ node, but the scalar can widen without breaking the short form:
 ```yaml
 layout: { direction: right, stageGap: 120, siblingGap: 60 }
 ```
+
+#### Constrained auto-layout geometry
+
+Use automatic layout by default, but pin one or two nodes when their placement
+communicates meaning - for example, an external actor at the left, a system
+boundary, or a durable outcome. Leave the other nodes and ordinary connectors
+without positions and anchors so the engine can arrange them around those
+constraints.
+
+Flowchart nodes default to `190` by `80`. Automatic layout uses a `120`-unit
+stage gap and a `60`-unit sibling gap. When choosing a position for a pinned
+node, leave room for the neighbouring node plus at least one stage gap in the
+flow direction, and one sibling gap perpendicular to it. In a right-flowing
+diagram, a default node immediately after a `190`-wide node begins about `310`
+units to its right (`190 + 120`). With `canvas.grid: 5`, use multiples of `5`
+for manually written positions and sizes.
+
+These values are guides rather than limits. Give a key node an explicit `size`
+when its label needs more room; use a deliberate anchor or waypoint only where
+the route itself carries meaning, such as a feedback edge or side branch.
 
 ### Named styles
 
@@ -931,41 +951,6 @@ label, or a legend is a normal part of a diagram.
 
 The rules live in the runtime beside the geometry they describe, so they cannot
 drift from the renderer that draws the diagram.
-
-### The core API
-
-`bakeDocumentSource(source)` returns `{ source, baked, preserved, fences }` and
-`lintDocument(source)` returns `{ messages, errorCount, warningCount }`, with
-`formatLintMessages(result)` rendering the latter as text. `hashSource(source)`
-produces the digest used in the report. New fence bodies are spliced into the
-document's own lines rather than the text being rebuilt, and `fences` carries the
-line range of each rewritten fence so a caller holding a differently encoded copy
-- the HTML-escaped body of a `template`, say - can splice the same ranges without
-re-encoding the parts it is not changing.
-
-### Running it outside a browser
-
-A checkout of skryb has `scripts/bake.mjs` and `scripts/lint.mjs`, which run the
-same code headlessly against a saved file:
-
-```sh
-node scripts/bake.mjs doc.html           # positions and anchors written in
-node scripts/bake.mjs doc.html --check   # non-zero if baking would change it
-node scripts/lint.mjs doc.html           # errors and warnings
-node scripts/lint.mjs doc.html --errors  # schema only, for CI
-```
-
-`scripts/bake.mjs` refuses a fence containing an HTML entity other than `&lt;`,
-`&gt;`, `&quot;`, `&#39;`, and `&amp;`, and writes nothing for that file: a
-browser decodes every entity when it reads the embedded source, so a fence
-holding `&nbsp;` - or a numeric `&#10;` the browser reads as a line break - is not
-the diagram the command would be writing back.
-
-These are conveniences for people working in the repository. The runtime is not
-meant to be downloaded and run outside a browser: in a browser it is sandboxed,
-whereas under Node it would have whatever access the person running it has, and
-the URL it came from is a value read out of a document that may not be
-trustworthy.
 
 ## Printing a document
 

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skryb codebase architecture</title>
+  <script src="https://sparkkz-nz.github.io/skryb/latest/skryb-runtime.js" defer></script>
+</head>
+<body>
+  <template id="source" type="text/markdown">
+---
+theme: light
+colourScheme: fire
+---
+
+# Skryb codebase architecture
+
+> **Skryb** is a browser runtime for portable, editable technical documents. An HTML file keeps Markdown and diagram YAML as its canonical source; the runtime renders the source into an interactive document, writes intentional edits back to that source, and can export a self-contained copy.
+
+:::toc { depth=2 diagrams=true }
+
+:::grid { columns="2fr 1fr" }
+:::panel { title="At a glance" palette=accent }
+The codebase is deliberately compact and layered:
+
+1. **Core** parses, validates, lays out, serializes, and lints document models.
+2. **Renderers** turn those models into accessible HTML and SVG.
+3. **Browser editor** coordinates state, interactions, persistence, and export.
+
+The public entry point is `src/index.ts`: it creates `BrowserRuntime`, exposes its core API for headless tooling, then calls `boot()`.
+::: (at a glance)
+
+:::stack
+:::callout { kind=success title="Design centre" palette=success }
+Markdown is the durable source of truth. The viewer is not a server application or a document database.
+::: (design centre)
+
+:::panel { title="Repository surfaces" palette=note }
+`src/` contains the runtime; `scripts/` expose bake and lint commands; `test/` executes the built bundle; `pages/` publishes the project site.
+::: (repository surfaces)
+::: (supporting stack)
+::: (overview grid)
+
+## Architecture and module boundaries
+
+Figure {ref=runtime-architecture} follows the dependency direction from document source to the browser experience. The diagram separates pure model work from DOM-facing code: this is what makes `scripts/bake.mjs`, `scripts/lint.mjs`, and the render tests able to execute the same bundled core in a Node VM.
+
+:::diagram { id=runtime-architecture }
+
+:::grid { columns=3 }
+:::panel { title="1. Document model" palette=pale }
+**`core/document.ts`** owns frontmatter, canonical source validation, fence extraction, source hashing, and baking. **`core/markdown.ts`** turns supported Markdown and Skryb directives into HTML, resolving figure references and the contents list.
+::: (document model)
+
+:::panel { title="2. Diagram engine" palette=pale }
+**`core/diagrams/parser.ts`** validates YAML into typed flowchart or sequence models. Layout, routing, hierarchy, geometry, styles, mutations, and serialization then keep the diagram consistent and editable.
+::: (diagram engine)
+
+:::panel { title="3. Runtime and UI" palette=pale }
+**`BrowserRuntime`** in `editor/orchestrator.ts` owns the render cycle. **`DiagramEditor`**, **`SourceEditor`**, and the inspector translate browser actions into core mutations and canonical-source updates.
+::: (runtime and UI)
+::: (module grid)
+
+### Main responsibilities
+
+| Area | Key modules and symbols | Contract with the rest of Skryb |
+| --- | --- | --- |
+| Bootstrap | `src/index.ts`, `BrowserRuntime.boot()` | Finds `template#source` and `main#rendered-document`, creates the runtime, publishes `DocDiagramCore`. |
+| Document core | `resolveDocument()`, `validateDocumentSource()`, `bakeDocumentSource()` | Treats embedded Markdown as canonical and controls safe frontmatter/fence semantics. |
+| Markdown core | `renderMarkdown()`, `renderInline()` | Renders supported CommonMark/GFM constructs and structured directives; delegates diagrams to the runtime. |
+| Diagram core | `parseDiagram()`, `applyFlowchartLayout()`, `buildEdgePath()`, `serializeDiagram()` | Converts YAML into models, completes geometry, avoids obstacles, and writes the result back to YAML. |
+| Quality gate | `lintDocument()` | Reports schema errors plus reader-visible overlap, crossing, and label-overflow warnings. |
+| Renderers | `renderDiagramSource()`, `renderFlowchartDiagram()`, `renderSequenceDiagram()` | Renders parsed models to interactive SVG figures with toolbars and captions. |
+| Editing and export | `SourceEditor`, `DiagramEditor`, `offline-document.ts` | Preserves valid edits, updates only canonical source, and creates portable hosted or offline files. |
+
+## Document render and bake flow
+
+The high-value path is shown in Figure {ref=render-and-bake}. It runs identically when a document opens in a browser and when repository tooling invokes the exposed core API. Auto-layout is intentionally a **seeding** step: it fills only missing positions and anchors, so later graphical adjustments stay authoritative.
+
+:::diagram { id=render-and-bake }
+
+:::callout { kind=info title="Why this separation matters" palette=note }
+The core does not need the DOM to parse, lay out, serialize, or lint a document. DOM concerns—menus, focus, event wiring, viewport fitting, and downloaded files—stay at the edge in the browser runtime.
+::: (separation)
+
+## Browser interaction flow
+
+Figure {ref=editor-round-trip} shows how an editor action remains reversible and source-first. The diagram renderer captures a typed model; the editing layer uses focused mutations instead of directly patching SVG; `BrowserRuntime.persistDiagramModels()` serializes the complete model back into its original fenced block.
+
+:::diagram { id=editor-round-trip }
+
+:::grid { columns=2 }
+:::panel { title="Diagram editing" palette=accent-soft }
+`DiagramEditor` enables canvas panning, zooming, selection, dragging, resizing, reconnection, and inline labels for flowcharts. It uses functions such as `createNode()`, `resizeFlowchartNode()`, and `reconnectConnector()` from `core/diagrams/mutations.ts`.
+::: (diagram editing)
+
+:::panel { title="Source editing" palette=accent-soft }
+`SourceEditor` owns the tray, debounced live rendering, validation failures, source-to-render navigation, insertion templates, and importing diagrams from HTML or Markdown files.
+::: (source editing)
+::: (editing grid)
+
+## What keeps the document portable
+
+:::grid { columns="1fr 2fr" }
+:::panel { title="Hosted document" palette=highlight }
+The normal shell loads `skryb-runtime.js` from the `latest` or a release URL. **Save As** keeps that external URL, so documents stay small and can be opened directly from local storage.
+::: (hosted document)
+
+:::panel { title="Offline document" palette=highlight }
+`getRuntimeSourceForOfflineExport()` obtains the packaged or fetched runtime. `embedRuntimeInDocumentHtml()` replaces the marked external script with an escaped inline runtime at the end of `<body>`. Errors surface if a safe complete export cannot be made.
+::: (offline document)
+::: (portability grid)
+
+### Tooling alignment
+
+The project’s command-line scripts load the built runtime into a restricted VM with a stub document. `bake.mjs` calls `bakeDocumentSource()` then splices only changed diagram fences into the original HTML. `lint.mjs` calls `lintDocument()` and fails only on errors, leaving visual warnings advisory. The test suite exercises the same `DocDiagramCore` API exported by the browser bundle.
+
+:::callout { kind=success title="Reading guide" palette=success }
+Start with Figure {ref=runtime-architecture} for ownership, then Figure {ref=render-and-bake} for the generated-document lifecycle, and Figure {ref=editor-round-trip} for the interactive edit round trip.
+::: (reading guide)
+
+---
+
+## Diagram definitions
+
+```diagram
+type: flowchart
+id: runtime-architecture
+caption: "Figure #: Skryb runtime architecture"
+layout: right
+styles:
+  core:
+    palette: accent-soft
+  ui:
+    palette: accent
+  output:
+    palette: success
+canvas:
+  auto: true
+  grid: 5
+nodes:
+  - id: source
+    label: Canonical HTML and Markdown
+    subtitle: "template#source"
+    shape: document
+    position: { x: 40, y: 110 }
+  - id: core
+    label: "Document, Markdown, and diagram core"
+    subtitle: "parse, validate, layout, route, serialize, lint"
+    shape: rounded-rectangle
+    class: core
+    position: { x: 350, y: 110 }
+    size: { width: 260, height: 100 }
+  - id: runtime
+    label: BrowserRuntime
+    subtitle: orchestrator and state
+    shape: rounded-rectangle
+    class: ui
+    position: { x: 660, y: 110 }
+  - id: renderers
+    label: HTML and SVG renderers
+    subtitle: flowchart and sequence
+    shape: rounded-rectangle
+    class: ui
+    position: { x: 970, y: 40 }
+  - id: editors
+    label: Source and diagram editors
+    subtitle: inspector and offline export
+    shape: rounded-rectangle
+    class: ui
+    position: { x: 970, y: 180 }
+  - id: reader
+    label: Interactive document
+    subtitle: browser view and exports
+    shape: document
+    class: output
+    position: { x: 1280, y: 110 }
+edges:
+  - source: source
+    target: core
+    label: resolve and validate
+    sourceAnchor: right
+    targetAnchor: left
+  - source: core
+    target: runtime
+    label: typed models
+    sourceAnchor: right
+    targetAnchor: left
+  - source: runtime
+    target: renderers
+    label: render cycle
+    sourceAnchor: right
+    targetAnchor: left
+  - source: runtime
+    target: editors
+    label: state and callbacks
+    sourceAnchor: right
+    targetAnchor: left
+  - source: renderers
+    target: reader
+    label: rendered DOM and SVG
+    sourceAnchor: right
+    targetAnchor: left
+  - source: editors
+    target: source
+    label: serialize canonical source
+    route: curved
+    sourceAnchor: left
+    targetAnchor: right
+```
+
+```diagram
+id: render-and-bake
+type: sequence
+caption: "Figure #: Opening, baking, and checking a document"
+canvas:
+  participantSpacing: 205
+  participantSize: { width: 165, height: 42 }
+participants:
+  - id: browser
+    label: Browser or CLI
+    kind: actor
+  - id: runtime
+    label: BrowserRuntime
+    palette: accent
+  - id: document
+    label: Document core
+    palette: accent-soft
+  - id: diagrams
+    label: Diagram engine
+    palette: accent-soft
+  - id: renderer
+    label: Renderers
+    palette: success
+messages:
+  - from: browser
+    to: runtime
+    label: Load HTML source
+  - from: runtime
+    to: document
+    label: Resolve frontmatter and validate source
+  - from: document
+    to: diagrams
+    label: Parse fences and fill missing layout
+  - from: diagrams
+    to: document
+    label: Serialize baked fences
+    style: dashed
+  - from: runtime
+    to: renderer
+    label: Render Markdown and SVG figures
+  - from: runtime
+    to: document
+    label: Lint schema and visual geometry
+  - from: document
+    to: runtime
+    label: Source hash and lint report
+    style: dashed
+  - from: runtime
+    to: browser
+    label: Interactive document and save prompt
+    style: dashed
+activations:
+  - participant: runtime
+    from: 1
+    to: 8
+  - participant: document
+    from: 2
+    to: 7
+  - participant: diagrams
+    from: 3
+    to: 4
+notes:
+  - at: diagrams
+    after: 4
+    label: Existing positions and anchors are preserved.
+    palette: note
+groups:
+  - from: 2
+    to: 4
+    label: Canonical-source preparation
+  - from: 5
+    to: 8
+    label: Render, inspect, and return
+```
+
+```diagram
+type: flowchart
+id: editor-round-trip
+caption: "Figure #: Editing a diagram without losing its source"
+layout: right
+styles:
+  interaction:
+    palette: accent
+  core:
+    palette: accent-soft
+  durable:
+    palette: success
+canvas:
+  auto: true
+  grid: 5
+nodes:
+  - id: person
+    label: Reader or author
+    shape: circle
+    position: { x: 40, y: 40 }
+  - id: editor
+    label: DiagramEditor or SourceEditor
+    subtitle: event and draft handling
+    shape: rounded-rectangle
+    class: interaction
+    position: { x: 350, y: 40 }
+  - id: core
+    label: "Mutate, validate, and serialize"
+    subtitle: focused core operations
+    shape: rounded-rectangle
+    class: core
+    position: { x: 660, y: 40 }
+  - id: template
+    label: "template#source"
+    subtitle: persistent source of truth
+    shape: document
+    class: durable
+    position: { x: 970, y: 40 }
+  - id: view
+    label: Re-rendered document
+    subtitle: "HTML, SVG, controls"
+    shape: document
+    class: durable
+    position: { x: 1280, y: 40 }
+edges:
+  - source: person
+    target: editor
+    label: "edit, drag, or type"
+    sourceAnchor: right
+    targetAnchor: left
+  - source: editor
+    target: core
+    label: model or source update
+    sourceAnchor: right
+    targetAnchor: left
+  - source: core
+    target: template
+    label: replace matching fence
+    sourceAnchor: right
+    targetAnchor: left
+  - source: template
+    target: view
+    label: "renderDocument()"
+    sourceAnchor: right
+    targetAnchor: left
+  - source: view
+    target: person
+    label: immediate feedback
+    route: curved
+    sourceAnchor: bottom
+    targetAnchor: bottom
+    waypoint: { x: 760, y: 260 }
+```
+  </template>
+  <main id="rendered-document"></main>
+</body>
+</html>
