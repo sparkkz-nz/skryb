@@ -15,7 +15,6 @@ import {
 import { parseDiagram } from "./diagrams/parser";
 import { FlowchartIndex } from "./diagrams/hierarchy";
 import {
-  buildEdgePath,
   computeNodeTextLayout,
   getNodeGeometry,
   measureTextWidth,
@@ -23,6 +22,7 @@ import {
   segmentIntersectsRectangle,
   splitTextLines
 } from "./diagrams/geometry";
+import { buildFlowchartEdgeGeometries } from "./diagrams/edge-labels";
 
 export type LintSeverity = "error" | "warning";
 
@@ -175,13 +175,15 @@ function lintEdges(
   index: FlowchartIndex,
   report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
 ): void {
+  const edgeSubject = (edgeIndex: number): LintEdgeSubject => ({
+    kind: "edge",
+    index: edgeIndex,
+    source: diagram.edges[edgeIndex].source,
+    target: diagram.edges[edgeIndex].target
+  });
+  const geometries = buildFlowchartEdgeGeometries(diagram, index);
   for (const [edgeIndex, edge] of (diagram.edges || []).entries()) {
-    const edgeSubject: LintEdgeSubject = {
-      kind: "edge",
-      index: edgeIndex,
-      source: edge.source,
-      target: edge.target
-    };
+    const subject = edgeSubject(edgeIndex);
     const source = index.getById(edge.source);
     const target = index.getById(edge.target);
     // The renderer drops an edge naming an unknown node without a word, so the connector simply
@@ -192,7 +194,7 @@ function lintEdges(
           "unknown-edge-endpoint",
           `Edge "${edge.source}" -> "${edge.target}" names a ${role} node "${id}" that does not exist, so it is not drawn.`,
           "error",
-          [edgeSubject]
+          [subject]
         );
       }
     }
@@ -200,27 +202,11 @@ function lintEdges(
       continue;
     }
 
-    const sourceBounds = source.bounds;
-    const targetBounds = target.bounds;
-    const sourceAnchor = getNodeGeometry(source.node, sourceBounds.x, sourceBounds.y, sourceBounds.width, sourceBounds.height)
-      .anchors[edge.sourceAnchor || "right"];
-    const targetAnchor = getNodeGeometry(target.node, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height)
-      .anchors[edge.targetAnchor || "left"];
     const obstacles = index.entries.filter(({ node }) =>
       !index.isRelated(node, source.node) && !index.isRelated(node, target.node)
     );
-    // The rule reports what a reader would actually see, so the path is built the same way the
-    // renderer builds it, obstacles included. What is left is a route too crowded to be cleared.
-    const { path } = buildEdgePath(
-      sourceAnchor,
-      targetAnchor,
-      edge.sourceAnchor || "right",
-      edge.targetAnchor || "left",
-      edge.route || "orthogonal",
-      edge.waypoint,
-      edge.waypoint ? undefined : obstacles.map((entry) => entry.bounds)
-    );
-    const points = sampleEdgePath(path);
+    const geometry = geometries[edgeIndex]!;
+    const points = sampleEdgePath(geometry.path.path);
 
     for (const obstacle of obstacles) {
       const crossed = points.slice(1).some((point, pointIndex) => segmentIntersectsRectangle(points[pointIndex], point, obstacle.bounds));
@@ -229,9 +215,33 @@ function lintEdges(
           "edge-crosses-node",
           `Edge "${edge.source}" -> "${edge.target}" passes through unrelated node "${obstacle.node.id}".`,
           "warning",
-          [edgeSubject, { kind: "node", id: obstacle.node.id }]
+          [subject, { kind: "node", id: obstacle.node.id }]
         );
       }
+    }
+
+    if (geometry.label && !geometry.label.clear) {
+      const subjects: LintSubject[] = [subject];
+      const keys = new Set([`edge:${edgeIndex}`]);
+      for (const conflict of geometry.label.conflicts) {
+        if (conflict.kind === "canvas") {
+          continue;
+        }
+        const key = conflict.kind === "node" ? `node:${conflict.id}` : `edge:${conflict.edgeIndex}`;
+        if (keys.has(key)) {
+          continue;
+        }
+        keys.add(key);
+        subjects.push(conflict.kind === "node"
+          ? { kind: "node", id: conflict.id }
+          : edgeSubject(conflict.edgeIndex));
+      }
+      report(
+        "edge-label-overlap",
+        `Edge "${edge.source}" -> "${edge.target}" has no clear position for its label; the deterministic fallback remains visible.`,
+        "warning",
+        subjects
+      );
     }
   }
 }

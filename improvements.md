@@ -210,11 +210,15 @@ placement budget (`190 + 120 = 310`).
   positions around the longest clear route segment. A label that cannot be
   placed clearly should remain visible and receive a warning rather than being
   silently hidden.
-- Preserve author control of edge-label density. Multiline edge labels already
-  work through an explicit newline in canonical YAML. The skill should recommend
-  a newline at a meaningful phrase boundary for a long label on a short
-  connector, for example `label: "rendered DOM\\nand SVG"`. The renderer may
-  eventually wrap labels automatically, but automatic wrapping should be a
+- Preserve author control of edge-label density. Multiline edge labels use a
+  YAML literal block scalar. The skill should recommend a newline at a meaningful
+  phrase boundary for a long label on a short connector, for example:
+  ```yaml
+  label: |+
+    rendered DOM
+    and SVG
+  ```
+  The renderer may eventually wrap labels automatically, but automatic wrapping should be a
   visual convenience only: it must not silently rewrite the semantic source or
   create a mismatch between the source and the exported diagram.
 - Prefer a curved route for a deliberate feedback edge or when an orthogonal

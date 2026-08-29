@@ -10,8 +10,8 @@ import {
 import { escapeHtml } from "../core/diagrams/parser";
 import { FlowchartIndex } from "../core/diagrams/hierarchy";
 import { getNamedStyle, getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
-import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
-import type { Obstacle } from "../core/diagrams/routing";
+import { renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
+import { buildFlowchartEdgeGeometries, edgeLabelLineHeight } from "../core/diagrams/edge-labels";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
 import { renderFigureAttributes, renderFigureCaption } from "./types";
@@ -76,13 +76,7 @@ export function renderFlowchartDiagram(
   const flowchartIndex = new FlowchartIndex(diagram);
   const nodeEntries = flowchartIndex.entries;
 
-  // A container legitimately contains its own children, and an edge to or from one has to pass
-  // through its box, so only nodes unrelated to an edge's endpoints count as obstacles for it.
-  const obstaclesFor = (sourceNode: FlowchartNode, targetNode: FlowchartNode): Obstacle[] => nodeEntries
-    .filter(({ node }) => !flowchartIndex.isRelated(node, sourceNode) && !flowchartIndex.isRelated(node, targetNode))
-    .map(({ bounds }) => bounds);
-
-  const edgeLabelLineHeight = 16;
+  const edgeGeometries = buildFlowchartEdgeGeometries(diagram, flowchartIndex);
   const edgeMarkerDefs: string[] = [];
   const edgeEndpointMarkup: string[] = [];
   const scheme = colourSchemes[state.documentColorScheme];
@@ -93,47 +87,13 @@ export function renderFlowchartDiagram(
     .join("") : "";
 
   const edgeMarkup = diagram.edges.map((edge, edgeIndex) => {
-    const sourceEntry = flowchartIndex.getById(edge.source);
-    const targetEntry = flowchartIndex.getById(edge.target);
-
-    if (!sourceEntry || !targetEntry) {
+    const geometry = edgeGeometries[edgeIndex];
+    if (!geometry) {
       return "";
     }
-    const sourceNode = sourceEntry.node;
-    const targetNode = targetEntry.node;
-
-    const sourceGeometry = getNodeGeometry(
-      sourceNode,
-      sourceEntry.position.x,
-      sourceEntry.position.y,
-      Number(sourceNode.size?.width) || 190,
-      Number(sourceNode.size?.height) || 80
-    );
-    const targetGeometry = getNodeGeometry(
-      targetNode,
-      targetEntry.position.x,
-      targetEntry.position.y,
-      Number(targetNode.size?.width) || 190,
-      Number(targetNode.size?.height) || 80
-    );
-    const sourceAnchorName = edge.sourceAnchor || "right";
-    const targetAnchorName = edge.targetAnchor || "left";
-    const sourceAnchor = sourceGeometry.anchors[sourceAnchorName];
-    const targetAnchor = targetGeometry.anchors[targetAnchorName];
-    const route = edge.route || "orthogonal";
-    // An author who placed a waypoint has already said where the edge should go, so routing does
-    // not second-guess it.
-    const edgePath = buildEdgePath(
-      sourceAnchor,
-      targetAnchor,
-      sourceAnchorName,
-      targetAnchorName,
-      route,
-      edge.waypoint,
-      edge.waypoint ? undefined : obstaclesFor(sourceNode, targetNode)
-    );
-    const labelX = edgePath.midpoint.x;
-    const labelY = edgePath.midpoint.y - 10;
+    const { sourceAnchor, targetAnchor, path: edgePath, label: edgeLabel } = geometry;
+    const labelX = edgeLabel?.center.x ?? edgePath.midpoint.x;
+    const labelY = edgeLabel?.center.y ?? edgePath.midpoint.y - 10;
 
     const style = getEdgeEffectiveStyle(diagram, edge, state.documentTheme);
     const isSelected = selectedEdge?.diagramIndex === diagramIndex && selectedEdge.edgeIndex === edgeIndex;
@@ -141,9 +101,6 @@ export function renderFlowchartDiagram(
     const strokeWidth = (Number(style.strokeWidth) || 2) + (isSelected ? 2 : 0);
     const editorWidth = 220;
     const editorHeight = 72;
-    const edgeLabelLines = edge.label ? splitTextLines(edge.label) : [];
-    const edgeLabelBlockHeight = edgeLabelLines.length * edgeLabelLineHeight;
-    const edgeLabelStartY = labelY - edgeLabelBlockHeight / 2 + edgeLabelLineHeight * 0.72;
 
     const startMarkerStyle = getEdgeMarkerStyle(edge, "start");
     const endMarkerStyle = getEdgeMarkerStyle(edge, "end");
@@ -177,8 +134,8 @@ export function renderFlowchartDiagram(
       `<path class="docdiagram-edge" d="${edgePath.path}"${markerAttributes} stroke="${escapeHtml(style.stroke || "")}" stroke-width="${strokeWidth}"/>`,
       isEditing
         ? `<foreignObject class="docdiagram-inline-editor-host" x="${labelX - editorWidth / 2}" y="${labelY - editorHeight / 2}" width="${editorWidth}" height="${editorHeight}"><textarea class="docdiagram-inline-editor docdiagram-inline-editor-edge" aria-label="Edit edge label. Press Enter for a new line. Press Control or Command plus Enter to save. Press Escape to cancel.">${escapeHtml(edge.label || "")}</textarea></foreignObject>`
-        : edgeLabelLines.length
-          ? renderTextBlock(labelX, edgeLabelStartY, edgeLabelLines, edgeLabelLineHeight, "docdiagram-edge-label", style.text || "")
+        : edgeLabel
+          ? renderTextBlock(labelX, edgeLabel.startY, edgeLabel.lines, edgeLabelLineHeight, "docdiagram-edge-label", style.text || "")
           : "",
       `</g>`
     ].join("");

@@ -117,10 +117,12 @@ syntax reference, including:
 
 Use explicit, stable node IDs and labels that describe a reader-visible
 responsibility. A node's shape is geometry only; choose its appearance with a
-palette or explicit style values, never a domain-specific `type`. Keep the
-diagram compact and include adjacent prose that explains the flow. Sequence
-diagrams use ordered participants and messages; do not add arbitrary positions
-or Mermaid syntax.
+palette or explicit style values, never a domain-specific `type`. Write
+multiline node, subtitle, and edge labels as YAML literal block scalars. For a
+long edge label on a short connector, break at a meaningful phrase boundary;
+do not prefer a quoted `\n` scalar. Keep the diagram compact and include
+adjacent prose that explains the flow. Sequence diagrams use ordered
+participants and messages; do not add arbitrary positions or Mermaid syntax.
 
 ### Let the layout engine place the diagram
 
@@ -379,6 +381,7 @@ comments and all. Nothing outside the diagram fences is ever rewritten.
 | `unknown-edge-endpoint` | error | An edge names a node that does not exist. The renderer drops such an edge silently, so the connector simply vanishes - invisible unless you count your arrows. |
 | `node-overlap` | warning | Two unrelated nodes' boxes overlap. A child inside its own parent is not reported. |
 | `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
+| `edge-label-overlap` | warning | Every deterministic position for an edge label conflicts with a node, another label, or another route; the fallback label remains visible. |
 | `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
 
 Only errors are blocking; warnings are advisory, so a document is never held up

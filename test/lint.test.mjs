@@ -5,6 +5,7 @@ const __dirname = testDirectory;
 const {
   lintDocument,
   formatLintMessages,
+  buildFlowchartEdgeGeometries,
   sampleEdgePath,
   segmentIntersectsRectangle
 } = core;
@@ -317,6 +318,205 @@ test("lint accepts an edge that clears every other node", () => {
   ]));
 
   assert.deepEqual(clear, []);
+});
+
+test("lint keeps an edge label visible and source-addressable when unrelated nodes block every candidate", () => {
+  const result = lintDocument(lintSource([
+    "id: blocked-label",
+    "canvas: auto",
+    "nodes:",
+    "  - id: api",
+    "    label: API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 100 }",
+    "    size: { width: 100, height: 60 }",
+    "  - id: ledger",
+    "    label: Ledger",
+    "    shape: rounded-rectangle",
+    "    position: { x: 400, y: 100 }",
+    "    size: { width: 100, height: 60 }",
+    ...["up-1,130,96", "down-1,130,136", "up-2,280,96", "down-2,280,136"].flatMap((entry) => {
+      const [id, x, y] = entry.split(",");
+      return [
+        `  - id: ${id}`,
+        `    label: ${id}`,
+        "    shape: rounded-rectangle",
+        `    position: { x: ${x}, y: ${y} }`,
+        "    size: { width: 90, height: 28 }"
+      ];
+    }),
+    "edges:",
+    "  - source: api",
+    "    target: ledger",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    route: straight",
+    "    waypoint: { x: 250, y: 130 }",
+    "    label: Blocked"
+  ]));
+  const warning = result.messages.find((message) => message.rule === "edge-label-overlap");
+
+  assert.ok(warning);
+  assert.match(warning.message, /fallback remains visible/);
+  assert.equal(warning.location.diagramId, "blocked-label");
+  assert.equal(warning.location.subjects[0].kind, "edge");
+  assert.equal(warning.location.subjects[0].index, 0);
+  assert.ok(warning.location.subjects[0].sourceRange?.start.line);
+});
+
+test("lint reports an edge label blocked by a nearby unrelated route", () => {
+  const rules = lintRules(lintSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: left",
+    "    label: Left",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 270 }",
+    "    size: { width: 100, height: 60 }",
+    "  - id: right",
+    "    label: Right",
+    "    shape: rounded-rectangle",
+    "    position: { x: 500, y: 270 }",
+    "    size: { width: 100, height: 60 }",
+    "  - id: top",
+    "    label: Top",
+    "    shape: rounded-rectangle",
+    "    position: { x: 250, y: 0 }",
+    "    size: { width: 100, height: 60 }",
+    "  - id: bottom",
+    "    label: Bottom",
+    "    shape: rounded-rectangle",
+    "    position: { x: 250, y: 500 }",
+    "    size: { width: 100, height: 60 }",
+    "edges:",
+    "  - source: left",
+    "    target: right",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    route: straight",
+    "    label: Crossing label",
+    "  - source: top",
+    "    target: bottom",
+    "    sourceAnchor: bottom",
+    "    targetAnchor: top",
+    "    route: straight"
+  ]));
+
+  assert.deepEqual(rules, ["edge-label-overlap"]);
+});
+
+test("edge label placement detects earlier labels and chooses candidates deterministically", () => {
+  const node = (id, x, y) => ({
+    id,
+    label: id,
+    shape: "rounded-rectangle",
+    position: { x, y },
+    size: { width: 100, height: 60 }
+  });
+  const diagram = {
+    type: "flowchart",
+    canvas: { auto: true },
+    nodes: [node("a", 0, 270), node("b", 500, 270), node("c", 0, 272), node("d", 500, 272), node("e", 0, 274), node("f", 500, 274)],
+    edges: [
+      { source: "a", target: "b", route: "straight", label: "Same label" },
+      { source: "c", target: "d", route: "straight", label: "Same label" },
+      { source: "e", target: "f", route: "straight", label: "Same label" }
+    ]
+  };
+  const first = buildFlowchartEdgeGeometries(diagram);
+  const second = buildFlowchartEdgeGeometries(diagram);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(first)), JSON.parse(JSON.stringify(second)));
+  assert.equal(first[1].label.clear, false);
+  assert.ok(first[1].label.conflicts.some((conflict) => conflict.kind === "edge-label" && conflict.edgeIndex === 0));
+  assert.equal(first[2].label.clear, true);
+});
+
+test("edge label placement rejects candidates clipped by the canvas", () => {
+  const node = (id, x, y) => ({
+    id,
+    label: id,
+    shape: "rounded-rectangle",
+    position: { x, y },
+    size: { width: 100, height: 60 }
+  });
+  const horizontal = buildFlowchartEdgeGeometries({
+    type: "flowchart",
+    canvas: { width: 600, height: 200 },
+    nodes: [node("a", 0, 0), node("b", 400, 0)],
+    edges: [{ source: "a", target: "b", sourceAnchor: "right", targetAnchor: "left", route: "straight", label: "First line\nSecond line" }]
+  })[0].label;
+  const vertical = buildFlowchartEdgeGeometries({
+    type: "flowchart",
+    canvas: { width: 200, height: 600 },
+    nodes: [node("a", 0, 0), node("b", 0, 400)],
+    edges: [{ source: "a", target: "b", sourceAnchor: "bottom", targetAnchor: "top", route: "straight", label: "Wide label" }]
+  })[0].label;
+
+  for (const [label, width, height] of [[horizontal, 600, 200], [vertical, 200, 600]]) {
+    assert.equal(label.clear, true);
+    assert.ok(label.bounds.x >= 0 && label.bounds.y >= 0);
+    assert.ok(label.bounds.x + label.bounds.width <= width);
+    assert.ok(label.bounds.y + label.bounds.height <= height);
+  }
+});
+
+test("edge label placement avoids non-host segments of its own route", () => {
+  const node = (id, x) => ({
+    id,
+    label: id,
+    shape: "rounded-rectangle",
+    position: { x, y: 50 },
+    size: { width: 100, height: 60 }
+  });
+  const geometry = buildFlowchartEdgeGeometries({
+    type: "flowchart",
+    canvas: { width: 700, height: 400 },
+    nodes: [node("a", 0), node("b", 300)],
+    edges: [{
+      source: "a",
+      target: "b",
+      sourceAnchor: "right",
+      targetAnchor: "left",
+      route: "orthogonal",
+      waypoint: { x: 100, y: 300 },
+      label: "Status update"
+    }]
+  })[0];
+  const bounds = geometry.label.bounds;
+  const padded = { x: bounds.x - 6, y: bounds.y - 6, width: bounds.width + 12, height: bounds.height + 12 };
+  const points = sampleEdgePath(geometry.path.path);
+
+  assert.equal(geometry.label.clear, true);
+  assert.equal(points.slice(1).some((point, index) =>
+    segmentIntersectsRectangle(points[index], point, padded)), false);
+});
+
+test("edge label placement checks adjacent segments at orthogonal bends", () => {
+  const geometry = buildFlowchartEdgeGeometries({
+    type: "flowchart",
+    canvas: { width: 700, height: 600 },
+    nodes: [
+      { id: "a", label: "a", shape: "rounded-rectangle", position: { x: 400, y: 400 }, size: { width: 100, height: 60 } },
+      { id: "b", label: "b", shape: "rounded-rectangle", position: { x: 440, y: 460 }, size: { width: 100, height: 60 } }
+    ],
+    edges: [{
+      source: "a",
+      target: "b",
+      sourceAnchor: "right",
+      targetAnchor: "top",
+      route: "orthogonal",
+      waypoint: { x: 490, y: 445 },
+      label: "Status update"
+    }]
+  })[0];
+  const bounds = geometry.label.bounds;
+  const padded = { x: bounds.x - 6, y: bounds.y - 6, width: bounds.width + 12, height: bounds.height + 12 };
+  const points = sampleEdgePath(geometry.path.path);
+
+  assert.equal(geometry.label.clear, true);
+  assert.equal(points.slice(1).some((point, index) =>
+    segmentIntersectsRectangle(points[index], point, padded)), false);
 });
 
 test("lint reports a label that cannot fit its shape, and tolerates one that only spills into the padding", () => {

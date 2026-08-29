@@ -324,7 +324,7 @@ Recorded on 2026-08-30 for `feat/source-addressable-lint`:
 
 ## Block 7 — Edge-label placement and clearance lint
 
-**Status:** Planned  
+**Status:** Complete
 **Suggested branch:** `feat/edge-label-clearance`  
 **Dependencies:** Blocks 2 and 6
 
@@ -350,6 +350,23 @@ clearly.
 - Candidate selection is deterministic across opens.
 - Focused fixtures cover node, label, and route conflicts plus multiline labels.
 - Warnings include source-addressable subjects.
+
+### Implementation result
+
+- Rendering and lint now share deterministic edge paths, measured multiline
+  label bounds, and segment-based candidate placement.
+- Label candidates avoid unrelated nodes, previously placed labels, and other
+  edge routes. A blocked label remains visible at a deterministic fallback and
+  emits a source-addressable `edge-label-overlap` warning.
+- Focused tests cover node, label, and route conflicts, deterministic fallback
+  placement, canvas boundaries, own-route clearance, multiline geometry, and
+  source locations. All 290 tests and type checks pass; changed examples lint
+  with no warnings.
+- Authoring guidance and examples now use YAML literal block scalars for
+  multiline node, subtitle, and edge labels.
+- The hosted runtime is 206,552 bytes raw, 58,365 gzip, and 50,207 Brotli; the
+  self-packaged runtime is 421,594/117,200/60,170 bytes. All artifact budgets
+  remain unchanged and pass.
 
 ## Block 8 — Accessible diagram descriptions
 
