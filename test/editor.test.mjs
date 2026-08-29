@@ -150,10 +150,14 @@ test("resolves the actual example document's dark theme", () => {
   }
 });
 
-test("rejects an unsupported document theme", () => {
+test("rejects unsupported document themes", () => {
   assert.throws(
     () => resolveDocument("---\ntheme: neon\n---\n# Payments"),
     /Unsupported document theme: neon/
+  );
+  assert.throws(
+    () => resolveDocument("---\ntheme: false\n---\n# Payments"),
+    /Unsupported document theme: false/
   );
 });
 
@@ -687,6 +691,28 @@ test("edge inspector helpers mutate the canonical model and round-trip through Y
   assert.equal(reparsed.edges[0].targetAnchor, "top");
   assert.equal(reparsed.edges[0].style.stroke, "#ff0000");
   assert.equal(reparsed.edges[0].style.strokeWidth, 5);
+});
+
+test("editor mutations reject unsupported validated values", () => {
+  const node = { id: "api", label: "API", shape: "rounded-rectangle", palette: "accent" };
+  const edge = { source: "api", target: "db", sourceAnchor: "right", targetAnchor: "left", route: "orthogonal" };
+
+  setNodeShape(node, "hexagon");
+  setNodeColorPalette(node, "rainbow");
+  setEdgeRoute(edge, "diagonal");
+  setEdgeAnchor(edge, "source", "middle");
+  reconnectConnector(edge, "target", "cache", "centre");
+
+  assert.equal(node.shape, "rounded-rectangle");
+  assert.equal(node.palette, "accent");
+  assert.equal(edge.route, "orthogonal");
+  assert.equal(edge.sourceAnchor, "right");
+  assert.equal(edge.target, "db");
+  assert.equal(edge.targetAnchor, "left");
+  assert.throws(
+    () => createConnector({ nodes: [], edges: [] }, "api", "middle", "db", "left"),
+    /Connector anchors must be supported edge anchors/
+  );
 });
 
 test("buildEdgePath produces deterministic geometry for every route and anchor pair", () => {

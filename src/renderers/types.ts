@@ -1,5 +1,5 @@
 import { escapeHtml } from "../core/diagrams/parser";
-import type { Position } from "../core/diagrams/schema";
+import type { ColourSchemeName, EdgeAnchor, Position, Theme } from "../core/diagrams/schema";
 
 export interface NodeSelection {
   diagramIndex: number;
@@ -18,10 +18,10 @@ export interface InlineEdgeEditor extends EdgeSelection {}
 export interface ConnectionDrag {
   diagramIndex: number;
   sourceNodeId: string;
-  sourceAnchor: string;
+  sourceAnchor: EdgeAnchor;
   start: Position;
   current: Position;
-  targetAnchor?: string;
+  targetAnchor?: EdgeAnchor;
   edgeIndex?: number;
   endpoint?: "source" | "target";
   reconnect?: boolean;
@@ -29,8 +29,8 @@ export interface ConnectionDrag {
 }
 
 export interface DiagramRenderState {
-  documentTheme: string;
-  documentColorScheme: string;
+  documentTheme: Exclude<Theme, "auto">;
+  documentColorScheme: ColourSchemeName;
   editingDiagramIndex: number | null;
   selectedNode: NodeSelection | null;
   selectedEdge: EdgeSelection | null;

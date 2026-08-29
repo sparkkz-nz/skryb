@@ -6,12 +6,20 @@ import {
   type Size,
   defaultNode,
   documentMinimumNodeSize,
+  edgeAnchors,
   edgeMarkerDefaults,
   edgeMarkerStyles,
-  minimumNodeSize
+  edgeRoutes,
+  minimumNodeSize,
+  nodeShapes,
+  paletteRoles
 } from "./schema";
 import { clampNodeSize, getGridSize, getNodeColorPalette, snapToGrid } from "./styles";
 import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds } from "./hierarchy";
+
+function includesValue<T extends string>(values: readonly T[], value: string): value is T {
+  return values.includes(value as T);
+}
 
 function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: number; height: number } {
   return {
@@ -273,6 +281,9 @@ export function createConnector(
   target: string,
   targetAnchor: string
 ): FlowchartEdge {
+  if (!includesValue(edgeAnchors, sourceAnchor) || !includesValue(edgeAnchors, targetAnchor)) {
+    throw new Error("Connector anchors must be supported edge anchors.");
+  }
   const edge: FlowchartEdge = {
     source,
     target,
@@ -286,6 +297,9 @@ export function createConnector(
 }
 
 export function reconnectConnector(edge: FlowchartEdge, endpoint: string, nodeId: string, anchor: string): FlowchartEdge {
+  if (!includesValue(edgeAnchors, anchor)) {
+    return edge;
+  }
   if (endpoint === "source") {
     edge.source = nodeId;
     edge.sourceAnchor = anchor;
@@ -326,7 +340,9 @@ export function setNodeLabel(node: FlowchartNode, label: string): FlowchartNode 
 }
 
 export function setNodeShape(node: FlowchartNode, shape: string): FlowchartNode {
-  node.shape = shape;
+  if (includesValue(nodeShapes, shape)) {
+    node.shape = shape;
+  }
   return node;
 }
 
@@ -345,8 +361,12 @@ export function setNodeTextAlignment(node: FlowchartNode, dimension: "textVAlign
   return node;
 }
 
-export function setNodeStyleOverride<T extends { style?: FlowchartNode["style"] }>(node: T, key: string, value: unknown): T {
-  node.style = { ...node.style, [key]: value } as FlowchartNode["style"];
+export function setNodeStyleOverride<T extends { style?: FlowchartNode["style"] }>(
+  node: T,
+  key: "fill" | "stroke" | "text",
+  value: string
+): T {
+  node.style = { ...node.style, [key]: value };
   return node;
 }
 
@@ -355,6 +375,9 @@ export function setNodeColorPalette<T extends { style?: FlowchartNode["style"]; 
   palette: string,
   colorScheme = "classic"
 ): T {
+  if (!includesValue(paletteRoles, palette)) {
+    return node;
+  }
   const preset = getNodeColorPalette(colorScheme, "light", palette);
   if (!preset) {
     return node;
@@ -366,7 +389,7 @@ export function setNodeColorPalette<T extends { style?: FlowchartNode["style"]; 
   } else {
     delete node.style;
   }
-  node.palette = palette as NonNullable<FlowchartNode["palette"]>;
+  node.palette = palette;
   return node;
 }
 
@@ -468,7 +491,9 @@ export function setEdgeLabel(edge: FlowchartEdge, label: string): FlowchartEdge 
 }
 
 export function setEdgeRoute(edge: FlowchartEdge, route: string): FlowchartEdge {
-  edge.route = route;
+  if (includesValue(edgeRoutes, route)) {
+    edge.route = route;
+  }
   return edge;
 }
 
@@ -505,6 +530,9 @@ export function toggleNodeCalloutPointer(diagram: FlowchartDiagram, node: Flowch
 }
 
 export function setEdgeAnchor(edge: FlowchartEdge, endpoint: string, anchor: string): FlowchartEdge {
+  if (!includesValue(edgeAnchors, anchor)) {
+    return edge;
+  }
   if (endpoint === "source") {
     edge.sourceAnchor = anchor;
   } else {
@@ -513,8 +541,12 @@ export function setEdgeAnchor(edge: FlowchartEdge, endpoint: string, anchor: str
   return edge;
 }
 
-export function setEdgeStyleOverride(edge: FlowchartEdge, key: string, value: unknown): FlowchartEdge {
-  edge.style = { ...edge.style, [key]: value } as FlowchartEdge["style"];
+export function setEdgeStyleOverride(
+  edge: FlowchartEdge,
+  key: "stroke" | "text",
+  value: string
+): FlowchartEdge {
+  edge.style = { ...edge.style, [key]: value };
   return edge;
 }
 
@@ -525,12 +557,12 @@ export function setStyleStrokeWidth<T extends { style?: FlowchartNode["style"] }
 }
 
 export function setEdgeMarkerStart(edge: FlowchartEdge, markerStyle: string): FlowchartEdge {
-  edge.start = edgeMarkerStyles.includes(markerStyle as (typeof edgeMarkerStyles)[number]) ? markerStyle : edgeMarkerDefaults.start;
+  edge.start = includesValue(edgeMarkerStyles, markerStyle) ? markerStyle : edgeMarkerDefaults.start;
   return edge;
 }
 
 export function setEdgeMarkerEnd(edge: FlowchartEdge, markerStyle: string): FlowchartEdge {
-  edge.end = edgeMarkerStyles.includes(markerStyle as (typeof edgeMarkerStyles)[number]) ? markerStyle : edgeMarkerDefaults.end;
+  edge.end = includesValue(edgeMarkerStyles, markerStyle) ? markerStyle : edgeMarkerDefaults.end;
   return edge;
 }
 

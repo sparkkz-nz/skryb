@@ -8,12 +8,10 @@
 // Determinism is load-bearing. A file may be opened many times before it is ever saved, so the same
 // source must always produce the same positions; every ordering here is total and derived from
 // source order.
-import type { FlowchartDiagram, FlowchartEdge, FlowchartNode, Position } from "./schema";
-import { defaultNode } from "./schema";
+import type { EdgeAnchor, FlowchartDiagram, FlowchartEdge, FlowchartNode, LayoutDirection, Position } from "./schema";
+import { defaultNode, layoutDirections } from "./schema";
 import { FlowchartIndex } from "./hierarchy";
 import { getGridSize, snapToGrid } from "./styles";
-
-export const layoutDirections = ["right", "down", "left", "up"] as const;
 
 /**
  * Diagrams the engine actually had to fill something in for. "Needed laying out" is not something a
@@ -27,7 +25,8 @@ export function layoutFilledDiagram(diagram: FlowchartDiagram): boolean {
   return filledDiagrams.has(diagram);
 }
 
-export type LayoutDirection = (typeof layoutDirections)[number];
+export { layoutDirections } from "./schema";
+export type { LayoutDirection } from "./schema";
 
 export interface LayoutSettings {
   direction: LayoutDirection;
@@ -72,13 +71,14 @@ function isHorizontal(direction: LayoutDirection): boolean {
 }
 
 /** The anchor a node's own edge faces when the flow runs in the layout direction. */
-function getForwardAnchors(direction: LayoutDirection): { source: string; target: string } {
-  return {
+function getForwardAnchors(direction: LayoutDirection): { source: EdgeAnchor; target: EdgeAnchor } {
+  const anchors: Record<LayoutDirection, { source: EdgeAnchor; target: EdgeAnchor }> = {
     right: { source: "right", target: "left" },
     left: { source: "left", target: "right" },
     down: { source: "bottom", target: "top" },
     up: { source: "top", target: "bottom" }
-  }[direction];
+  };
+  return anchors[direction];
 }
 
 /**
@@ -462,7 +462,7 @@ function layoutSiblings(
  * each axis rather than of their centre offsets, which is what makes it agree with the eye: two
  * wide nodes stacked with a small horizontal offset face bottom to top, not right to left.
  */
-function facingAnchors(source: Bounds, target: Bounds): { source: string; target: string } | null {
+function facingAnchors(source: Bounds, target: Bounds): { source: EdgeAnchor; target: EdgeAnchor } | null {
   const dx = (target.x + target.width / 2) - (source.x + source.width / 2);
   const dy = (target.y + target.height / 2) - (source.y + source.height / 2);
   const reachX = Math.abs(dx) - (source.width + target.width) / 2;

@@ -5,12 +5,15 @@ import {
   colourSchemes,
   paletteRoles,
   nodeShapes,
+  sequenceMessageStyles,
+  type ColourSchemeName,
   type FlowchartDiagram,
   type FlowchartEdge,
   type FlowchartNode,
   type SequenceMessage,
   type SequenceNote,
-  type SequenceParticipant
+  type SequenceParticipant,
+  type Theme
 } from "../core/diagrams/schema";
 import { escapeHtml } from "../core/diagrams/parser";
 import { findFlowchartNode } from "../core/diagrams/hierarchy";
@@ -47,7 +50,12 @@ export interface InspectorHost {
 type ControlElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 type SequenceInspectable = SequenceParticipant | SequenceNote | SequenceMessage;
 
-function paletteMarkup(colourScheme: string, theme: string, selectedPalette: string, name: string): string {
+function paletteMarkup(
+  colourScheme: ColourSchemeName,
+  theme: Theme,
+  selectedPalette: string,
+  name: string
+): string {
   const palette = colourSchemes[colourScheme]?.[theme === "dark" ? "dark" : "light"];
   return [
     [...paletteRoles.slice(0, 5), "none"],
@@ -64,8 +72,8 @@ function paletteMarkup(colourScheme: string, theme: string, selectedPalette: str
 export function buildNodeInspectorFields(
   diagram: FlowchartDiagram,
   node: FlowchartNode,
-  colourScheme = "classic",
-  documentTheme = "light"
+  colourScheme: ColourSchemeName = "classic",
+  documentTheme: Theme = "light"
 ): string {
   const grid = getGridSize(diagram);
   const style = getNodeEffectiveStyle(diagram, node, documentTheme, colourScheme);
@@ -90,7 +98,7 @@ export function buildNodeInspectorFields(
   ].join("");
 }
 
-export function buildEdgeInspectorFields(diagram: { theme?: string }, edge: FlowchartEdge): string {
+export function buildEdgeInspectorFields(diagram: { theme?: Theme }, edge: FlowchartEdge): string {
   const style = getEdgeEffectiveStyle(diagram, edge);
   const strokeWidth = Number(style.strokeWidth) || 2;
   const route = edge.route || "orthogonal";
@@ -124,11 +132,11 @@ export function buildEdgeInspectorFields(diagram: { theme?: string }, edge: Flow
 }
 
 export function buildSequenceInspectorFields(
-  diagram: { theme?: string },
+  diagram: { theme?: Theme },
   selection: SequenceSelection,
   element: SequenceInspectable,
-  colourScheme = "classic",
-  documentTheme = "light"
+  colourScheme: ColourSchemeName = "classic",
+  documentTheme: Theme = "light"
 ): string {
   const style = "from" in element
     ? null
@@ -322,7 +330,9 @@ export function wireSequenceInspector(host: InspectorHost, container: ParentNode
   }));
   if (selection.kind === "message") {
     change(container, ".docdiagram-sequence-inspector-message-style", (value) => update(host, () => {
-      (element as SequenceMessage).style = value;
+      if (sequenceMessageStyles.includes(value as (typeof sequenceMessageStyles)[number])) {
+        (element as SequenceMessage).style = value as (typeof sequenceMessageStyles)[number];
+      }
     }));
     return;
   }

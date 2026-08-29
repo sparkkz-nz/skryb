@@ -7,16 +7,23 @@ import {
   edgeAnchors,
   edgeMarkerStyles,
   edgeRoutes,
+  layoutDirections,
   paletteRoles,
   nodeTextHAlignments,
   nodeTextVAlignments,
   nodeShapes,
-  supportedDiagramTypes
+  sequenceMessageStyles,
+  sequenceParticipantKinds,
+  supportedDiagramTypes,
+  themes
 } from "./schema";
 import { fitCanvasToContent } from "./mutations";
-import { applyFlowchartLayout, layoutDirections, resolveLayoutSettings } from "./layout";
+import { applyFlowchartLayout, resolveLayoutSettings } from "./layout";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
+const diagramMetadataFields = ["version", "id", "caption", "theme"] as const;
+const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "styles", "canvas", "nodes", "edges"] as const;
+const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
 const flowchartNodeFields = ["id", "label", "shape", "class", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
 const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
@@ -24,9 +31,7 @@ const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
 const flowchartEdgeStyleFields = ["stroke", "strokeWidth", "text"] as const;
 const sequenceParticipantFields = ["id", "label", "kind", "palette", "style", "size"] as const;
-const sequenceParticipantKinds = ["actor"] as const;
 const sequenceMessageFields = ["from", "to", "label", "style"] as const;
-const sequenceMessageStyles = ["solid", "dashed"] as const;
 const sequenceActivationFields = ["participant", "from", "to"] as const;
 const sequenceNoteFields = ["at", "after", "label", "palette", "style", "size"] as const;
 const sequenceGroupFields = ["label", "from", "to"] as const;
@@ -242,9 +247,28 @@ export function parseDiagram(source: string, colorScheme = "classic"): Diagram {
     throw new Error(`Unsupported diagram type: ${String(diagram.type)}`);
   }
 
+  const allowedFields = diagram.type === "flowchart" ? flowchartDiagramFields : sequenceDiagramFields;
+  assertAllowedFields(diagram, allowedFields, `${diagram.type} diagram`);
+  validateDiagramMetadata(diagram);
+
   return diagram.type === "flowchart"
     ? parseFlowchartDiagram(diagram as unknown as FlowchartDiagram, colorScheme)
     : parseSequenceDiagram(diagram as unknown as SequenceDiagram, colorScheme);
+}
+
+function validateDiagramMetadata(diagram: ParsedObject): void {
+  if (diagram.version !== undefined && (!Number.isInteger(diagram.version) || Number(diagram.version) < 1)) {
+    throw new Error("Diagram version must be a positive integer.");
+  }
+  for (const field of ["id", "caption"] as const) {
+    if (diagram[field] !== undefined && typeof diagram[field] !== "string") {
+      throw new Error(`Diagram ${field} must be a string.`);
+    }
+  }
+  if (diagram.theme !== undefined &&
+    (typeof diagram.theme !== "string" || !themes.includes(diagram.theme as (typeof themes)[number]))) {
+    throw new Error(`Unsupported diagram theme: ${String(diagram.theme)}`);
+  }
 }
 
 function parseFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): FlowchartDiagram {
@@ -287,7 +311,7 @@ function validateDiagram(diagram: Diagram, colorScheme = "classic"): void {
     : validateSequenceDiagram(diagram, colorScheme);
 }
 
-function assertAllowedFields(candidate: Record<string, unknown> | undefined, allowedFields: readonly string[], description: string): void {
+function assertAllowedFields(candidate: object | undefined, allowedFields: readonly string[], description: string): void {
   for (const key of Object.keys(candidate || {})) {
     if (!allowedFields.includes(key)) {
       throw new Error(`Unsupported ${description} field: ${key}`);
@@ -336,7 +360,7 @@ function validateNamedStyles(diagram: FlowchartDiagram): Set<string> {
       throw new Error(`Style "${name}" must be a mapping.`);
     }
 
-    assertAllowedFields(definition as unknown as Record<string, unknown>, namedStyleFields, `style "${name}"`);
+    assertAllowedFields(definition, namedStyleFields, `style "${name}"`);
 
     if (definition.palette !== undefined &&
       (typeof definition.palette !== "string" || !paletteRoles.includes(definition.palette as (typeof paletteRoles)[number]))) {
@@ -386,10 +410,6 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
   // difference: with it, positions and anchors may be left out for the layout engine to fill in;
   // without it, leaving them out is an error rather than a drawing silently stacked at the origin.
   const layoutManaged = diagram.layout !== undefined;
-  if (diagram.participants !== undefined || diagram.messages !== undefined ||
-    diagram.activations !== undefined || diagram.notes !== undefined || diagram.groups !== undefined) {
-    throw new Error("Flowchart diagrams do not support sequence sections.");
-  }
 
   const styleNames = validateNamedStyles(diagram);
   const assertKnownClass = (value: unknown, description: string): void => {
@@ -407,7 +427,7 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
       throw new Error(`Node "${node.id || "unknown"}" uses removed field "type".`);
     }
 
-    assertAllowedFields(node as unknown as Record<string, unknown>, flowchartNodeFields, `node "${node.id || "unknown"}"`);
+    assertAllowedFields(node, flowchartNodeFields, `node "${node.id || "unknown"}"`);
 
     if (!node.id || typeof node.label !== "string") {
       throw new Error("Every node requires an id and a string label.");
@@ -467,7 +487,7 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
   }
 
   for (const edge of diagram.edges) {
-    assertAllowedFields(edge as unknown as Record<string, unknown>, flowchartEdgeFields, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
+    assertAllowedFields(edge, flowchartEdgeFields, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
 
     // Anchors are resolved per side, so an author can pin the one that carries intent - the
     // deliberate back-edge that steers stage assignment - and leave the other to be derived.
@@ -513,10 +533,6 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
 }
 
 function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classic"): void {
-  if (diagram.nodes !== undefined || diagram.edges !== undefined) {
-    throw new Error("Sequence diagrams do not support flowchart sections.");
-  }
-
   if (!Array.isArray(diagram.participants) || !Array.isArray(diagram.messages)) {
     throw new Error("Sequence diagrams require participants and messages sections.");
   }
@@ -562,7 +578,7 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
 
   const participantIds = new Set<string>();
   for (const participant of diagram.participants) {
-    assertAllowedFields(participant as unknown as Record<string, unknown>, sequenceParticipantFields, `participant "${participant.id || "unknown"}"`);
+    assertAllowedFields(participant, sequenceParticipantFields, `participant "${participant.id || "unknown"}"`);
 
     if (!participant.id || !participant.label) {
       throw new Error("Every sequence participant requires an id and label.");
@@ -581,7 +597,7 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
   }
 
   for (const [index, message] of diagram.messages.entries()) {
-    assertAllowedFields(message as unknown as Record<string, unknown>, sequenceMessageFields, `message ${index}`);
+    assertAllowedFields(message, sequenceMessageFields, `message ${index}`);
 
     if (!message.from || !message.to || !message.label) {
       throw new Error(`Sequence message ${index} requires from, to, and label.`);
@@ -597,7 +613,7 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
   }
 
   for (const [index, activation] of (diagram.activations || []).entries()) {
-    assertAllowedFields(activation as unknown as Record<string, unknown>, sequenceActivationFields, `activation ${index}`);
+    assertAllowedFields(activation, sequenceActivationFields, `activation ${index}`);
     if (!activation.participant || !Number.isInteger(activation.from) || !Number.isInteger(activation.to)) {
       throw new Error(`Sequence activation ${index} requires participant and integer from and to message positions.`);
     }
@@ -610,7 +626,7 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
   }
 
   for (const [index, note] of (diagram.notes || []).entries()) {
-    assertAllowedFields(note as unknown as Record<string, unknown>, sequenceNoteFields, `note ${index}`);
+    assertAllowedFields(note, sequenceNoteFields, `note ${index}`);
     const after = note.after as unknown as number;
     if (!note.at || !Number.isInteger(after) || !note.label) {
       throw new Error(`Sequence note ${index} requires at, after, and label.`);
@@ -625,7 +641,7 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
   }
 
   for (const [index, group] of (diagram.groups || []).entries()) {
-    assertAllowedFields(group as unknown as Record<string, unknown>, sequenceGroupFields, `group ${index}`);
+    assertAllowedFields(group, sequenceGroupFields, `group ${index}`);
     if (!group.label && group.label !== "") {
       throw new Error(`Sequence group ${index} requires a label.`);
     }

@@ -13,7 +13,8 @@ import {
   type FlowchartNode,
   type SequenceMessage,
   type SequenceNote,
-  type SequenceParticipant
+  type SequenceParticipant,
+  type Theme
 } from "../core/diagrams/schema";
 import { escapeHtml, parseDiagram, desugarBlockScalars } from "../core/diagrams/parser";
 import { serializeDiagram } from "../core/diagrams/serializer";
@@ -1199,7 +1200,7 @@ export class BrowserRuntime {
     this.renderDocument();
   }
 
-  private applyPageTheme(theme: string): void {
+  private applyPageTheme(theme: Exclude<Theme, "auto">): void {
     const background = getNodeColorPalette(this.state.documentColorScheme, theme, "background");
     const text = background?.text;
     document.documentElement.dataset.docdiagramTheme = theme;

@@ -1,11 +1,13 @@
 import {
   type Canvas,
+  type ColourSchemeName,
   type EdgeStyle,
   type FlowchartEdge,
   type FlowchartNode,
   type NamedStyle,
   type NodeStyle,
   type PaletteRole,
+  type Theme,
   type ThemeColors,
   colourSchemes,
   diagramThemes,
@@ -13,7 +15,7 @@ import {
   edgeMarkerStyles,
 } from "./schema";
 
-export function resolveTheme(theme: string): "light" | "dark" {
+export function resolveTheme(theme: Theme): Exclude<Theme, "auto"> {
   if (theme === "light" || theme === "dark") {
     return theme;
   }
@@ -23,7 +25,7 @@ export function resolveTheme(theme: string): "light" | "dark" {
   throw new Error(`Unsupported document theme: ${theme}`);
 }
 
-export function getTheme(_: { theme?: string }, documentTheme = "light"): ThemeColors {
+export function getTheme(_: { theme?: Theme }, documentTheme: Theme = "light"): ThemeColors {
   const themeName = resolveTheme(documentTheme);
   const theme = diagramThemes[themeName];
 
@@ -34,8 +36,11 @@ export function getTheme(_: { theme?: string }, documentTheme = "light"): ThemeC
   return theme;
 }
 
-export function getNodeColorPalette(schemeName: string, theme: string, role: string): NodeStyle | null {
-  const palette = colourSchemes[schemeName]?.[resolveTheme(theme)]?.[role as PaletteRole];
+export function getNodeColorPalette(schemeName: string, theme: Theme, role: string): NodeStyle | null {
+  const scheme = Object.prototype.hasOwnProperty.call(colourSchemes, schemeName)
+    ? colourSchemes[schemeName as ColourSchemeName]
+    : undefined;
+  const palette = scheme?.[resolveTheme(theme)]?.[role as PaletteRole];
   return palette || null;
 }
 
@@ -48,10 +53,10 @@ export function getNamedStyle(diagram: { styles?: Record<string, NamedStyle> }, 
 }
 
 export function getNodeEffectiveStyle(
-  diagram: { theme?: string; styles?: Record<string, NamedStyle> },
+  diagram: { theme?: Theme; styles?: Record<string, NamedStyle> },
   node: FlowchartNode,
-  documentTheme = "light",
-  documentColorScheme = "classic"
+  documentTheme: Theme = "light",
+  documentColorScheme: ColourSchemeName = "classic"
 ): NodeStyle {
   const theme = getTheme(diagram, documentTheme);
   const defaults = theme.node;
@@ -77,10 +82,10 @@ export function getNodeEffectiveStyle(
 }
 
 export function getSequenceElementEffectiveStyle(
-  diagram: { theme?: string },
+  diagram: { theme?: Theme },
   element: { palette?: PaletteRole; style?: NodeStyle },
-  documentTheme = "light",
-  documentColorScheme = "classic"
+  documentTheme: Theme = "light",
+  documentColorScheme: ColourSchemeName = "classic"
 ): NodeStyle {
   const theme = getTheme(diagram, documentTheme);
   const palette = element.palette
@@ -90,9 +95,9 @@ export function getSequenceElementEffectiveStyle(
 }
 
 export function getEdgeEffectiveStyle(
-  diagram: { theme?: string; styles?: Record<string, NamedStyle> },
+  diagram: { theme?: Theme; styles?: Record<string, NamedStyle> },
   edge: FlowchartEdge,
-  documentTheme = "light"
+  documentTheme: Theme = "light"
 ): EdgeStyle {
   const theme = getTheme(diagram, documentTheme);
   // An edge has no palette of its own, so a class contributes only its style fields.

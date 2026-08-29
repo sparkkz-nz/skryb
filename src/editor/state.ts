@@ -1,4 +1,4 @@
-import type { Diagram } from "../core/diagrams/schema";
+import type { ColourSchemeName, Diagram, Theme } from "../core/diagrams/schema";
 import type { DocumentDoctype } from "../core/document";
 import type {
   ConnectionDrag,
@@ -28,9 +28,9 @@ export type SequenceSelection = ParticipantSelection | IndexedSequenceSelection;
 export interface EditorState extends DiagramRenderState {
   diagramModels: Diagram[];
   selectedSequenceElement: SequenceSelection | null;
-  documentTheme: string;
-  documentThemeSetting: string;
-  documentColorScheme: string;
+  documentTheme: Exclude<Theme, "auto">;
+  documentThemeSetting: Theme;
+  documentColorScheme: ColourSchemeName;
   documentFormat: "centered" | "full-width";
   documentDoctype: DocumentDoctype;
   savedSource: string;
