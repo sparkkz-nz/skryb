@@ -318,7 +318,9 @@ same two elements: `template#source` (the baked Markdown) and
 
 The lint report carries a `sourceHash` of the source it describes. Compare it
 against the source you hold: if they differ, the report predates your edits and
-must not be trusted.
+its locations must not be trusted. Geometry messages carry a `location` with the
+diagram id/index, fence range, and node or edge subjects. Positions use one-based
+lines and columns plus zero-based UTF-16 offsets; ranges exclude their end.
 
 Use the first of these routes available to you.
 

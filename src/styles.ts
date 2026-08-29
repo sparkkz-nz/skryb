@@ -318,12 +318,32 @@ export function injectStyles(): void {
       font-size: 1rem;
       margin: 0 0 12px;
     }
-    .docdiagram-lint-dialog pre {
-      font-size: 0.85rem;
+    .docdiagram-lint-messages {
+      display: grid;
+      gap: 8px;
       margin: 0 0 12px;
       max-height: 50vh;
       overflow: auto;
+    }
+    .docdiagram-lint-messages pre,
+    .docdiagram-lint-messages button {
+      background: transparent;
+      color: inherit;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.85rem;
+      margin: 0;
+      text-align: left;
       white-space: pre-wrap;
+    }
+    .docdiagram-lint-messages button {
+      border: 1px solid var(--docdiagram-border, currentColor);
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 8px;
+    }
+    .docdiagram-lint-messages button:hover,
+    .docdiagram-lint-messages button:focus-visible {
+      background: var(--docdiagram-panel-background, rgb(127 127 127 / 10%));
     }
     .docdiagram-source-tray {
       background: var(--docdiagram-background);

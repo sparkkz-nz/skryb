@@ -10,10 +10,11 @@ const repositoryRoot = path.resolve(scriptDirectory, "..");
 
 const args = process.argv.slice(2);
 const errorsOnly = args.includes("--errors");
+const jsonOutput = args.includes("--json");
 const files = args.filter((argument) => !argument.startsWith("--"));
 
 if (!files.length) {
-  console.error("Usage: node scripts/lint.mjs <document.html|document.md>... [--errors]");
+  console.error("Usage: node scripts/lint.mjs <document.html|document.md>... [--errors] [--json]");
   process.exit(2);
 }
 
@@ -42,33 +43,57 @@ function readDocumentSource(filePath) {
 
 let errorTotal = 0;
 let warningTotal = 0;
+const documents = [];
 
 for (const file of files) {
   let result;
   try {
     result = lintDocument(readDocumentSource(file));
   } catch (error) {
-    console.error(`${file}: ${error.message}`);
-    errorTotal += 1;
-    continue;
+    const message = error instanceof Error ? error.message : String(error);
+    result = {
+      sourceHash: null,
+      messages: [{ severity: "error", rule: "schema", message }],
+      errorCount: 1,
+      warningCount: 0
+    };
   }
 
   const reported = errorsOnly
     ? result.messages.filter((message) => message.severity === "error")
     : result.messages;
-  for (const message of reported) {
-    const location = message.diagram ? `${file}:${message.diagram}` : file;
-    console.log(`${location}: ${message.severity}: ${message.message} (${message.rule})`);
+  documents.push({
+    file,
+    sourceHash: result.sourceHash,
+    errors: result.errorCount,
+    warnings: errorsOnly ? 0 : result.warningCount,
+    messages: reported
+  });
+  if (!jsonOutput) {
+    for (const message of reported) {
+      const subjectRange = message.location?.subjects?.find((subject) => subject.sourceRange)?.sourceRange;
+      const point = subjectRange?.start || message.location?.fenceRange?.start;
+      const location = point ? `${file}:${point.line}:${point.column}` : file;
+      console.log(`${location}: ${message.severity}: ${message.message} (${message.rule})`);
+    }
   }
 
   errorTotal += result.errorCount;
   warningTotal += errorsOnly ? 0 : result.warningCount;
 }
 
-const summary = errorsOnly
-  ? `${errorTotal} error${errorTotal === 1 ? "" : "s"}`
-  : `${errorTotal} error${errorTotal === 1 ? "" : "s"}, ${warningTotal} warning${warningTotal === 1 ? "" : "s"}`;
-console.log(summary);
+if (jsonOutput) {
+  console.log(JSON.stringify({
+    errors: errorTotal,
+    warnings: warningTotal,
+    documents
+  }, null, 2));
+} else {
+  const summary = errorsOnly
+    ? `${errorTotal} error${errorTotal === 1 ? "" : "s"}`
+    : `${errorTotal} error${errorTotal === 1 ? "" : "s"}, ${warningTotal} warning${warningTotal === 1 ? "" : "s"}`;
+  console.log(summary);
+}
 
 // Warnings are advisory, so a generated document is never blocked on aesthetics.
 process.exit(errorTotal ? 1 : 0);

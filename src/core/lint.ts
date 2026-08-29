@@ -4,7 +4,14 @@
 // bundle as the renderer that draws it, so a rule cannot drift from what is actually drawn.
 import type { FlowchartDiagram } from "./diagrams/schema";
 import { defaultNode } from "./diagrams/schema";
-import { extractDiagramFences, resolveDocument, validateDocumentSource } from "./document";
+import {
+  extractDiagramFences,
+  hashSource,
+  resolveDocument,
+  validateDocumentSource,
+  type ExtractedDiagram,
+  type SourceRange
+} from "./document";
 import { parseDiagram } from "./diagrams/parser";
 import { FlowchartIndex } from "./diagrams/hierarchy";
 import {
@@ -19,14 +26,39 @@ import {
 
 export type LintSeverity = "error" | "warning";
 
+export interface LintNodeSubject {
+  kind: "node";
+  id: string;
+  sourceRange?: SourceRange;
+}
+
+export interface LintEdgeSubject {
+  kind: "edge";
+  index: number;
+  source: string;
+  target: string;
+  sourceRange?: SourceRange;
+}
+
+export type LintSubject = LintNodeSubject | LintEdgeSubject;
+
+export interface LintLocation {
+  diagramId: string | null;
+  diagramIndex: number;
+  fenceRange: SourceRange;
+  subjects: LintSubject[];
+}
+
 export interface LintMessage {
   severity: LintSeverity;
   rule: string;
   message: string;
   diagram?: string;
+  location?: LintLocation;
 }
 
 export interface LintResult {
+  sourceHash: string;
   messages: LintMessage[];
   errorCount: number;
   warningCount: number;
@@ -38,13 +70,41 @@ function describeDiagram(id: string | null, index: number): string {
   return id || `diagram ${index + 1}`;
 }
 
+function locateSubjects(diagram: ExtractedDiagram, subjects: LintSubject[]): LintSubject[] {
+  const nodeRanges = new Map<string, SourceRange>();
+  const edgeRanges: SourceRange[] = [];
+  let section = "";
+
+  diagram.source.split("\n").forEach((line, lineIndex) => {
+    const topLevel = line.match(/^([A-Za-z_][\w-]*):/);
+    if (topLevel) {
+      section = topLevel[1];
+    }
+    const node = line.match(/^\s*-\s+id:\s*(?:"([^"]+)"|'([^']+)'|([^\s#]+))/);
+    const range = diagram.lineRanges[lineIndex];
+    if (node && range) {
+      nodeRanges.set(node[1] || node[2] || node[3], range);
+    }
+    if (section === "edges" && /^\s*-\s+[^:]+:/.test(line) && range) {
+      edgeRanges.push(range);
+    }
+  });
+
+  return subjects.map((subject) => subject.kind === "node"
+    ? { ...subject, sourceRange: nodeRanges.get(subject.id) }
+    : { ...subject, sourceRange: edgeRanges[subject.index] });
+}
+
 function boundsOverlap(first: Bounds, second: Bounds): { width: number; height: number } | null {
   const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
   const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
-function lintNodeOverlaps(index: FlowchartIndex, report: (rule: string, message: string) => void): void {
+function lintNodeOverlaps(
+  index: FlowchartIndex,
+  report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
+): void {
   const entries = index.entries;
   for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
     for (let other = entryIndex + 1; other < entries.length; other += 1) {
@@ -59,14 +119,19 @@ function lintNodeOverlaps(index: FlowchartIndex, report: (rule: string, message:
       if (overlap) {
         report(
           "node-overlap",
-          `Nodes "${first.node.id}" and "${second.node.id}" overlap by ${Math.round(overlap.width)} by ${Math.round(overlap.height)} units.`
+          `Nodes "${first.node.id}" and "${second.node.id}" overlap by ${Math.round(overlap.width)} by ${Math.round(overlap.height)} units.`,
+          "warning",
+          [{ kind: "node", id: first.node.id }, { kind: "node", id: second.node.id }]
         );
       }
     }
   }
 }
 
-function lintNodeLabels(index: FlowchartIndex, report: (rule: string, message: string) => void): void {
+function lintNodeLabels(
+  index: FlowchartIndex,
+  report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
+): void {
   for (const { node } of index.entries) {
     const width = Number(node.size?.width) || defaultNode.width;
     const height = Number(node.size?.height) || defaultNode.height;
@@ -83,7 +148,12 @@ function lintNodeLabels(index: FlowchartIndex, report: (rule: string, message: s
       const overflowing = splitTextLines(node.label)
         .find((line) => measureTextWidth(line.replace(/^#{1,2}\s+/, ""), /^#{1,2}\s/.test(line) ? 24 : 16) > textBounds.width + padding);
       if (overflowing !== undefined) {
-        report("label-overflow", `Node "${node.id}" has a line wider than its shape: "${overflowing.trim()}".`);
+        report(
+          "label-overflow",
+          `Node "${node.id}" has a line wider than its shape: "${overflowing.trim()}".`,
+          "warning",
+          [{ kind: "node", id: node.id }]
+        );
       }
     }
 
@@ -92,14 +162,26 @@ function lintNodeLabels(index: FlowchartIndex, report: (rule: string, message: s
     if (contentHeight > textBounds.height + padding) {
       report(
         "label-overflow",
-        `Node "${node.id}" needs ${Math.ceil(contentHeight)} units of text height but its shape offers ${Math.floor(textBounds.height + padding)}.`
+        `Node "${node.id}" needs ${Math.ceil(contentHeight)} units of text height but its shape offers ${Math.floor(textBounds.height + padding)}.`,
+        "warning",
+        [{ kind: "node", id: node.id }]
       );
     }
   }
 }
 
-function lintEdges(diagram: FlowchartDiagram, index: FlowchartIndex, report: (rule: string, message: string, severity?: LintSeverity) => void): void {
-  for (const edge of diagram.edges || []) {
+function lintEdges(
+  diagram: FlowchartDiagram,
+  index: FlowchartIndex,
+  report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
+): void {
+  for (const [edgeIndex, edge] of (diagram.edges || []).entries()) {
+    const edgeSubject: LintEdgeSubject = {
+      kind: "edge",
+      index: edgeIndex,
+      source: edge.source,
+      target: edge.target
+    };
     const source = index.getById(edge.source);
     const target = index.getById(edge.target);
     // The renderer drops an edge naming an unknown node without a word, so the connector simply
@@ -109,7 +191,8 @@ function lintEdges(diagram: FlowchartDiagram, index: FlowchartIndex, report: (ru
         report(
           "unknown-edge-endpoint",
           `Edge "${edge.source}" -> "${edge.target}" names a ${role} node "${id}" that does not exist, so it is not drawn.`,
-          "error"
+          "error",
+          [edgeSubject]
         );
       }
     }
@@ -144,7 +227,9 @@ function lintEdges(diagram: FlowchartDiagram, index: FlowchartIndex, report: (ru
       if (crossed) {
         report(
           "edge-crosses-node",
-          `Edge "${edge.source}" -> "${edge.target}" passes through unrelated node "${obstacle.node.id}".`
+          `Edge "${edge.source}" -> "${edge.target}" passes through unrelated node "${obstacle.node.id}".`,
+          "warning",
+          [edgeSubject, { kind: "node", id: obstacle.node.id }]
         );
       }
     }
@@ -157,24 +242,41 @@ function lintEdges(diagram: FlowchartDiagram, index: FlowchartIndex, report: (ru
  */
 export function lintDocument(source: string): LintResult {
   const messages: LintMessage[] = [];
+  const sourceHash = hashSource(source);
 
   try {
     validateDocumentSource(source);
   } catch (error) {
     messages.push({ severity: "error", rule: "schema", message: (error as Error).message });
-    return { messages, errorCount: 1, warningCount: 0 };
+    return { sourceHash, messages, errorCount: 1, warningCount: 0 };
   }
 
   const colourScheme = resolveDocument(source).colourScheme;
-  extractDiagramFences(source).forEach(({ id, source: diagramSource }, index) => {
-    const diagram = parseDiagram(diagramSource, colourScheme);
+  extractDiagramFences(source).forEach((extracted) => {
+    const diagram = parseDiagram(extracted.source, colourScheme);
     if (diagram.type !== "flowchart") {
       return;
     }
 
-    const name = describeDiagram(id, index);
-    const report = (rule: string, message: string, severity: LintSeverity = "warning") => {
-      messages.push({ severity, rule, message, diagram: name });
+    const name = describeDiagram(extracted.id, extracted.index);
+    const report = (
+      rule: string,
+      message: string,
+      severity: LintSeverity = "warning",
+      subjects: LintSubject[] = []
+    ) => {
+      messages.push({
+        severity,
+        rule,
+        message,
+        diagram: name,
+        location: {
+          diagramId: extracted.id,
+          diagramIndex: extracted.index,
+          fenceRange: extracted.fenceRange,
+          subjects: locateSubjects(extracted, subjects)
+        }
+      });
     };
 
     const flowchartIndex = new FlowchartIndex(diagram);
@@ -184,6 +286,7 @@ export function lintDocument(source: string): LintResult {
   });
 
   return {
+    sourceHash,
     messages,
     errorCount: messages.filter((message) => message.severity === "error").length,
     warningCount: messages.filter((message) => message.severity === "warning").length

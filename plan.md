@@ -278,7 +278,7 @@ Recorded on 2026-08-30 for `refactor/browser-runtime-services`:
 
 ## Block 6 — Source-addressable lint model
 
-**Status:** Planned  
+**Status:** In progress
 **Suggested branch:** `feat/source-addressable-lint`  
 **Dependencies:** Blocks 2 through 4
 
@@ -303,6 +303,24 @@ finding to the relevant canonical source.
 - Existing consumers of message text continue to work.
 - Location tests cover referenced definitions, block quotes, CRLF, and diagrams
   without IDs.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `feat/source-addressable-lint`:
+
+- Every geometry message carries the canonical diagram id/index and fence range,
+  plus node or stable edge-index subjects with source ranges when known.
+- Browser findings reveal their canonical YAML in the source editor, while the
+  report hash prevents stale ranges from being followed.
+- CLI text output uses navigable `file:line:column` prefixes and `--json` exposes
+  the same versionless additive report contract as the browser template.
+- CRLF, block-quoted referenced definitions, id-less diagrams, nodes, and edges
+  have focused location coverage. All 283 tests and type checks pass.
+- The source-location model and browser navigation increased the hosted runtime
+  to 203,918 bytes raw, 57,309 gzip, and 49,354 Brotli; the self-packaged runtime
+  is 416,304/115,032/59,285 bytes. Raw budgets increased to 210,000 and 425,000
+  bytes respectively to accommodate the feature; compressed budgets are
+  unchanged because both artifacts remain within them.
 
 ## Block 7 — Edge-label placement and clearance lint
 
