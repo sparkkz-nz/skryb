@@ -31,7 +31,7 @@ function formatField(key: string, value: unknown, lineIndent: number, contentInd
   return [`${" ".repeat(lineIndent)}${prefix}${key}: ${formatScalar(value)}`];
 }
 
-function serializeItem(item: Record<string, unknown>, indent = 2): string[] {
+function serializeItem(item: object, indent = 2): string[] {
   const entries = Object.entries(item);
   const [firstKey, firstValue] = entries[0];
   const lines = formatField(firstKey, firstValue, indent, indent + 4, "- ");
@@ -43,7 +43,7 @@ function serializeItem(item: Record<string, unknown>, indent = 2): string[] {
     if (key === "children" && Array.isArray(value)) {
       lines.push(`${" ".repeat(indent + 2)}children:`);
       for (const child of value) {
-        lines.push(...serializeItem(child as Record<string, unknown>, indent + 4));
+        lines.push(...serializeItem(child as object, indent + 4));
       }
     } else {
       lines.push(...formatField(key, value, indent + 2, indent + 4));
@@ -56,12 +56,13 @@ function serializeItem(item: Record<string, unknown>, indent = 2): string[] {
 export function serializeDiagram(diagram: Diagram): string {
   const lines = [`type: ${formatScalar(diagram.type)}`];
 
-  for (const [key, value] of Object.entries(diagram as unknown as Record<string, unknown>)) {
-    if (key === "type" || key === "canvas" || key === "styles" || key === "nodes" || key === "edges" ||
-      key === "participants" || key === "messages" || key === "activations" || key === "notes" || key === "groups") {
-      continue;
+  for (const key of ["version", "id", "caption", "theme"] as const) {
+    if (diagram[key] !== undefined) {
+      lines.push(...formatField(key, diagram[key], 0, 2));
     }
-    lines.push(...formatField(key, value, 0, 2));
+  }
+  if (diagram.type === "flowchart" && diagram.layout !== undefined) {
+    lines.push(...formatField("layout", diagram.layout, 0, 2));
   }
 
   if (diagram.type === "sequence") {
@@ -74,32 +75,32 @@ export function serializeDiagram(diagram: Diagram): string {
 
     lines.push("participants:");
     for (const participant of diagram.participants || []) {
-      lines.push(...serializeItem(participant as unknown as Record<string, unknown>));
+      lines.push(...serializeItem(participant));
     }
 
     lines.push("messages:");
     for (const message of diagram.messages || []) {
-      lines.push(...serializeItem(message as unknown as Record<string, unknown>));
+      lines.push(...serializeItem(message));
     }
 
     if (diagram.activations !== undefined) {
       lines.push("activations:");
       for (const activation of diagram.activations || []) {
-        lines.push(...serializeItem(activation as unknown as Record<string, unknown>));
+        lines.push(...serializeItem(activation));
       }
     }
 
     if (diagram.notes !== undefined) {
       lines.push("notes:");
       for (const note of diagram.notes || []) {
-        lines.push(...serializeItem(note as unknown as Record<string, unknown>));
+        lines.push(...serializeItem(note));
       }
     }
 
     if (diagram.groups !== undefined) {
       lines.push("groups:");
       for (const group of diagram.groups || []) {
-        lines.push(...serializeItem(group as unknown as Record<string, unknown>));
+        lines.push(...serializeItem(group));
       }
     }
 
@@ -134,12 +135,12 @@ export function serializeDiagram(diagram: Diagram): string {
 
   lines.push("nodes:");
   for (const node of diagram.nodes || []) {
-    lines.push(...serializeItem(node as unknown as Record<string, unknown>));
+    lines.push(...serializeItem(node));
   }
 
   lines.push("edges:");
   for (const edge of diagram.edges || []) {
-    lines.push(...serializeItem(edge as unknown as Record<string, unknown>));
+    lines.push(...serializeItem(edge));
   }
 
   return lines.join("\n");

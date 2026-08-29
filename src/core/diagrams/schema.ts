@@ -41,15 +41,15 @@ export interface NamedStyle {
 export interface FlowchartNode {
   id: string;
   label: string;
-  shape: string;
+  shape: NodeShape;
   class?: string;
   position?: Position;
   size?: Size;
   style?: NodeStyle;
   palette?: PaletteRole;
   subtitle?: string;
-  textVAlign?: "top" | "center";
-  textHAlign?: "left" | "center" | "right";
+  textVAlign?: NodeTextVAlignment;
+  textHAlign?: NodeTextHAlignment;
   arrow?: Position;
   children?: FlowchartNode[];
 }
@@ -58,13 +58,13 @@ export interface FlowchartEdge {
   source: string;
   target: string;
   class?: string;
-  sourceAnchor?: string;
-  targetAnchor?: string;
-  route?: string;
+  sourceAnchor?: EdgeAnchor;
+  targetAnchor?: EdgeAnchor;
+  route?: EdgeRoute;
   label?: string;
   style?: EdgeStyle;
-  start?: string;
-  end?: string;
+  start?: EdgeMarkerStyle;
+  end?: EdgeMarkerStyle;
   waypoint?: Position;
 }
 
@@ -73,24 +73,34 @@ export interface Canvas {
   height?: number;
   grid?: number;
   auto?: boolean;
-  [key: string]: unknown;
 }
 
-export interface FlowchartDiagram {
+export interface DiagramMetadata {
+  version?: number;
+  id?: string;
+  caption?: string;
+  theme?: Theme;
+}
+
+export interface LayoutOptions {
+  direction?: LayoutDirection;
+  stageGap?: number;
+  siblingGap?: number;
+}
+
+export interface FlowchartDiagram extends DiagramMetadata {
   type: "flowchart";
-  theme?: string;
-  layout?: string | { direction?: string; stageGap?: number; siblingGap?: number };
+  layout?: LayoutDirection | LayoutOptions;
   styles?: Record<string, NamedStyle>;
   canvas: Canvas;
   nodes: FlowchartNode[];
   edges: FlowchartEdge[];
-  [key: string]: unknown;
 }
 
 export interface SequenceParticipant {
   id: string;
   label?: string;
-  kind?: string;
+  kind?: SequenceParticipantKind;
   palette?: PaletteRole;
   style?: NodeStyle;
   size?: Size;
@@ -100,7 +110,7 @@ export interface SequenceMessage {
   from: string;
   to: string;
   label?: string;
-  style?: string;
+  style?: SequenceMessageStyle;
 }
 
 export interface SequenceActivation {
@@ -131,16 +141,14 @@ export interface SequenceCanvas {
   participantSize?: Size;
 }
 
-export interface SequenceDiagram {
+export interface SequenceDiagram extends DiagramMetadata {
   type: "sequence";
-  theme?: string;
   canvas?: SequenceCanvas;
   participants?: SequenceParticipant[];
   messages?: SequenceMessage[];
   activations?: SequenceActivation[];
   notes?: SequenceNote[];
   groups?: SequenceGroup[];
-  [key: string]: unknown;
 }
 
 export type Diagram = FlowchartDiagram | SequenceDiagram;
@@ -166,6 +174,10 @@ export interface ColourScheme {
 }
 
 export const supportedDiagramTypes = ["flowchart", "sequence"] as const;
+export const themes = ["auto", "light", "dark"] as const;
+export const layoutDirections = ["right", "down", "left", "up"] as const;
+export const sequenceParticipantKinds = ["actor"] as const;
+export const sequenceMessageStyles = ["solid", "dashed"] as const;
 
 export const nodeShapes = [
   "rounded-rectangle",
@@ -187,6 +199,17 @@ export const edgeMarkerStyles = ["none", "arrow", "circle"] as const;
 export const edgeMarkerDefaults = { start: "none", end: "arrow" } as const;
 export const nodeTextVAlignments = ["top", "center"] as const;
 export const nodeTextHAlignments = ["left", "center", "right"] as const;
+
+export type Theme = (typeof themes)[number];
+export type LayoutDirection = (typeof layoutDirections)[number];
+export type NodeShape = (typeof nodeShapes)[number];
+export type EdgeAnchor = (typeof edgeAnchors)[number];
+export type EdgeRoute = (typeof edgeRoutes)[number];
+export type EdgeMarkerStyle = (typeof edgeMarkerStyles)[number];
+export type NodeTextVAlignment = (typeof nodeTextVAlignments)[number];
+export type NodeTextHAlignment = (typeof nodeTextHAlignments)[number];
+export type SequenceParticipantKind = (typeof sequenceParticipantKinds)[number];
+export type SequenceMessageStyle = (typeof sequenceMessageStyles)[number];
 
 export const minimumNodeSize: Size = { width: 50, height: 20 };
 export const documentMinimumNodeSize: Size = { width: 50, height: 20 };
@@ -211,7 +234,7 @@ const roles = (
 const colour = (label: string, fill: string, stroke: string, text: string, gradient?: string, glow?: string): ColorPaletteEntry =>
   ({ label, fill, stroke, text, gradient, glow });
 
-export const colourSchemes: Record<string, ColourScheme> = {
+export const colourSchemes = {
   classic: {
     label: "Classic",
     light: roles(
@@ -277,7 +300,9 @@ export const colourSchemes: Record<string, ColourScheme> = {
       colour("Note", "#273A46", "#7DB2D0", "#E5EFF4"), colour("Success", "#31452B", "#9BC58F", "#E4F0DF"), colour("Warning", "#503016", "#E3A060", "#F9E8CD"), colour("Danger", "#51281F", "#DA8A79", "#F5E0DA"), colour("Highlight", "#4A3D12", "#D6BC48", "#F8F0BD")
     )
   }
-};
+} satisfies Record<string, ColourScheme>;
+
+export type ColourSchemeName = keyof typeof colourSchemes;
 
 export const diagramThemes: Record<"light" | "dark", ThemeColors> = {
   light: {

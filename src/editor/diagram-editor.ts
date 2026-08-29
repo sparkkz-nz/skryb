@@ -1,5 +1,6 @@
 import {
   edgeAnchors,
+  type EdgeAnchor,
   type FlowchartDiagram,
   type FlowchartEdge,
   type FlowchartNode,
@@ -283,8 +284,9 @@ export class DiagramEditor {
       const nodeId = port.getAttribute("data-node-id") || group?.getAttribute("data-node-id") || "";
       const diagram = diagramAt(this.host.state, diagramIndex);
       const node = diagram ? findFlowchartNode(diagram, nodeId)?.node : null;
-      const anchor = port.getAttribute("data-anchor") || "";
-      if (node) {
+      const anchorValue = port.getAttribute("data-anchor") || "";
+      if (node && edgeAnchors.includes(anchorValue as EdgeAnchor)) {
+        const anchor = anchorValue as EdgeAnchor;
         this.beginConnectionDrag(svg, event, {
           diagramIndex,
           sourceNodeId: nodeId,

@@ -210,6 +210,27 @@ test("a caption round-trips through parse and serialize with no serializer chang
   assert.match(serializeDiagram(parseDiagram(source)), /^caption: "Figure #: Authentication flow"$/m);
 });
 
+test("diagram metadata validates explicit fields and round-trips unchanged", () => {
+  const source = [
+    "type: flowchart",
+    "version: 1",
+    "id: auth-flow",
+    "caption: Authentication flow",
+    "theme: dark",
+    "canvas: auto",
+    "nodes:",
+    "edges:"
+  ].join("\n");
+  const body = ["canvas: auto", "nodes:", "edges:"];
+
+  assert.equal(serializeDiagram(parseDiagram(source)), source);
+  assert.throws(() => parseDiagram(flowchartSource(["debug: true", ...body])), /Unsupported flowchart diagram field: debug/);
+  assert.throws(() => parseDiagram(flowchartSource(["theme: ultraviolet", ...body])), /Unsupported diagram theme: ultraviolet/);
+  assert.throws(() => parseDiagram(flowchartSource(["version: 0", ...body])), /Diagram version must be a positive integer/);
+  assert.throws(() => parseDiagram(flowchartSource(["id: 42", ...body])), /Diagram id must be a string/);
+  assert.throws(() => parseDiagram(flowchartSource(["caption: false", ...body])), /Diagram caption must be a string/);
+});
+
 test("captions and references render their inline markdown subset but not block content", () => {
   const markup = renderMarkdown([
     "See {ref=flow}.",

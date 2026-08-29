@@ -1,4 +1,4 @@
-import { colourSchemes } from "./diagrams/schema";
+import { colourSchemes, themes, type ColourSchemeName, type Theme } from "./diagrams/schema";
 import { parseDiagram, parseScalar } from "./diagrams/parser";
 import { layoutFilledDiagram } from "./diagrams/layout";
 import { serializeDiagram } from "./diagrams/serializer";
@@ -12,9 +12,9 @@ export type DocumentDoctype = (typeof documentDoctypes)[number];
 export interface ResolvedDocument {
   content: string;
   frontmatter: Record<string, unknown>;
-  theme: string;
-  resolvedTheme: "light" | "dark";
-  colourScheme: string;
+  theme: Theme;
+  resolvedTheme: Exclude<Theme, "auto">;
+  colourScheme: ColourSchemeName;
   doctype: DocumentDoctype;
 }
 
@@ -49,24 +49,24 @@ export function parseDocumentFrontmatter(source: string): { content: string; fro
 
 export function resolveDocument(source: string): ResolvedDocument {
   const document = parseDocumentFrontmatter(source);
-  const theme = String(document.frontmatter.theme || "auto");
-  const colourScheme = String(document.frontmatter.colourScheme || "classic");
-  const doctype = String(document.frontmatter.doctype || "document");
+  const theme = String(document.frontmatter.theme ?? "auto");
+  const colourScheme = String(document.frontmatter.colourScheme ?? "classic");
+  const doctype = String(document.frontmatter.doctype ?? "document");
 
-  let resolvedTheme: "light" | "dark";
-  try {
-    resolvedTheme = resolveTheme(theme);
-  } catch {
+  if (!themes.includes(theme as Theme)) {
     throw new Error(`Unsupported document theme: ${theme}`);
   }
-  if (!colourSchemes[colourScheme]) {
+  const validatedTheme = theme as Theme;
+  const resolvedTheme = resolveTheme(validatedTheme);
+  if (!Object.prototype.hasOwnProperty.call(colourSchemes, colourScheme)) {
     throw new Error(`Unsupported document colour scheme: ${colourScheme}`);
   }
+  const validatedColourScheme = colourScheme as ColourSchemeName;
   if (!documentDoctypes.includes(doctype as DocumentDoctype)) {
     throw new Error(`Unsupported document doctype: ${doctype}`);
   }
 
-  return { ...document, theme, resolvedTheme, colourScheme, doctype: doctype as DocumentDoctype };
+  return { ...document, theme: validatedTheme, resolvedTheme, colourScheme: validatedColourScheme, doctype: doctype as DocumentDoctype };
 }
 
 export function validateDocumentSource(source: string): ResolvedDocument {

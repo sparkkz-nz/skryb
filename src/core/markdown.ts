@@ -1,4 +1,11 @@
-import { calloutKinds, paletteRoles, gridColumns } from "./diagrams/schema";
+import {
+  calloutKinds,
+  paletteRoles,
+  gridColumns,
+  type ColourSchemeName,
+  type PaletteRole,
+  type Theme
+} from "./diagrams/schema";
 import { escapeHtml, parseScalar } from "./diagrams/parser";
 import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
@@ -251,7 +258,11 @@ function isComponentColour(value: string): boolean {
   return /^#[\da-f]{3,8}$/i.test(value);
 }
 
-function getComponentStyle(attributes: Record<string, string>, documentColorScheme = "classic", documentTheme = "light"): string | null {
+function getComponentStyle(
+  attributes: Record<string, string>,
+  documentColorScheme: ColourSchemeName = "classic",
+  documentTheme: Theme = "light"
+): string | null {
   const hasPalette = attributes.palette !== undefined;
   if (hasPalette && !paletteRoles.includes(attributes.palette as (typeof paletteRoles)[number])) {
     return null;
@@ -264,7 +275,7 @@ function getComponentStyle(attributes: Record<string, string>, documentColorSche
   }
 
   const palette = hasPalette
-    ? getNodeColorPalette(documentColorScheme, documentTheme, attributes.palette as string)
+    ? getNodeColorPalette(documentColorScheme, documentTheme, attributes.palette as PaletteRole)
     : null;
   const overrides = Object.fromEntries(
     ["fill", "stroke", "text"]
@@ -338,8 +349,8 @@ export function renderMarkdown(
   state: MarkdownRenderState = { diagramIndex: 0 },
   options?: {
     renderDiagram?: (source: string, index: number, figure?: { id: string | null; caption: string | null }) => string;
-    documentColorScheme?: string;
-    documentTheme?: string;
+    documentColorScheme?: ColourSchemeName;
+    documentTheme?: Theme;
     diagramReferenceRegistry?: DiagramReferenceRegistry;
   }
 ): string {

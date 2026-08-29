@@ -1,11 +1,11 @@
 import { escapeHtml, parseDiagram } from "../core/diagrams/parser";
-import type { Diagram } from "../core/diagrams/schema";
+import type { ColourSchemeName, Diagram } from "../core/diagrams/schema";
 import { renderFlowchartDiagram, renderDiagramToolbar } from "./flowchart";
 import { renderSequenceDiagram } from "./sequence";
 import type { DiagramFigure, DiagramRenderState } from "./types";
 
 export interface DiagramRenderOptions {
-  colourScheme: string;
+  colourScheme: ColourSchemeName;
   state: DiagramRenderState;
   onDiagram: (diagramIndex: number, diagram: Diagram) => void;
   figure?: DiagramFigure;
