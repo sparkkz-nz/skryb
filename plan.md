@@ -526,7 +526,7 @@ Record merged work here in chronological order.
 | 1 | Complete | [#67](https://github.com/sparkkz-nz/skryb/pull/67) | Split lean hosted and self-packaged runtime artifacts with enforced size budgets. |
 | 2 | In progress | [#68](https://github.com/sparkkz-nz/skryb/pull/68) | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
 | 3 | Planned | — | — |
-| 4 | In progress | — | Derived validated unions from schema constants, removed broad model index signatures, and guarded parser and editor boundaries. |
+| 4 | In progress | [#70](https://github.com/sparkkz-nz/skryb/pull/70) | Derived validated unions from schema constants, removed broad model index signatures, and guarded parser and editor boundaries. |
 | 5 | Planned | — | — |
 | 6 | Planned | — | — |
 | 7 | Planned | — | — |
