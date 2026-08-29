@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 176 176" role="img" aria-labelledby="skryb-logo-title skryb-logo-desc">
+  <title id="skryb-logo-title">Skryb</title>
+  <desc id="skryb-logo-desc">A midnight rounded square containing warm white document brackets and three mint source lines.</desc>
+  <rect width="176" height="176" rx="42" fill="#17133f"/>
+  <path
+    d="M59 45H38v86h21M117 45h21v86h-21"
+    fill="none"
+    stroke="#f7f5f0"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M70 65h22M70 88h36M70 111h22"
+    fill="none"
+    stroke="#35e6a5"
+    stroke-width="13"
+    stroke-linecap="round"
+  />
+</svg>
