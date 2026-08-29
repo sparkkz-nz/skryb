@@ -853,8 +853,10 @@ The document menu also changes the theme, colour scheme, and doctype, which
 writes frontmatter into the canonical source. **Save As** downloads a portable
 HTML copy that retains an external runtime URL. **Save for Offline** downloads a
 self-contained copy with the selected runtime embedded at the end of its body.
-The latter reports an error rather than producing a partial document if the
-runtime cannot be obtained.
+A hosted runtime is fetched for that export; the explicitly named
+`skryb-runtime-self-packaged.js` artifact includes the same source for a local
+`file:` workflow with no network access. The export reports an error rather than
+producing a partial document if the runtime cannot be obtained.
 
 Each diagram frame has an **Expand** control that grows it to fill the window,
 and collapses it again from the same button or with Escape. An expanded frame
@@ -996,7 +998,9 @@ A single diagram can still be printed on its own from its **Export** menu.
 
 Use `/latest/skryb-runtime.js` for normal use, `/dev/skryb-runtime.js` only for
 short-lived branch testing, and `/releases/&lt;tag&gt;/skryb-runtime.js` for immutable
-published documents. See the
+published documents. These hosted artifacts omit the encoded source copy. Use
+`skryb-runtime-self-packaged.js` only when distributing the runtime beside a
+local document that must export offline without fetching. See the
 [quickstart](https://sparkkz-nz.github.io/skryb/docs/quickstart.html) for URLs and
 examples.
 
