@@ -57,6 +57,7 @@ permanent targets.
 ## Block 1 — Runtime artifact split and size budgets
 
 **Status:** In progress
+**Pull request:** [#67](https://github.com/sparkkz-nz/skryb/pull/67)
 **Suggested branch:** `perf/runtime-artifact-split`  
 **Dependencies:** None
 
