@@ -505,7 +505,7 @@ Record merged work here in chronological order.
 | Block | Status | Pull request | Result |
 |---|---|---|---|
 | 1 | Complete | [#67](https://github.com/sparkkz-nz/skryb/pull/67) | Split lean hosted and self-packaged runtime artifacts with enforced size budgets. |
-| 2 | In progress | — | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
+| 2 | In progress | [#68](https://github.com/sparkkz-nz/skryb/pull/68) | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
 | 3 | Planned | — | — |
 | 4 | Planned | — | — |
 | 5 | Planned | — | — |
