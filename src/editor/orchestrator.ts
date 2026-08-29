@@ -17,7 +17,7 @@ import {
 } from "../core/diagrams/schema";
 import { escapeHtml, parseDiagram, desugarBlockScalars } from "../core/diagrams/parser";
 import { serializeDiagram } from "../core/diagrams/serializer";
-import { findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, reparentFlowchartNode } from "../core/diagrams/hierarchy";
+import { FlowchartIndex, findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, reparentFlowchartNode } from "../core/diagrams/hierarchy";
 import {
   clampZoom,
   getWheelPixels,
@@ -727,6 +727,7 @@ export class BrowserRuntime {
       fitCanvasToContent,
       applyFlowchartLayout,
       layoutDirections,
+      FlowchartIndex,
       flattenFlowchartNodes,
       getFlowchartNodeBounds,
       reparentFlowchartNode,
