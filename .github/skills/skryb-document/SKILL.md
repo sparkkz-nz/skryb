@@ -185,6 +185,20 @@ leave a particular side - a feedback edge doubling back, which the engine also
 reads as a deliberate back-edge and keeps out of the stage assignment - and
 leave the other edges alone.
 
+### Constrained auto-layout geometry
+
+Flowchart nodes default to `190` by `80`. Automatic layout uses a `120`-unit
+gap between stages and a `60`-unit gap between siblings. When pinning a key
+node, leave room for the neighbouring node plus at least one stage gap in the
+flow direction, and one sibling gap perpendicular to it. With `canvas.grid: 5`,
+write manually positioned nodes on multiples of `5`.
+
+For example, a default node immediately downstream from a `190`-wide node in a
+right-flowing diagram begins about `310` units to its right (`190 + 120`).
+These are layout guides, not constraints: add an explicit `size` when a label
+needs more room, and leave unimportant nodes and ordinary connectors without
+positions or anchors so the engine can place them around your pin.
+
 Choose the direction from the content: `right` for a pipeline or request path,
 `down` for a decision tree or a sequence of steps. A diagram wider than about
 five stages usually reads better as `down`.
@@ -343,22 +357,6 @@ With no browser at all, ask whoever you are working for to open the document,
 choose **Check document** from the document menu, and save it over the original.
 That single action bakes the layout, runs the checks, and hands both back to you.
 Batch your edits before asking: each request costs them an open and a save.
-
-### 4. Working inside the skryb repository
-
-Only when you are in a checkout of skryb itself:
-
-```sh
-node scripts/bake.mjs doc.html            # positions and anchors written in
-node scripts/bake.mjs doc.html --check    # non-zero if baking would change it
-node scripts/lint.mjs doc.html            # errors and warnings
-node scripts/lint.mjs doc.html --errors   # schema only, for CI
-```
-
-Do not download a runtime and run it outside the browser, and do not ask anyone
-to. In a browser the runtime is sandboxed; under Node it would have the same
-access to the machine as you do, and the URL it came from is a value taken from
-a document that may not be trustworthy.
 
 ### What baking touches
 
