@@ -26,8 +26,9 @@ document.
    that lets a reader understand a diagram without relying only on its visuals.
 6. Validate the HTML shell, frontmatter, Markdown subset, and every diagram
    field before returning the document.
-7. Run the lint command over the finished file. You cannot see what you have
-   written, and it catches the defects that do not show up in the source.
+7. Bake the file, then lint it, then adjust and lint again. You cannot see what
+   you have written; this is the loop that closes that gap, and it is described
+   under "Reviewing a document" below.
 
 ```html
 <!doctype html>
@@ -98,9 +99,10 @@ annotation for nesting readability, such as `::: (supporting stack)`.
 ## Diagram rules
 
 Every fenced `diagram` YAML block must declare `type: flowchart` or
-`type: sequence`. Flowchart nodes must have a supported `shape`, and every
-flowchart edge must include both `sourceAnchor` and `targetAnchor`. Use only
-the values in the syntax reference, including:
+`type: sequence`. Flowchart nodes must have a supported `shape`. Node positions
+and edge anchors are required only when the flowchart has no `layout` - see
+"Let the layout engine place the diagram" below. Use only the values in the
+syntax reference, including:
 
 - node shapes: `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`,
   `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, and
@@ -118,30 +120,89 @@ diagram compact and include adjacent prose that explains the flow. Sequence
 diagrams use ordered participants and messages; do not add arbitrary positions
 or Mermaid syntax.
 
-Set `layout: right` (or `down`, `left`, `up`) on a flowchart and leave the nodes
-without a `position` and the edges without anchors, unless you have a specific
-arrangement in mind. Placing nodes blind is the main source of untidy generated
-diagrams; declaring the flow direction and letting the runtime place them is both
-shorter to write and reliably better looking. Layout only ever fills in what is
-missing, so you can pin the few nodes and anchors that matter and let the rest
-fall into stages. Keep the `layout` key afterwards: it is what places a node you
-append later.
+### Let the layout engine place the diagram
 
-Then bake it: `node scripts/bake.mjs doc.html` writes the positions and anchors
-the engine worked out into the document's own source. Do this before you review
-the diagram, because until you do, the file says nothing about where anything is
-and there is nothing in it to adjust. Review and adjustment happen on the baked
-source; re-bake after adding a node with no position, and it is placed without
-moving anything already there.
+Placing nodes blind is the single largest source of untidy generated diagrams.
+Do not do it. Set `layout: right` (or `down`, `left`, `up`), leave every
+`position` and both anchors off every edge, and describe only the graph:
 
-Without a `layout`, a node with no `position` or an edge with no anchors is an
-error, not a diagram drawn at the origin.
+```yaml
+type: flowchart
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: client
+    label: Client
+    shape: rounded-rectangle
+  - id: api
+    label: Orders API
+    shape: rounded-rectangle
+  - id: db
+    label: Order store
+    shape: database
+edges:
+  - source: client
+    target: api
+    label: POST /orders
+  - source: api
+    target: db
+```
 
-Set `canvas.grid: 5` on a flowchart unless there is a reason not to, and place
-nodes on multiples of that grid when you do place them by hand. Shared coordinates are what make a diagram look
-deliberate: node edges line up, rows and columns align, and connectors meet
-anchors squarely instead of missing by a pixel or two. It also makes later
-graphical edits snap into the same alignment rather than drifting out of it.
+That is the whole diagram. Baking it fills in the geometry - nodes in stages
+along the flow, ordered to avoid crossings, and each connector given the anchors
+its final geometry implies:
+
+```yaml
+nodes:
+  - id: client
+    label: Client
+    shape: rounded-rectangle
+    position: { x: 40, y: 40 }
+  - id: api
+    label: Orders API
+    shape: rounded-rectangle
+    position: { x: 350, y: 40 }
+  - id: db
+    label: Order store
+    shape: database
+    position: { x: 660, y: 40 }
+edges:
+  - source: client
+    target: api
+    label: POST /orders
+    sourceAnchor: right
+    targetAnchor: left
+  - source: api
+    target: db
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+The engine only ever fills in what is missing, so it composes with whatever you
+do want to control. Pin the one node whose placement carries meaning and let the
+rest fall into stages around it. Write an anchor on the one edge that needs to
+leave a particular side - a feedback edge doubling back, which the engine also
+reads as a deliberate back-edge and keeps out of the stage assignment - and
+leave the other edges alone.
+
+Choose the direction from the content: `right` for a pipeline or request path,
+`down` for a decision tree or a sequence of steps. A diagram wider than about
+five stages usually reads better as `down`.
+
+Keep the `layout` key in the baked source. It is a no-op for a fully placed
+diagram, but it is what places the next node you add, and it is what marks the
+diagram as yours to regenerate. Removing it is how a human freezes a diagram
+they have hand-tuned, so do not remove it on their behalf.
+
+Without a `layout`, every node needs a `position` and every edge both anchors;
+leaving one out is an error, not a diagram drawn at the origin.
+
+Set `canvas.grid: 5` on a flowchart unless there is a reason not to. The layout
+engine snaps to it, and you should too on the nodes you place by hand. Shared
+coordinates are what make a diagram look deliberate: node edges line up, rows
+and columns align, and connectors meet anchors squarely instead of missing by a
+pixel or two. It also makes later graphical edits snap into the same alignment
+rather than drifting out of it.
 (This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
 directive.)
 
@@ -221,11 +282,30 @@ use it when the recipient must open the document without network access.
 Label every fenced code block with its language. A recognised language is syntax
 highlighted, and the label costs nothing when it is not.
 
-## Checking a document
+## Reviewing a document
 
-An authoring agent works blind: it emits coordinates and never sees the result.
-The lint command closes that loop and is the fastest way to catch a defect a
-reader would notice immediately:
+An authoring agent works blind: it emits a document and never sees the result.
+Two commands close that loop, and they are used in order.
+
+**Bake first.** A diagram you left to the layout engine renders from positions
+that exist only while the document is open - the file still says nothing about
+where anything is, so there is nothing in it to adjust when something needs
+moving. Baking writes the engine's work into the document's own source:
+
+```sh
+node scripts/bake.mjs doc.html            # positions and anchors written in
+node scripts/bake.mjs doc.html --check    # non-zero if baking would change it
+```
+
+Only fences declaring a `layout` are rewritten, and they are rewritten into
+canonical form: fields are reordered and reformatted, and comments inside that
+fence are dropped. That is expected - a diagram carrying a `layout` is generated
+output. A diagram without one is someone's own work and is copied through
+untouched, as is everything outside the diagram fences. Baking is idempotent,
+and a diagram that fails to parse fails the bake rather than being skipped.
+
+**Then lint**, which is the fastest way to catch a defect a reader would notice
+immediately:
 
 ```sh
 node scripts/lint.mjs doc.html            # errors and warnings
@@ -242,6 +322,21 @@ blocked on aesthetics. The rules are:
 | `node-overlap` | warning | Two unrelated nodes' boxes overlap. A child inside its own parent is not reported. |
 | `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
 | `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
+
+**Then adjust the baked source and lint again.** Because the engine only fills
+in what is missing, the baked source stays workable without any extra machinery:
+
+| To do this | Do this |
+| --- | --- |
+| Move a node | Edit its `position`, keeping to the `canvas.grid` multiple. |
+| Have one node re-placed in context | Delete its `position` and bake again. |
+| Add a node | Add it with no `position` and bake. Nothing already placed moves. |
+| Lay the whole diagram out afresh | Strip every `position` and bake. This discards any hand tuning, so be sure. |
+| Change where a connector leaves or lands | Edit that edge's anchors, or delete them and bake to have them derived again. |
+
+Rendering the document in a browser for a screenshot is worth doing for a
+diagram that matters, but do it on the baked file, so what you are looking at is
+what the source says.
 
 ## Validation checklist
 
