@@ -1,14 +1,12 @@
 // Writes the layout engine's positions and anchors back into a document's own source, so an author
-// working on the file rather than in the browser has real coordinates to adjust. The bundle is
-// loaded into a `vm` with a stubbed `document`, the same way the lint command and the render tests
-// exercise it, which keeps one implementation of the bake behind both entry points.
+// working on the file rather than in the browser has real coordinates to adjust. Repository tooling
+// imports the internal ESM core directly instead of evaluating the browser runtime.
 //
 // This is the step that closes the gap between what a positionless document renders as and what its
 // source says: author, bake, lint, adjust the numbers, lint again.
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..");
@@ -22,15 +20,13 @@ if (!files.length) {
   process.exit(2);
 }
 
-const runtimePath = path.join(repositoryRoot, "dist", "skryb-runtime.js");
-if (!fs.existsSync(runtimePath)) {
-  console.error(`Runtime bundle not found at ${runtimePath}. Run "npm run build" first.`);
+const corePath = path.join(repositoryRoot, "dist", "skryb-core.mjs");
+if (!fs.existsSync(corePath)) {
+  console.error(`Core module not found at ${corePath}. Run "npm run build" first.`);
   process.exit(2);
 }
 
-const context = vm.createContext({ document: { querySelector: () => null }, globalThis: {} });
-vm.runInContext(fs.readFileSync(runtimePath, "utf8"), context, { filename: "dist/skryb-runtime.js" });
-const { bakeDocumentSource, spliceBakedFences } = context.globalThis.DocDiagramCore;
+const { bakeDocumentSource, spliceBakedFences } = await import(pathToFileURL(corePath));
 
 const templatePattern = /(<template id="source"[^>]*>)([\s\S]*?)(<\/template>)/;
 

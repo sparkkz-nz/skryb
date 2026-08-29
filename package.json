@@ -10,9 +10,9 @@
     "bake": "node scripts/bake.mjs",
     "check": "tsc --noEmit",
     "check:artifacts": "node scripts/check-runtime-artifact-sizes.mjs",
-    "benchmark:flowchart": "npm run build && node --test --test-name-pattern=\"500-node (flat|nested) flowchart lint\" test/render-runtime.test.js",
+    "benchmark:flowchart": "npm run build && node --test --test-name-pattern=\"500-node (flat|nested) flowchart lint\" test/lint.test.mjs",
     "lint": "node scripts/lint.mjs",
-    "test": "npm run build && npm run build:docs && node --test test/render-runtime.test.js"
+    "test": "npm run build && npm run build:docs && node --test test/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
