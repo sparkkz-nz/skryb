@@ -27,7 +27,7 @@ The codebase is deliberately compact and layered:
 2. **Renderers** turn those models into accessible HTML and SVG.
 3. **Browser editor** coordinates state, interactions, persistence, and export.
 
-The public entry point is `src/index.ts`: it creates `BrowserRuntime`, exposes its core API for headless tooling, then calls `boot()`.
+The browser entry point is `src/index.ts`: it creates `BrowserRuntime` and calls `boot()`. Repository tooling and focused tests use the separate internal entry point at `src/core/index.ts`.
 ::: (at a glance)
 
 :::stack
@@ -36,14 +36,14 @@ Markdown is the durable source of truth. The viewer is not a server application 
 ::: (design centre)
 
 :::panel { title="Repository surfaces" palette=note }
-`src/` contains the runtime; `scripts/` expose bake and lint commands; `test/` executes the built bundle; `pages/` publishes the project site.
+`src/` contains the runtime and internal core entry point; `scripts/` expose bake and lint commands; `test/` contains focused core suites and browser-artifact smoke coverage; `pages/` publishes the project site.
 ::: (repository surfaces)
 ::: (supporting stack)
 ::: (overview grid)
 
 ## Architecture and module boundaries
 
-Figure {ref=runtime-architecture} follows the dependency direction from document source to the browser experience. The diagram separates pure model work from DOM-facing code: this is what makes `scripts/bake.mjs`, `scripts/lint.mjs`, and the render tests able to execute the same bundled core in a Node VM.
+Figure {ref=runtime-architecture} follows the dependency direction from document source to the browser experience. The diagram separates pure model work from DOM-facing code: this lets `scripts/bake.mjs`, `scripts/lint.mjs`, and focused tests import the internal ESM core directly, without constructing a browser runtime.
 
 :::diagram { id=runtime-architecture }
 
@@ -65,7 +65,7 @@ Figure {ref=runtime-architecture} follows the dependency direction from document
 
 | Area | Key modules and symbols | Contract with the rest of Skryb |
 | --- | --- | --- |
-| Bootstrap | `src/index.ts`, `BrowserRuntime.boot()` | Finds `template#source` and `main#rendered-document`, creates the runtime, publishes `DocDiagramCore`. |
+| Bootstrap | `src/index.ts`, `BrowserRuntime.boot()` | Finds `template#source` and `main#rendered-document`, creates the runtime, and publishes only the small `DocDiagramCore` compatibility surface. |
 | Document core | `resolveDocument()`, `validateDocumentSource()`, `bakeDocumentSource()` | Treats embedded Markdown as canonical and controls safe frontmatter/fence semantics. |
 | Markdown core | `renderMarkdown()`, `renderInline()` | Renders supported CommonMark/GFM constructs and structured directives; delegates diagrams to the runtime. |
 | Diagram core | `parseDiagram()`, `applyFlowchartLayout()`, `buildEdgePath()`, `serializeDiagram()` | Converts YAML into models, completes geometry, avoids obstacles, and writes the result back to YAML. |
@@ -75,7 +75,7 @@ Figure {ref=runtime-architecture} follows the dependency direction from document
 
 ## Document render and bake flow
 
-The high-value path is shown in Figure {ref=render-and-bake}. It runs identically when a document opens in a browser and when repository tooling invokes the exposed core API. Auto-layout is intentionally a **seeding** step: it fills only missing positions and anchors, so later graphical adjustments stay authoritative.
+The high-value path is shown in Figure {ref=render-and-bake}. It uses the same core functions whether a document opens in a browser or repository tooling imports the internal ESM entry point. Auto-layout is intentionally a **seeding** step: it fills only missing positions and anchors, so later graphical adjustments stay authoritative.
 
 :::diagram { id=render-and-bake }
 
@@ -113,7 +113,7 @@ The normal shell loads `skryb-runtime.js` from the `latest` or a release URL. **
 
 ### Tooling alignment
 
-The project’s command-line scripts load the built runtime into a restricted VM with a stub document. `bake.mjs` calls `bakeDocumentSource()` then splices only changed diagram fences into the original HTML. `lint.mjs` calls `lintDocument()` and fails only on errors, leaving visual warnings advisory. The test suite exercises the same `DocDiagramCore` API exported by the browser bundle.
+The build produces an internal ESM core module for repository tooling and focused tests. `bake.mjs` imports `bakeDocumentSource()` directly, then splices only changed diagram fences into the original HTML. `lint.mjs` imports `lintDocument()` directly and fails only on errors, leaving visual warnings advisory. Focused suites import the same core boundaries without evaluating the browser runtime; a small smoke suite still executes each browser artifact.
 
 :::callout { kind=success title="Reading guide" palette=success }
 Start with Figure {ref=runtime-architecture} for ownership, then Figure {ref=render-and-bake} for the generated-document lifecycle, and Figure {ref=editor-round-trip} for the interactive edit round trip.

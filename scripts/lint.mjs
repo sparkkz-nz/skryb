@@ -1,10 +1,9 @@
 // Runs the runtime's own lint rules headlessly, so a generated document can be checked without a
-// browser. The bundle is loaded into a `vm` with a stubbed `document`, the same way the render
-// tests exercise it, which keeps the rules and the renderer in one place.
+// browser. Repository tooling imports the internal ESM core directly instead of evaluating the
+// browser runtime.
 import fs from "node:fs";
 import path from "node:path";
-import vm from "node:vm";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..");
@@ -18,15 +17,13 @@ if (!files.length) {
   process.exit(2);
 }
 
-const runtimePath = path.join(repositoryRoot, "dist", "skryb-runtime.js");
-if (!fs.existsSync(runtimePath)) {
-  console.error(`Runtime bundle not found at ${runtimePath}. Run "npm run build" first.`);
+const corePath = path.join(repositoryRoot, "dist", "skryb-core.mjs");
+if (!fs.existsSync(corePath)) {
+  console.error(`Core module not found at ${corePath}. Run "npm run build" first.`);
   process.exit(2);
 }
 
-const context = vm.createContext({ document: { querySelector: () => null }, globalThis: {} });
-vm.runInContext(fs.readFileSync(runtimePath, "utf8"), context, { filename: "dist/skryb-runtime.js" });
-const { lintDocument } = context.globalThis.DocDiagramCore;
+const { lintDocument } = await import(pathToFileURL(corePath));
 
 function readDocumentSource(filePath) {
   const contents = fs.readFileSync(filePath, "utf8");

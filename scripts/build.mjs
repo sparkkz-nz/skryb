@@ -5,6 +5,7 @@ import { reportArtifactSizes } from "./runtime-artifact-sizes.mjs";
 const entryPoint = process.env.RENDER_RUNTIME_ENTRY ?? "src/index.ts";
 const hostedRuntimePath = "dist/skryb-runtime.js";
 const selfPackagedRuntimePath = "dist/skryb-runtime-self-packaged.js";
+const corePath = "dist/skryb-core.mjs";
 
 // Kept in the bundle so offline copies carry attribution with them.
 const licenseBanner =
@@ -13,7 +14,8 @@ const licenseBanner =
 await Promise.all([
   rm("dist/render-runtime.js", { force: true }),
   rm(hostedRuntimePath, { force: true }),
-  rm(selfPackagedRuntimePath, { force: true })
+  rm(selfPackagedRuntimePath, { force: true }),
+  rm(corePath, { force: true })
 ]);
 await mkdir("dist", { recursive: true });
 
@@ -36,7 +38,15 @@ await Promise.all([
   writeFile(
     selfPackagedRuntimePath,
     `${runtimeSource}globalThis.DocDiagramRuntimeSource=${JSON.stringify(runtimeSource)};\n`
-  )
+  ),
+  build({
+    bundle: true,
+    entryPoints: ["src/core/index.ts"],
+    format: "esm",
+    outfile: corePath,
+    platform: "node",
+    target: ["node22"]
+  })
 ]);
 
 await reportArtifactSizes();

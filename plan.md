@@ -103,7 +103,8 @@ Recorded on 2026-08-30 for `perf/runtime-artifact-split`:
 
 ## Block 2 — Flowchart index and performance regression coverage
 
-**Status:** In progress
+**Status:** Complete
+**Pull request:** [#68](https://github.com/sparkkz-nz/skryb/pull/68)
 **Suggested branch:** `perf/flowchart-index`  
 **Dependencies:** None
 
@@ -152,7 +153,8 @@ Recorded on 2026-08-30 for `perf/flowchart-index`:
 
 ## Block 3 — Direct core entry point and test/tool boundaries
 
-**Status:** Planned  
+**Status:** In progress
+**Pull request:** [#69](https://github.com/sparkkz-nz/skryb/pull/69)
 **Suggested branch:** `refactor/core-entrypoint`  
 **Dependencies:** Blocks 1 and 2
 
@@ -178,6 +180,23 @@ complete browser runtime through `node:vm`.
 - Bake and lint do not depend on `BrowserRuntime.getCoreApi()`.
 - Built artifacts still receive direct smoke coverage.
 - Test count and behavioral coverage do not regress.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `refactor/core-entrypoint`:
+
+- The build emits an internal `dist/skryb-core.mjs` ESM entry point for repository
+  tooling and focused tests; it is not published with the browser artifacts.
+- Bake and lint import the core module directly and no longer evaluate the
+  browser bundle in a VM with a stub document.
+- The 274-test monolith is split into responsibility-focused document,
+  Markdown, parsing/editor, layout, routing, lint, rendering, highlighting,
+  baking, offline-export, and browser-runtime suites.
+- Focused suites import the ESM core directly. Browser VM execution remains only
+  in the artifact/offline smoke suite, which executes hosted, self-packaged, and
+  embedded runtime forms.
+- `DocDiagramCore` remains an undocumented compatibility object limited to
+  `bakeDocumentSource`, `spliceBakedFences`, and `lintDocument`.
 
 ## Block 4 — Strong validated domain types
 
