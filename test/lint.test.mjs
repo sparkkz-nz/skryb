@@ -165,8 +165,9 @@ test("flat and nested lint fixtures keep warning content and order deterministic
   ]);
 
   assert.deepEqual(JSON.parse(JSON.stringify(lintDocument(flat).messages)), []);
+  const nestedMessages = lintDocument(nested).messages;
   assert.deepEqual(
-    JSON.parse(JSON.stringify(lintDocument(nested).messages)),
+    JSON.parse(JSON.stringify(nestedMessages.map(({ location: _location, ...message }) => message))),
     [
       {
         severity: "warning",
@@ -193,6 +194,10 @@ test("flat and nested lint fixtures keep warning content and order deterministic
         diagram: "diagram 1"
       }
     ]
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(nestedMessages.map((message) => message.location))),
+    JSON.parse(JSON.stringify(lintDocument(nested).messages.map((message) => message.location)))
   );
 });
 
@@ -415,6 +420,100 @@ test("lint names each diagram by its id and leaves sequence diagrams to the sche
 
   assert.equal(result.messages.length, 1);
   assert.equal(result.messages[0].diagram, "payment-flow");
+});
+
+test("lint locations point through CRLF block quotes to a referenced diagram definition", () => {
+  const source = [
+    "# Document",
+    "",
+    ":::diagram { id=shared-flow }",
+    "",
+    "> ```diagram",
+    "> id: shared-flow",
+    "> type: flowchart",
+    "> canvas: auto",
+    "> nodes:",
+    ">   - id: first",
+    ">     label: First",
+    ">     shape: rounded-rectangle",
+    ">     position: { x: 0, y: 0 }",
+    ">   - id: second",
+    ">     label: Second",
+    ">     shape: rounded-rectangle",
+    ">     position: { x: 100, y: 40 }",
+    "> edges:",
+    "> ```"
+  ].join("\r\n");
+
+  const result = lintDocument(source);
+  const message = result.messages[0];
+  assert.equal(message.rule, "node-overlap");
+  assert.equal(message.location.diagramId, "shared-flow");
+  assert.equal(message.location.diagramIndex, 0);
+  assert.equal(message.location.fenceRange.start.line, 5);
+  assert.equal(message.location.fenceRange.end.line, 19);
+  assert.deepEqual(message.location.subjects.map((subject) => subject.id), ["first", "second"]);
+  assert.equal(source.slice(
+    message.location.subjects[0].sourceRange.start.offset,
+    message.location.subjects[0].sourceRange.end.offset
+  ).trim(), "- id: first");
+  assert.equal(result.sourceHash.length, 8);
+});
+
+test("lint locations address edges and diagrams without ids by stable indexes", () => {
+  const source = lintSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: api",
+    "    label: API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "edges:",
+    "  - source: api",
+    "    target: missing",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ]);
+
+  const message = lintDocument(source).messages[0];
+  assert.equal(message.location.diagramId, null);
+  assert.equal(message.location.diagramIndex, 0);
+  assert.equal(message.location.subjects[0].kind, "edge");
+  assert.equal(message.location.subjects[0].index, 0);
+  assert.equal(source.slice(
+    message.location.subjects[0].sourceRange.start.offset,
+    message.location.subjects[0].sourceRange.end.offset
+  ).trim(), "- source: api");
+});
+
+test("lint locations preserve canonical quoted ids and edge indexes regardless of property order", () => {
+  const source = lintSource([
+    "id: 'quoted-flow'",
+    "canvas: auto",
+    "nodes:",
+    "  - id: api",
+    "    label: API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "edges:",
+    "  - target: first-missing",
+    "    source: api",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "  - source: api",
+    "    target: second-missing",
+    "    sourceAnchor: right",
+    "    targetAnchor: left"
+  ]);
+
+  const messages = lintDocument(source).messages;
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].location.diagramId, "quoted-flow");
+  assert.deepEqual(messages.map((message) => message.location.subjects[0].index), [0, 1]);
+  assert.deepEqual(messages.map((message) => source.slice(
+    message.location.subjects[0].sourceRange.start.offset,
+    message.location.subjects[0].sourceRange.end.offset
+  ).trim()), ["- target: first-missing", "- source: api"]);
 });
 
 test("a clean document lints clean", () => {

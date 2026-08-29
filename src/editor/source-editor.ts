@@ -1,9 +1,11 @@
 import {
   extractDiagramFences,
   findSourceTextRange,
+  hashSource,
   scrollSourceEditorToRange,
   setDiagramId,
-  type ExtractedDiagram
+  type ExtractedDiagram,
+  type SourceRange
 } from "../core/document";
 import { parseDiagram } from "../core/diagrams/parser";
 
@@ -257,8 +259,19 @@ export class SourceEditor {
   }
 
   public reveal(text: string): boolean {
-    const range = findSourceTextRange(this.host.getSource(), text);
-    if (!range || this.hasUnsavedDraft) {
+    const source = this.host.getSource();
+    const range = findSourceTextRange(source, text);
+    return range
+      ? this.revealSourceRange({
+        start: { line: 1, column: 1, offset: range.start },
+        end: { line: 1, column: 1, offset: range.end }
+      }, hashSource(source))
+      : false;
+  }
+
+  public revealSourceRange(range: SourceRange, sourceHash: string): boolean {
+    const source = this.host.getSource();
+    if (hashSource(source) !== sourceHash || this.hasUnsavedDraft || range.start.offset > source.length) {
       return false;
     }
 
@@ -272,8 +285,8 @@ export class SourceEditor {
         return;
       }
       editor.focus();
-      editor.setSelectionRange(range.start, range.end);
-      scrollSourceEditorToRange(editor, range);
+      editor.setSelectionRange(range.start.offset, Math.min(range.end.offset, source.length));
+      scrollSourceEditorToRange(editor, { start: range.start.offset });
     };
 
     globalThis.requestAnimationFrame?.(selectMatch) ?? selectMatch();

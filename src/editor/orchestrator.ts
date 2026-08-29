@@ -411,6 +411,7 @@ export class BrowserRuntime {
       result = lintDocument(source);
     } catch (error) {
       result = {
+        sourceHash: hashSource(source),
         messages: [{ severity: "error", rule: "schema", message: error instanceof Error ? error.message : String(error) }],
         errorCount: 1,
         warningCount: 0
@@ -427,7 +428,7 @@ export class BrowserRuntime {
     report.content.replaceChildren(document.createTextNode(JSON.stringify({
       errors: result.errorCount,
       warnings: result.warningCount,
-      sourceHash: hashSource(source),
+      sourceHash: result.sourceHash,
       messages: result.messages
     }, null, 2)));
     if (!report.isConnected) {
@@ -449,7 +450,6 @@ export class BrowserRuntime {
     }
     const summary = `${result.errorCount} error${result.errorCount === 1 ? "" : "s"}, ` +
       `${result.warningCount} warning${result.warningCount === 1 ? "" : "s"}`;
-    const detail = formatLintMessages(result);
     const dialog = document.querySelector<HTMLDialogElement>(".docdiagram-lint-dialog") ||
       document.body.appendChild(document.createElement("dialog"));
     dialog.className = "docdiagram-lint-dialog";
@@ -457,8 +457,33 @@ export class BrowserRuntime {
 
     const heading = document.createElement("h2");
     heading.textContent = `Document check: ${summary}`;
-    const body = document.createElement("pre");
-    body.textContent = detail || "Nothing to report. Every check passed.";
+    const body = document.createElement("div");
+    body.className = "docdiagram-lint-messages";
+    if (!result.messages.length) {
+      body.textContent = "Nothing to report. Every check passed.";
+    }
+    for (const message of result.messages) {
+      const sourceRange = message.location?.subjects.find((subject) => subject.sourceRange)?.sourceRange ||
+        message.location?.fenceRange;
+      const item = sourceRange && this.sourceEditor
+        ? document.createElement("button")
+        : document.createElement("pre");
+      item.textContent = formatLintMessages({
+        sourceHash: result.sourceHash,
+        messages: [message],
+        errorCount: message.severity === "error" ? 1 : 0,
+        warningCount: message.severity === "warning" ? 1 : 0
+      });
+      if (item instanceof HTMLButtonElement && sourceRange) {
+        item.type = "button";
+        item.title = `Reveal source at line ${sourceRange.start.line}`;
+        item.addEventListener("click", () => {
+          dialog.close();
+          this.sourceEditor?.revealSourceRange(sourceRange, result.sourceHash);
+        });
+      }
+      body.append(item);
+    }
     const close = document.createElement("button");
     close.type = "button";
     close.textContent = "Close";

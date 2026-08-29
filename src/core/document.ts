@@ -130,13 +130,39 @@ export function validateDocumentSource(source: string): ResolvedDocument {
   return document;
 }
 
+export interface SourcePosition {
+  /** One-based line and column, plus the zero-based UTF-16 offset used by text editors. */
+  line: number;
+  column: number;
+  offset: number;
+}
+
+export interface SourceRange {
+  /** Start-inclusive, end-exclusive source range. */
+  start: SourcePosition;
+  end: SourcePosition;
+}
+
 export interface ExtractedDiagram {
   id: string | null;
   source: string;
+  index: number;
+  fenceRange: SourceRange;
+  bodyRange: SourceRange;
+  lineRanges: SourceRange[];
 }
 
 export function getDiagramId(diagramSource: string): string | null {
-  return diagramSource.match(/^id:\s*(?:"([^"]+)"|([^\s#]+))\s*$/m)?.slice(1).find(Boolean) || null;
+  const scalar = diagramSource.match(/^id:\s*(.*?)\s*$/m)?.[1];
+  if (scalar === undefined) {
+    return null;
+  }
+  try {
+    const id = parseScalar(scalar);
+    return typeof id === "string" ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -145,30 +171,73 @@ export function getDiagramId(diagramSource: string): string | null {
  * same way here as they do when the document renders.
  */
 export function extractDiagramFences(source: string): ExtractedDiagram[] {
-  const { content } = parseDocumentFrontmatter(source.replace(/\r\n/g, "\n"));
-  const lines = content.split("\n");
-  const diagrams: ExtractedDiagram[] = [];
-  let index = 0;
+  const rawLines = source.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter((line, index, lines) =>
+    line.length > 0 || index < lines.length - 1
+  ) || [];
+  const lines = rawLines.map((line) => line.replace(/\r\n$|[\r\n]$/, ""));
+  const lineStarts: number[] = [];
+  let offset = 0;
+  for (const rawLine of rawLines) {
+    lineStarts.push(offset);
+    offset += rawLine.length;
+  }
+  const position = (lineIndex: number, columnOffset: number): SourcePosition => ({
+    line: lineIndex + 1,
+    column: columnOffset + 1,
+    offset: (lineStarts[lineIndex] ?? source.length) + columnOffset
+  });
+  const lineRange = (lineIndex: number): SourceRange => {
+    const text = lines[lineIndex] || "";
+    const stripped = stripFencePrefix(text);
+    const prefixLength = text.length - stripped.length;
+    return {
+      start: position(lineIndex, prefixLength),
+      end: position(lineIndex, text.length)
+    };
+  };
 
-  while (index < lines.length) {
-    const fence = parseFenceOpen(stripFencePrefix(lines[index]));
+  let contentStart = 0;
+  const firstContentLine = lines.findIndex((line) => line.trim() !== "");
+  if (firstContentLine !== -1 && lines[firstContentLine] === "---") {
+    const frontmatterEnd = lines.indexOf("---", firstContentLine + 1);
+    if (frontmatterEnd !== -1) {
+      contentStart = frontmatterEnd + 1;
+    }
+  }
+
+  const diagrams: ExtractedDiagram[] = [];
+  let lineIndex = contentStart;
+  while (lineIndex < lines.length) {
+    const fence = parseFenceOpen(stripFencePrefix(lines[lineIndex]));
     if (!fence) {
-      index += 1;
+      lineIndex += 1;
       continue;
     }
 
-    const closeIndex = findFenceClose(lines, index + 1, fence.marker);
+    const closeIndex = findFenceClose(lines, lineIndex + 1, fence.marker);
     if (closeIndex === -1) {
       break;
     }
     if (fence.info === "diagram") {
-      const diagramSource = lines
-        .slice(index + 1, closeIndex)
+      const bodyLineRanges = lines.slice(lineIndex + 1, closeIndex)
+        .map((_line, bodyIndex) => lineRange(lineIndex + 1 + bodyIndex));
+      const diagramSource = lines.slice(lineIndex + 1, closeIndex)
         .map((line) => stripFencePrefix(line))
         .join("\n");
-      diagrams.push({ id: getDiagramId(diagramSource), source: diagramSource });
+      const openingRange = lineRange(lineIndex);
+      const closingRange = lineRange(closeIndex);
+      diagrams.push({
+        id: getDiagramId(diagramSource),
+        source: diagramSource,
+        index: diagrams.length,
+        fenceRange: { start: openingRange.start, end: closingRange.end },
+        bodyRange: bodyLineRanges.length
+          ? { start: bodyLineRanges[0].start, end: bodyLineRanges[bodyLineRanges.length - 1].end }
+          : { start: openingRange.end, end: closingRange.start },
+        lineRanges: bodyLineRanges
+      });
     }
-    index = closeIndex + 1;
+    lineIndex = closeIndex + 1;
   }
 
   return diagrams;

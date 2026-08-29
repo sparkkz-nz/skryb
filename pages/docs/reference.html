@@ -932,8 +932,13 @@ The report is addressed by attribute rather than by id, because ids belong to th
 document's own anchor namespace - a heading called "Lint" would take `#lint`.
 Both elements are HTML-escaped inside the file, so decode entities when reading
 them.
-`sourceHash` is a digest of the source the report describes: if it does not match
-the source you are holding, the report predates your edits.
+
+`sourceHash` is the eight-character FNV-1a digest of the exact UTF-16 source the
+report describes. Recompute it before following locations: if it does not match
+the source you are holding, the report predates an edit and every range must be
+treated as stale. Locations use one-based `line` and `column` values and
+zero-based UTF-16 `offset` values. Ranges are start-inclusive and end-exclusive,
+matching browser text selection APIs.
 
 The report is written only when there was something to report on - a bake
 happened, `?skryb-lint` was on the URL, or a reader chose **Check document** from
@@ -953,10 +958,31 @@ than being skipped quietly.
 ### The rules
 
 Each message carries a `severity` (`error` or `warning`), a `rule`, a `message`,
-and the `diagram` it belongs to. The rules are `schema`,
-`unknown-edge-endpoint`, `node-overlap`, `edge-crosses-node`, and
-`label-overflow`. Only errors are blocking: warnings describe things a reader
-would notice, but a generated document is not held up on aesthetics.
+and the compatibility `diagram` display name. Geometry messages also carry a
+`location` with the nullable canonical `diagramId`, zero-based `diagramIndex`,
+the complete `fenceRange`, and `subjects`. A subject is either a node with its
+`id`, or an edge with its zero-based `index`, `source`, and `target`; when known,
+its `sourceRange` selects the defining YAML line. Diagrams without ids remain
+addressable by `diagramIndex`, and a rendered `:::diagram` reference points back
+to the original fence rather than the reference directive.
+
+The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
+`edge-crosses-node`, and `label-overflow`. Only errors are blocking: warnings
+describe things a reader would notice, but a generated document is not held up
+on aesthetics. Message text remains stable for consumers that do not use the
+structured location.
+
+The repository CLI prints navigable `file:line:column` prefixes where a location
+is available:
+
+```sh
+npm run lint -- document.md
+npm run lint -- document.md --json
+```
+
+`--json` emits aggregate `errors` and `warnings` plus a `documents` array. Each
+document has `file`, `sourceHash`, counts, and the same structured `messages` as
+the browser template. `--errors` may be combined with either output format.
 
 A node with no connector is never reported. A `text` shape used for annotation, a
 label, or a legend is a normal part of a diagram.
