@@ -96,8 +96,9 @@ Everything happens inside the open document; there is no separate application.
   flowchart's `canvas` so dragging and resizing snap to a shared grid and shapes
   stay aligned.
 - **Theme and colour scheme** are set in frontmatter or from the document menu:
-  `theme` is `auto`, `light`, or `dark`, and `colourScheme` is `classic`, `ice`,
-  `midnight`, or `paper`. Diagrams render as live SVG and follow the theme, and
+  `theme` is `auto`, `light`, or `dark`, and `colourScheme` is `classic`,
+  `fire`, `ice`, `midnight`, or `paper`. Diagrams render as live SVG and follow
+  the theme, and
   a menu change becomes canonical frontmatter when the document is saved.
 - **Layout and zoom** switch the reading view between centred and full-width,
   and zoom, fit, or pan a diagram inside its frame. Over a diagram the wheel pans

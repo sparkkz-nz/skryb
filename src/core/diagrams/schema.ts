@@ -225,6 +225,19 @@ export const colourSchemes: Record<string, ColourScheme> = {
       colour("Note", "#172554", "#60A5FA", "#DBEAFE"), colour("Success", "#052E16", "#4ADE80", "#DCFCE7"), colour("Warning", "#431407", "#FB923C", "#FFEDD5"), colour("Danger", "#450A0A", "#F87171", "#FEE2E2"), colour("Highlight", "#422006", "#FACC15", "#FEF9C3")
     )
   },
+  fire: {
+    label: "Fire",
+    light: roles(
+      colour("Background", "#FBFAF9", "#D9D2CC", "#1F1B19"), colour("Pale", "#F4F1ED", "#C7BDB6", "#282320"), colour("Light", "#E9E2DC", "#A2948B", "#282320"), colour("Neutral", "#D5CAC2", "#8A6D59", "#241B15"), colour("Dark", "#3D312A", "#221913", "#FFF2E4"),
+      colour("Soft", "#FDECDD", "#E7A672", "#7A3B12"), colour("Accent", "#FBD8BA", "#D2691E", "#6A2D07", "#FFF3E8"), colour("Strong", "#D2521C", "#A6380D", "#FFFFFF", "#F0873C", "#FFA867"),
+      colour("Note", "#F7EBDD", "#A9784C", "#523A22"), colour("Success", "#E7F2D9", "#5F8C2B", "#2C4310"), colour("Warning", "#FFEACB", "#E08600", "#6D3C00"), colour("Danger", "#FFE1DB", "#D93A1F", "#6D1708"), colour("Highlight", "#FFF6CB", "#D9A400", "#5B4200")
+    ),
+    dark: roles(
+      colour("Background", "#171413", "#3A3330", "#E7E2DE"), colour("Pale", "#1F1B19", "#4A413C", "#EDE8E3"), colour("Light", "#2B2522", "#695C54", "#F5EFE9"), colour("Neutral", "#3E3430", "#A08674", "#FFF3E7"), colour("Dark", "#C9B29F", "#E4D3C4", "#191412"),
+      colour("Soft", "#3A2415", "#C4763A", "#FFE7D2"), colour("Accent", "#5A2E12", "#F0873C", "#FFEDDD", "#47240F"), colour("Strong", "#E2571B", "#FFB27A", "#FFFFFF", "#B33C0E", "#FF8A3D"),
+      colour("Note", "#302319", "#BE8C5A", "#F6E4D0"), colour("Success", "#1F2E14", "#8FBF52", "#E7F4D5"), colour("Warning", "#4A2A05", "#FFA726", "#FFE9C4"), colour("Danger", "#4B1108", "#FF6B52", "#FFE0DA"), colour("Highlight", "#453206", "#FFD54A", "#FFF6D2")
+    )
+  },
   ice: {
     label: "Ice",
     light: roles(

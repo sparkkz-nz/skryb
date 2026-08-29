@@ -1751,7 +1751,7 @@ test("semantic palette roles replace manual fill, stroke, and text overrides tog
 });
 
 test("colour schemes provide every semantic role in distinct light and dark variants", () => {
-  assert.deepEqual(Object.keys(colourSchemes), ["classic", "ice", "midnight", "paper"]);
+  assert.deepEqual(Object.keys(colourSchemes), ["classic", "fire", "ice", "midnight", "paper"]);
   for (const scheme of Object.values(colourSchemes)) {
     assert.deepEqual(Object.keys(scheme.light), Object.keys(scheme.dark));
     assert.equal(Object.keys(scheme.light).length, 14);
