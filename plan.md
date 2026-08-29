@@ -153,7 +153,7 @@ Recorded on 2026-08-30 for `perf/flowchart-index`:
 
 ## Block 3 — Direct core entry point and test/tool boundaries
 
-**Status:** In progress
+**Status:** Complete
 **Pull request:** [#69](https://github.com/sparkkz-nz/skryb/pull/69)
 **Suggested branch:** `refactor/core-entrypoint`  
 **Dependencies:** Blocks 1 and 2
@@ -200,8 +200,9 @@ Recorded on 2026-08-30 for `refactor/core-entrypoint`:
 
 ## Block 4 — Strong validated domain types
 
-**Status:** In progress
-**Suggested branch:** `refactor/diagram-domain-types`  
+**Status:** Complete
+**Pull request:** [#70](https://github.com/sparkkz-nz/skryb/pull/70)
+**Suggested branch:** `refactor/validated-domain-types`
 **Dependencies:** Block 3
 
 ### Goal
@@ -226,7 +227,8 @@ Make invalid schema enum values unrepresentable after parsing.
 
 ## Block 5 — Browser runtime decomposition
 
-**Status:** Planned  
+**Status:** In progress
+**Pull request:** [#71](https://github.com/sparkkz-nz/skryb/pull/71)
 **Suggested branch:** `refactor/browser-runtime-services`  
 **Dependencies:** Blocks 3 and 4
 
@@ -255,6 +257,24 @@ small typed interfaces are sufficient.
 - Browser orchestration mainly coordinates explicit services.
 - No document-format or visible interaction changes occur.
 - Existing browser-level tests pass.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `refactor/browser-runtime-services`:
+
+- `DocumentSession` owns canonical and saved source, baking, diagram persistence,
+  and dirty-state decisions behind a source-store boundary.
+- `DocumentRenderer` coordinates validated source-to-markup state transitions and
+  restores the last valid state when an editor draft cannot be rendered.
+- `DocumentExportService` owns clean document copies, Save As and offline output,
+  SVG preparation and download, diagram documents, and print preparation.
+- `BrowserLifecycle` and `BrowserChrome` isolate global event binding, shortcuts,
+  browser dismissal behavior, page theming, menu state, and toolbar docking.
+- `BrowserRuntime` is reduced from 1,254 to 852 lines and primarily coordinates
+  the extracted services with the existing source and diagram editors.
+- Four focused service tests cover session dirty state and baking plus renderer
+  success and rollback behavior. All 280 tests, type checks, and both runtime
+  artifact budgets pass without document-format or visible interaction changes.
 
 ## Block 6 — Source-addressable lint model
 

@@ -33,7 +33,6 @@ export interface EditorState extends DiagramRenderState {
   documentColorScheme: ColourSchemeName;
   documentFormat: "centered" | "full-width";
   documentDoctype: DocumentDoctype;
-  savedSource: string;
   editSessionDiagram: Diagram | null;
 }
 
@@ -52,7 +51,6 @@ export function createEditorState(): EditorState {
     documentColorScheme: "classic",
     documentFormat: "centered",
     documentDoctype: "document",
-    savedSource: "",
     editSessionDiagram: null,
     expandedDiagramIndex: null,
     diagramZooms: new Map(),

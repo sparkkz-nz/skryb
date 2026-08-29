@@ -15,6 +15,10 @@ export * from "./lint";
 export { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "./markdown";
 
 export { buildEdgeInspectorFields, buildNodeInspectorFields } from "../editor/inspector";
+export { DocumentExportService } from "../editor/document-export-service";
+export { DocumentRenderer } from "../editor/document-renderer";
+export { DocumentSession, TemplateSourceStore } from "../editor/document-session";
+export { createEditorState } from "../editor/state";
 export {
   embedRuntimeInDocumentHtml,
   fetchRuntimeSource,
