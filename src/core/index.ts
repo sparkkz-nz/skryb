@@ -1,4 +1,5 @@
 export * from "./diagrams/geometry";
+export * from "./diagrams/edge-labels";
 export * from "./diagrams/hierarchy";
 export * from "./diagrams/layout";
 export * from "./diagrams/mutations";

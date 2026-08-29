@@ -33,14 +33,20 @@ nodes:
     palette: success
     size: { width: 210, height: 52 }
     shape: oval
-    subtitle: "Owns the payment-intent\nlifecycle"
+    subtitle: |-
+      Owns the payment-intent
+      lifecycle
     position: { x: 420, y: 210 }
     size: { width: 220, height: 100 }
     palette: success
   - id: payments-db
-    label: "Payments\nDB"
+    label: |-
+      Payments
+      DB
     shape: database
-    subtitle: "Postgres, encrypted\nat rest"
+    subtitle: |-
+      Postgres, encrypted
+      at rest
     position: { x: 810, y: 210 }
     size: { width: 200, height: 100 }
     palette: accent-strong
@@ -49,7 +55,9 @@ edges:
     target: payments-api
     sourceAnchor: right
     targetAnchor: left
-    label: "POST /payments\n(idempotent)"
+    label: |-
+      POST /payments
+      (idempotent)
     route: orthogonal
     start: circle
     end: arrow

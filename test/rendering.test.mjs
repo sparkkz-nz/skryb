@@ -17,6 +17,7 @@ const {
   getNodeGeometry,
   renderNodeBody,
   buildEdgePath,
+  buildFlowchartEdgeGeometries,
   clampZoom
 } = core;
 
@@ -69,6 +70,40 @@ test("diagram markup provides compact view-mode zoom, export, and edit controls"
   assert.match(markup, />Open full diagram<\/button>/);
   assert.match(markup, />Save as SVG<\/button>/);
   assert.match(markup, />Print \/ Save as PDF<\/button>/);
+});
+
+test("flowchart rendering uses the deterministic multiline edge-label geometry", () => {
+  const source = flowchartSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: api",
+    "    label: API",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 100 }",
+    "    size: { width: 100, height: 60 }",
+    "  - id: ledger",
+    "    label: Ledger",
+    "    shape: rounded-rectangle",
+    "    position: { x: 400, y: 100 }",
+    "    size: { width: 100, height: 60 }",
+    "edges:",
+    "  - source: api",
+    "    target: ledger",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    route: straight",
+    "    label: |-",
+    "      Submit",
+    "      payment"
+  ]);
+  const diagram = parseDiagram(source);
+  const first = buildFlowchartEdgeGeometries(diagram)[0].label;
+  const second = buildFlowchartEdgeGeometries(diagram)[0].label;
+
+  assert.deepEqual(JSON.parse(JSON.stringify(first)), JSON.parse(JSON.stringify(second)));
+  assert.deepEqual(JSON.parse(JSON.stringify(first.lines)), ["Submit", "payment"]);
+  assert.equal(first.bounds.height, 32);
+  assert.match(renderDiagram(source, 0), new RegExp(`<text x="${first.center.x}" y="${first.startY}"[^>]*><tspan x="${first.center.x}">Submit</tspan><tspan x="${first.center.x}" dy="16">payment</tspan></text>`));
 });
 
 test("flowchart nodes support arbitrary nesting with relative coordinates and edge endpoints", () => {

@@ -26,7 +26,6 @@ export class TemplateSourceStore implements CanonicalSourceStore {
 
 export class DocumentSession {
   private savedSource = "";
-  private lintReportUnsaved = false;
 
   public constructor(private readonly sourceStore: CanonicalSourceStore) {}
 
@@ -44,15 +43,10 @@ export class DocumentSession {
 
   public markSaved(): void {
     this.captureSavedSource();
-    this.lintReportUnsaved = false;
-  }
-
-  public markLintReportUnsaved(): void {
-    this.lintReportUnsaved = true;
   }
 
   public hasUnsavedChanges(hasUnsavedDraft = false): boolean {
-    return this.source !== this.savedSource || hasUnsavedDraft || this.lintReportUnsaved;
+    return this.source !== this.savedSource || hasUnsavedDraft;
   }
 
   public bake(): BakeSessionResult {
