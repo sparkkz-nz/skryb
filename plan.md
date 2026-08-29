@@ -154,6 +154,7 @@ Recorded on 2026-08-30 for `perf/flowchart-index`:
 ## Block 3 — Direct core entry point and test/tool boundaries
 
 **Status:** In progress
+**Pull request:** [#69](https://github.com/sparkkz-nz/skryb/pull/69)
 **Suggested branch:** `refactor/core-entrypoint`  
 **Dependencies:** Blocks 1 and 2
 
