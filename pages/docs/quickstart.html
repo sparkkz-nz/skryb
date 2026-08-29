@@ -270,7 +270,10 @@ top to bottom in source order.
 - **Save As** downloads an updated portable HTML document and retains its hosted
   runtime URL.
 - **Save for Offline** downloads a self-contained HTML document with the
-  selected runtime embedded at the end of its body.
+  selected runtime embedded at the end of its body. The normal hosted runtime
+  is fetched during export. For a fully local `file:` workflow, distribute
+  `skryb-runtime-self-packaged.js` beside the document and load it with a
+  relative script URL; its included copy avoids that network request.
 - Cmd/Ctrl+S saves the latest valid source; Cmd/Ctrl+Shift+E opens or closes the
   source tray.
 
