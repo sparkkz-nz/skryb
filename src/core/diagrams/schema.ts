@@ -79,6 +79,7 @@ export interface DiagramMetadata {
   version?: number;
   id?: string;
   caption?: string;
+  description?: string;
   theme?: Theme;
 }
 

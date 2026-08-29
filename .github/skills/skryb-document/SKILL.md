@@ -270,6 +270,8 @@ reference at the intended reading position and place the matching fenced
 definition at the end of the document. This keeps the explanatory source easy
 to edit and review without changing where the diagram renders.
 
+Give every diagram a concise plain-text `description` of its purpose and primary relationship. This becomes the SVG's accessible name or description and is retained by SVG and diagram-document exports. Keep the full explanation in nearby prose rather than turning this field into a transcript.
+
 Give a diagram a `caption` when the prose refers to it. Write
 `caption: "Figure #: Authentication flow"` to have it numbered, and refer to it
 as `See Figure {ref=auth-flow}`; a caption with no `#` is just a title, and
@@ -419,9 +421,9 @@ Before returning a document, verify:
 - Frontmatter, if present, is at the start and uses only supported values.
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
-- Every diagram declares its supported type. Every flowchart has explicit shapes
-  and uses only supported palette, route, marker, waypoint, callout pointer, and
-  style values.
+- Every diagram declares its supported type and has a concise accessible
+  `description`. Every flowchart has explicit shapes and uses only supported
+  palette, route, marker, waypoint, callout pointer, and style values.
 - Flowcharts set `canvas.grid` (normally `5`) and any hand-written node positions
   and sizes are multiples of it.
 - A flowchart either declares `layout` or gives every node a `position` and every

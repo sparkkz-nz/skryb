@@ -127,6 +127,7 @@ Start with Figure {ref=runtime-architecture} for ownership, then Figure {ref=ren
 type: flowchart
 id: runtime-architecture
 caption: "Figure #: Skryb runtime architecture"
+description: Canonical source flows through the Skryb core and browser runtime into the rendered document.
 layout: right
 styles:
   core:
@@ -213,6 +214,7 @@ edges:
 id: render-and-bake
 type: sequence
 caption: "Figure #: Opening, baking, and checking a document"
+description: The browser runtime bakes missing layout, renders canonical source, and records a current lint report.
 canvas:
   participantSpacing: 205
   participantSize: { width: 165, height: 42 }
@@ -288,6 +290,7 @@ groups:
 type: flowchart
 id: editor-round-trip
 caption: "Figure #: Editing a diagram without losing its source"
+description: A graphical edit updates the diagram model and persists the change back into canonical source.
 layout: right
 styles:
   interaction:

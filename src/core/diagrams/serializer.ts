@@ -56,7 +56,7 @@ function serializeItem(item: object, indent = 2): string[] {
 export function serializeDiagram(diagram: Diagram): string {
   const lines = [`type: ${formatScalar(diagram.type)}`];
 
-  for (const key of ["version", "id", "caption", "theme"] as const) {
+  for (const key of ["version", "id", "caption", "description", "theme"] as const) {
     if (diagram[key] !== undefined) {
       lines.push(...formatField(key, diagram[key], 0, 2));
     }

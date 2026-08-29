@@ -202,6 +202,7 @@ its canonical YAML model:
 type: flowchart
 version: 1
 id: payment-flow
+description: The customer submits a payment that the payments service records.
 canvas: auto
 nodes: []
 edges: []
@@ -290,6 +291,18 @@ failure.
 
 There is a single figure counter shared by every diagram type.
 
+### Accessible descriptions
+
+Give each diagram a concise plain-text `description` that identifies its purpose and primary relationship:
+
+```yaml
+description: The customer submits a payment that the payments service records.
+```
+
+When a caption is present, it names the SVG through `<title>` and `description` supplies the related `<desc>`. Without a caption, `description` is the SVG title and accessible name. Both forms are retained when saving a standalone SVG, printing it, or saving it as a Skryb diagram. A diagram without `description` keeps the compatible generic accessible label.
+
+Keep the full explanation in nearby prose. `description` is a concise text alternative, not a transcript of every node and connector.
+
 ### Table of contents
 
 `:::toc` builds a contents listing from the document's heading tree. It holds no
@@ -319,6 +332,7 @@ The directive may appear anywhere, including before the headings it lists.
 | `version` | No | A document-defined diagram version, commonly `1`. |
 | `id` | No | A document-defined diagram identifier. It is also the diagram's anchor and the target of `{ref=}`. |
 | `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
+| `description` | No | Concise plain-text summary of the diagram's purpose and primary relationship for screen readers and exported SVGs. Nearby prose should provide the full explanation. |
 | `layout` | No | Flowchart only. Marks the diagram machine-managed: nodes may omit `position` and edges may omit anchors, and the engine fills in what is missing. |
 | `styles` | No | Flowchart only. Named styles applied to nodes and edges with `class`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
@@ -729,6 +743,7 @@ graphical editor.
 type: sequence
 version: 1
 id: payment-authorisation
+description: The shopper requests authorisation and the payments API returns the result.
 canvas:
   participantSpacing: 220
   participantSize: { width: 180, height: 42 }

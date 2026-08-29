@@ -72,6 +72,48 @@ test("diagram markup provides compact view-mode zoom, export, and edit controls"
   assert.match(markup, />Print \/ Save as PDF<\/button>/);
 });
 
+test("diagram descriptions provide distinct accessible SVG metadata and round-trip through exports", () => {
+  const flowchart = flowchartSource([
+    "id: payment-flow",
+    "description: The customer submits a payment that the Payments API stores.",
+    "canvas: auto",
+    "nodes:",
+    "edges:"
+  ]);
+  const sequence = sequenceSource([
+    "description: The customer receives the payment result.",
+    "participants:",
+    "  - id: customer",
+    "    label: Customer",
+    "messages:",
+    "  - from: customer",
+    "    to: customer",
+    "    label: Payment result"
+  ]);
+
+  const captionedMarkup = renderDiagram(flowchart, 2, {
+    id: "payment-flow",
+    caption: "Figure 1: Payment flow"
+  });
+  assert.match(captionedMarkup, /role="img" aria-labelledby="docdiagram-title-2" aria-describedby="docdiagram-description-2"/);
+  assert.match(captionedMarkup, /<title id="docdiagram-title-2">Figure 1: Payment flow<\/title>/);
+  assert.match(captionedMarkup, /<desc id="docdiagram-description-2">The customer submits a payment that the Payments API stores\.<\/desc>/);
+
+  const uncaptionedMarkup = renderDiagram(sequence, 3);
+  assert.match(uncaptionedMarkup, /role="img" aria-labelledby="docdiagram-title-3"/);
+  assert.match(uncaptionedMarkup, /<title id="docdiagram-title-3">The customer receives the payment result\.<\/title>/);
+  assert.doesNotMatch(uncaptionedMarkup, /aria-label="Sequence diagram"/);
+
+  const parsed = parseDiagram(flowchart);
+  assert.equal(parsed.description, "The customer submits a payment that the Payments API stores.");
+  assert.equal(parseDiagram(serializeDiagram(parsed)).description, parsed.description);
+  assert.match(serializeDiagram(parsed), /^description: The customer submits a payment that the Payments API stores\.$/m);
+  assert.throws(
+    () => parseDiagram(flowchartSource(["description: 42", "canvas: auto", "nodes:", "edges:"])),
+    /Diagram description must be a string/
+  );
+});
+
 test("flowchart rendering uses the deterministic multiline edge-label geometry", () => {
   const source = flowchartSource([
     "canvas: auto",

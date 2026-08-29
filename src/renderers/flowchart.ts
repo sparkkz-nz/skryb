@@ -14,7 +14,7 @@ import { renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody
 import { buildFlowchartEdgeGeometries, edgeLabelLineHeight } from "../core/diagrams/edge-labels";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
-import { renderFigureAttributes, renderFigureCaption } from "./types";
+import { renderFigureAttributes, renderFigureCaption, renderSvgAccessibility } from "./types";
 import { renderInline } from "../core/markdown";
 
 export function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: number; height: number } {
@@ -235,11 +235,13 @@ export function renderFlowchartDiagram(
     : "";
   const cameraOffset = diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
+  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Architecture diagram", figure);
 
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "flowchart", state),
-    `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Architecture diagram" data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
+    `<svg viewBox="0 0 ${width} ${height}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
+    accessibility.metadata,
     `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,
     nodeMarkup,
     edgeMarkup,
