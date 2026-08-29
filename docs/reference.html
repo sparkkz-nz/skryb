@@ -667,7 +667,9 @@ Every edge requires both explicit endpoint anchors:
   target: payments-api
   sourceAnchor: right
   targetAnchor: left
-  label: POST /payments
+  label: |+
+    POST /payments
+    (idempotent)
   route: orthogonal
   start: none
   end: arrow
@@ -688,6 +690,14 @@ Every edge requires both explicit endpoint anchors:
 Anchors resolve on the rendered shape perimeter. Endpoint markers follow the
 edge stroke colour and maintain their own definitions, so one edge's styling
 does not affect another.
+
+Edge labels use their rendered 15px text bounds and 16-unit line height when
+choosing a position. Candidates on both sides of the longest route segments are
+tried in deterministic order against unrelated nodes, labels already placed,
+and other edge routes. If no candidate is clear, the first candidate remains
+visible and lint emits `edge-label-overlap`. For a long label on a short
+connector, use a literal block scalar and put the line break at a meaningful
+phrase boundary; the renderer does not rewrite or automatically wrap it.
 
 `orthogonal` suits most flows and reads as a conventional box-and-line diagram.
 `curved` is worth reaching for when an orthogonal route would be hard to
@@ -967,7 +977,7 @@ addressable by `diagramIndex`, and a rendered `:::diagram` reference points back
 to the original fence rather than the reference directive.
 
 The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
-`edge-crosses-node`, and `label-overflow`. Only errors are blocking: warnings
+`edge-crosses-node`, `edge-label-overlap`, and `label-overflow`. Only errors are blocking: warnings
 describe things a reader would notice, but a generated document is not held up
 on aesthetics. Message text remains stable for consumers that do not use the
 structured location.
