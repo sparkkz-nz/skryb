@@ -362,6 +362,8 @@ clearly.
   placement, canvas boundaries, own-route clearance, multiline geometry, and
   source locations. All 290 tests and type checks pass; changed examples lint
   with no warnings.
+- Lint reports are live derived metadata and do not dirty an otherwise unchanged
+  document or trigger a save prompt; source edits and layout baking still do.
 - Authoring guidance and examples now use YAML literal block scalars for
   multiline node, subtitle, and edge labels.
 - The hosted runtime is 206,552 bytes raw, 58,365 gzip, and 50,207 Brotli; the

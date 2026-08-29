@@ -21,9 +21,6 @@ test("DocumentSession owns canonical source and dirty state", () => {
 
   session.markSaved();
   assert.equal(session.hasUnsavedChanges(), false);
-  session.markLintReportUnsaved();
-  assert.equal(session.hasUnsavedChanges(), true);
-  session.markSaved();
   assert.equal(session.hasUnsavedChanges(true), true);
 });
 

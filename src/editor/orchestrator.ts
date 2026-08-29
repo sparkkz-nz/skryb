@@ -399,10 +399,9 @@ export class BrowserRuntime {
   }
 
   /**
-   * Publishes lint results as a `template#lint` beside the document's source. A template is inert,
-   * so this cannot disturb the document, and it survives Save As - which makes it the one way a
-   * reader with no tooling can hand a report back: open, save, send the file. An agent driving a
-   * browser, or dumping the DOM from a headless one, reads exactly the same element.
+   * Publishes lint results beside the document's source without marking the document as changed.
+   * The live template gives readers and browser-driven agents the same report, and a later explicit
+   * Save As includes it without making a check alone trigger an unload prompt.
    */
   public writeLintReport(): LintResult | null {
     const source = this.getSource();
@@ -434,15 +433,10 @@ export class BrowserRuntime {
     if (!report.isConnected) {
       document.body.append(report);
     }
-    this.session.markLintReportUnsaved();
     return result;
   }
 
-  /**
-   * Runs the checks and shows what they found. The report is written into the document as well as
-   * shown, so a reader asked for one by an author who cannot see the document can simply save the
-   * file and send it back.
-   */
+  /** Runs the checks, updates the live report template, and shows what they found. */
   public showLintReport(): void {
     const result = this.writeLintReport();
     if (!result) {

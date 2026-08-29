@@ -917,11 +917,10 @@ highlighted in a language of that family which does not have it.
 
 Opening a document is what does both. When the runtime loads it lays out any
 diagram that needs it, writes the result back into the document's own source,
-runs the checks, and publishes the report. The document then counts as changed,
-so a reader is prompted to save it on the way out - which is how the results get
-back to whoever asked for them.
+runs the checks, and publishes the report. Baked source changes count as unsaved
+and prompt the reader to save; publishing the derived report alone does not.
 
-Two elements carry the result, and every route returns the same two:
+Two elements carry the live result, and every route returns the same two:
 
 | Element | Contents |
 | --- | --- |
@@ -942,7 +941,11 @@ matching browser text selection APIs.
 
 The report is written only when there was something to report on - a bake
 happened, `?skryb-lint` was on the URL, or a reader chose **Check document** from
-the document menu. A document that needed nothing is left completely alone.
+the document menu. It is live derived metadata: writing or replacing it does not
+mark the document as changed or cause a save prompt. If the source was already
+changed by editing or layout baking, it remains changed. An explicit Save As
+includes the current report; a document that needed neither baking nor checking
+is left completely alone.
 
 ### What baking touches
 

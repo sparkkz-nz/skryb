@@ -309,14 +309,15 @@ itself the moment it loads:
 
 - if any diagram needed laying out, the result is **baked into the document's own
   source** there and then, so the source and the screen can never disagree;
-- **the checks are then run**, and the report is written into a
+- **the checks are then run**, and the report is written into a live
   `template[data-skryb-lint]` beside the source;
-- the document now counts as changed, so a reader is asked to save it on the way
-  out.
+- only baked source changes count as unsaved changes; checking alone does not
+  dirty the document or cause a save prompt.
 
-Both results therefore live in the document, and every route below returns the
-same two elements: `template#source` (the baked Markdown) and
-`template[data-skryb-lint]` (a JSON report). Both are HTML-escaped, so decode entities when reading them.
+Both results therefore live in the current document DOM, and every route below
+returns the same two elements: `template#source` (the baked Markdown) and
+`template[data-skryb-lint]` (a JSON report). An explicit Save As includes the
+current report. Both are HTML-escaped, so decode entities when reading them.
 
 The lint report carries a `sourceHash` of the source it describes. Compare it
 against the source you hold: if they differ, the report predates your edits and
@@ -360,10 +361,12 @@ without it the DOM may be dumped before the runtime has finished.
 
 ### 3. Ask a person
 
-With no browser at all, ask whoever you are working for to open the document,
-choose **Check document** from the document menu, and save it over the original.
-That single action bakes the layout, runs the checks, and hands both back to you.
-Batch your edits before asking: each request costs them an open and a save.
+With no browser at all, ask whoever you are working for to open the document and
+choose **Check document** from the document menu. Ask them to share the displayed
+findings. If opening the document baked layout, they should also save the changed
+source; checking alone does not dirty the document or prompt them to save. If you
+need the report embedded in a returned file, explicitly ask them to use Save As.
+Batch your edits before asking.
 
 ### What baking touches
 

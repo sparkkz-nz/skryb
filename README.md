@@ -225,11 +225,10 @@ untidy diagrams come from. The document checks itself instead, when it opens.
 
 If a diagram needed laying out, the geometry is written back into the document's
 own source there and then, so what the source says and what the screen shows can
-never disagree. The checks then run, and the report goes into a
-`template[data-skryb-lint]`
-beside the source. The document counts as changed at that point, so you are
-asked to save it on the way out - and saving is how the result reaches whoever
-asked for it. **Check document** in the document menu runs the checks any time
+never disagree. That source change prompts you to save it on the way out. The
+checks then run, and the report goes into a live `template[data-skryb-lint]`
+beside the source. Checking alone does not count as a document change or cause a
+save prompt. **Check document** in the document menu reruns the checks any time
 and shows them in a dialog.
 
 The checks catch what the source will not show you:
