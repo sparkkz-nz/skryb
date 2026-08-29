@@ -228,6 +228,7 @@ Make invalid schema enum values unrepresentable after parsing.
 ## Block 5 — Browser runtime decomposition
 
 **Status:** In progress
+**Pull request:** [#71](https://github.com/sparkkz-nz/skryb/pull/71)
 **Suggested branch:** `refactor/browser-runtime-services`  
 **Dependencies:** Blocks 3 and 4
 
