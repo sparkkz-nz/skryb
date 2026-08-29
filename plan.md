@@ -56,7 +56,8 @@ permanent targets.
 
 ## Block 1 — Runtime artifact split and size budgets
 
-**Status:** Planned  
+**Status:** In progress
+**Pull request:** [#67](https://github.com/sparkkz-nz/skryb/pull/67)
 **Suggested branch:** `perf/runtime-artifact-split`  
 **Dependencies:** None
 
@@ -85,6 +86,20 @@ preserving deliberate local and offline workflows.
 - Hosted and self-packaged runtimes produce equivalent offline documents.
 - A local `file:` document has a documented, tested self-packaged route.
 - Existing document rendering and export tests pass.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `perf/runtime-artifact-split`:
+
+- The hosted artifact is 199,901 bytes raw, 56,398 bytes gzip, and 48,554
+  bytes Brotli.
+- The self-packaged artifact is 408,155 bytes raw, 113,165 bytes gzip, and
+  58,525 bytes Brotli.
+- CI budgets are 205,000/60,000/52,000 bytes for hosted raw/gzip/Brotli and
+  415,000/118,000/62,000 bytes for self-packaged raw/gzip/Brotli.
+- The self-packaged artifact embeds the exact hosted artifact source. Focused
+  equivalence and local `file:` route tests pass, as do the full type, test,
+  artifact-budget, and document-lint checks.
 
 ## Block 2 — Flowchart index and performance regression coverage
 

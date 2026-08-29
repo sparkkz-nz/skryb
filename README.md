@@ -142,15 +142,24 @@ Everything happens inside the open document; there is no separate application.
 <script src="https://sparkkz-nz.github.io/skryb/dev/skryb-runtime.js" defer></script>
 ```
 
-Each push to `main` tests and publishes the latest runtime. A Git tag beginning
-with `v` produces a retained, versioned snapshot. Each branch push updates the
-shared development runtime, so documents must not rely on that URL after
+Each published channel contains two artifacts:
+
+- `skryb-runtime.js` is the lean hosted runtime and is the right default for
+  templates and shared documents.
+- `skryb-runtime-self-packaged.js` includes a second encoded runtime copy. Use
+  it only when an HTML file and runtime are deliberately distributed together
+  for direct `file:` use without network access.
+
+Each push to `main` tests and publishes the latest artifacts. A Git tag beginning
+with `v` produces retained, versioned snapshots. Each branch push updates the
+shared development artifacts, so documents must not rely on those URLs after
 testing.
 
-For a document that must work without network access, choose **Save for
-Offline**. It embeds the selected pinned runtime in the saved document; ordinary
-**Save As** retains a hosted external runtime URL to keep source documents
-small and portable between folders.
+With a hosted runtime, **Save for Offline** fetches the selected runtime and
+embeds it in the saved document. The self-packaged runtime uses its included
+copy instead, so the same action works from `file:` without a network request.
+Ordinary **Save As** retains a hosted external runtime URL to keep source
+documents small and portable between folders.
 
 ## Documentation
 
@@ -190,8 +199,8 @@ published documents when you need a stable document contract.
 
 [examples/web-runtime.html](examples/web-runtime.html) is the comprehensive
 hosted-runtime demo. [examples/file-runtime.html](examples/file-runtime.html)
-uses the runtime built at `dist/skryb-runtime.js`, so build first and keep the
-example beside the repository's `dist/` directory. Install development
+uses `dist/skryb-runtime-self-packaged.js`, so build first and keep the example
+beside the repository's `dist/` directory. Install development
 dependencies and run the runtime tests with:
 
 ```sh
@@ -199,8 +208,15 @@ npm ci
 npm test
 ```
 
-`npm test` builds and tests the minified browser artifact. Use `npm run check`
-to type-check the TypeScript build entry independently.
+`npm test` builds and tests both minified browser artifacts. The build reports
+raw, gzip, and Brotli sizes. Use `npm run check` to type-check the TypeScript
+build entry independently and `npm run check:artifacts` to enforce the CI size
+budgets.
+
+The budgets live beside the measurement code in
+`scripts/runtime-artifact-sizes.mjs`. An intentional increase must update those
+limits in the same pull request, record fresh measurements in `plan.md`, and
+explain why the added transfer cost is justified.
 
 ## Checking a document
 
@@ -275,9 +291,9 @@ to edit:
 
 Skryb is licensed under the [Apache License 2.0](LICENSE).
 
-The built runtime carries a short attribution banner at the top of
-`dist/skryb-runtime.js`. Because **Save As** inlines the runtime into the
-document it produces, that banner travels with every saved document.
+Both built runtimes carry a short attribution banner. Because **Save for
+Offline** inlines the selected runtime into the document it produces, that
+banner travels with every self-contained document.
 
 To keep single-file documents practical, the copyright holder grants an
 additional permission: **retaining the banner comment in an inlined or

@@ -7,7 +7,7 @@ description: Create valid, portable Skryb HTML documents with canonical Markdown
 
 Use this skill when creating or updating a Skryb document. A Skryb document is
 a portable HTML file that embeds canonical Markdown in `template#source` and
-renders it through the hosted `skryb-runtime.js` browser runtime.
+renders it through a Skryb browser runtime.
 
 The complete, versioned authoring contract is the bundled
 [schema reference](reference.md). Read it before authoring or changing a
@@ -62,8 +62,10 @@ Use one of these script sources:
 | Normal local or shared use | `https://sparkkz-nz.github.io/skryb/latest/skryb-runtime.js` |
 | Short-lived pre-merge testing only | `https://sparkkz-nz.github.io/skryb/dev/skryb-runtime.js` |
 | Published or distributed document | `https://sparkkz-nz.github.io/skryb/releases/<tag>/skryb-runtime.js` |
+| Runtime distributed beside a local `file:` document | `./skryb-runtime-self-packaged.js` |
 
-Use a real released tag, such as `v1.2.0`, in a pinned URL. Never use the shared
+Use the self-packaged artifact only when the HTML and runtime are deliberately
+distributed together and offline export must work without fetching. Use a real released tag, such as `v1.2.0`, in a pinned URL. Never use the shared
 development channel in an enduring document. A local relative runtime is valid
 only when the document and runtime are deliberately distributed together. Never
 put a machine-specific `file:///...` URL in a shareable document.
@@ -291,7 +293,8 @@ across a page boundary.
 
 **Save As** keeps a hosted runtime URL in the downloaded portable document.
 **Save for Offline** embeds the selected runtime into a self-contained copy;
-use it when the recipient must open the document without network access.
+the hosted artifact fetches its source, while the self-packaged artifact uses
+its included source without network access.
 
 Label every fenced code block with its language. A recognised language is syntax
 highlighted, and the label costs nothing when it is not.

@@ -8,12 +8,23 @@ const runtime = fs.readFileSync(
   path.resolve(__dirname, "..", "dist", "skryb-runtime.js"),
   "utf8"
 );
+const selfPackagedRuntime = fs.readFileSync(
+  path.resolve(__dirname, "..", "dist", "skryb-runtime-self-packaged.js"),
+  "utf8"
+);
 const context = vm.createContext({
+  document: { querySelector: () => null },
+  globalThis: {}
+});
+const selfPackagedContext = vm.createContext({
   document: { querySelector: () => null },
   globalThis: {}
 });
 
 vm.runInContext(runtime, context, { filename: "dist/skryb-runtime.js" });
+vm.runInContext(selfPackagedRuntime, selfPackagedContext, {
+  filename: "dist/skryb-runtime-self-packaged.js"
+});
 
 const {
   supportedDiagramTypes,
@@ -181,9 +192,21 @@ test("creates a portable offline document with the fetched runtime at the end of
   assert.match(exportedDocument, new RegExp(`<script data-docdiagram-runtime="embedded" data-docdiagram-runtime-url="https://sparkkz-nz.github.io/skryb/releases/v1.2.0/skryb-runtime.js">\\n${runtimeSource}\\n</script>\\n</body>`));
 });
 
-test("runtime packages its source for local offline export without fetching", () => {
-  assert.equal(typeof context.globalThis.DocDiagramRuntimeSource, "string");
-  assert.match(context.globalThis.DocDiagramRuntimeSource, /DocDiagramCore/);
+test("hosted runtime omits the packaged source copy", () => {
+  assert.equal(context.globalThis.DocDiagramRuntimeSource, undefined);
+  assert.equal(typeof context.globalThis.DocDiagramCore, "object");
+});
+
+test("self-packaged runtime carries the hosted source for local offline export", () => {
+  assert.equal(selfPackagedContext.globalThis.DocDiagramRuntimeSource, runtime);
+  assert.equal(typeof selfPackagedContext.globalThis.DocDiagramCore, "object");
+});
+
+test("local file examples select the self-packaged runtime", () => {
+  for (const fixture of ["file-runtime.html", "diagram-file.html", "seq-diag-file.html"]) {
+    const html = fs.readFileSync(path.resolve(__dirname, "..", "examples", fixture), "utf8");
+    assert.match(html, /<script src="\.\.\/dist\/skryb-runtime-self-packaged\.js" defer(?:="")?><\/script>/);
+  }
 });
 
 test("portable document exports remove page-level runtime theme state", () => {
@@ -211,11 +234,14 @@ test("uses the hosted runtime for a portable Save As when local runtime paths ar
   );
 });
 
-test("the packaged runtime remains executable after offline HTML embedding", () => {
+test("hosted and self-packaged runtimes produce the same executable offline document", () => {
+  const shell = "<html><body><script data-docdiagram-offline-runtime-placeholder></script></body></html>";
+  const hostedExport = embedRuntimeInDocumentHtml(shell, runtime);
   const exportedDocument = embedRuntimeInDocumentHtml(
-    "<html><body><script data-docdiagram-offline-runtime-placeholder></script></body></html>",
-    context.globalThis.DocDiagramRuntimeSource
+    shell,
+    selfPackagedContext.globalThis.DocDiagramRuntimeSource
   );
+  assert.equal(exportedDocument, hostedExport);
   const embeddedRuntime = exportedDocument.match(/<script data-docdiagram-runtime="embedded">\n([\s\S]*?)\n<\/script>/);
   const offlineContext = vm.createContext({
     document: { querySelector: () => null },

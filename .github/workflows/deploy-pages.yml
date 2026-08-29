@@ -39,6 +39,7 @@ jobs:
         run: |
           npm run check
           npm test
+          npm run check:artifacts
 
       - name: Build Pages site
         shell: bash
@@ -69,6 +70,7 @@ jobs:
           fi
           mkdir -p "$destination"
           cp dist/skryb-runtime.js "$destination/skryb-runtime.js"
+          cp dist/skryb-runtime-self-packaged.js "$destination/skryb-runtime-self-packaged.js"
           mkdir -p "$site_dir/docs"
           cp pages/docs/*.html "$site_dir/docs/"
           cp pages/index.html "$site_dir/index.html"

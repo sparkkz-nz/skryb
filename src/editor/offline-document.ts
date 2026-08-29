@@ -64,7 +64,14 @@ export async function getRuntimeSourceForOfflineExport(
     };
   }
 
-  const runtime = documentCopy.querySelector<HTMLScriptElement>('script[src*="skryb-runtime.js"]');
+  const runtime = Array.from(documentCopy.querySelectorAll<HTMLScriptElement>("script[src]")).find((script) => {
+    try {
+      const pathname = new URL(script.getAttribute("src") || "", documentCopy.ownerDocument.baseURI).pathname;
+      return /\/skryb-runtime(?:-self-packaged)?\.js$/i.test(pathname);
+    } catch {
+      return false;
+    }
+  });
   if (!runtime) {
     throw new Error("Could not find the selected Skryb runtime in this document.");
   }
