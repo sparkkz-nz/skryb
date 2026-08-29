@@ -10,7 +10,7 @@
 // source order.
 import type { FlowchartDiagram, FlowchartEdge, FlowchartNode, Position } from "./schema";
 import { defaultNode } from "./schema";
-import { flattenFlowchartNodes } from "./hierarchy";
+import { FlowchartIndex } from "./hierarchy";
 import { getGridSize, snapToGrid } from "./styles";
 
 export const layoutDirections = ["right", "down", "left", "up"] as const;
@@ -491,15 +491,14 @@ function deriveEdgeAnchors(diagram: FlowchartDiagram, settings: LayoutSettings):
   }
 
   const forward = getForwardAnchors(settings.direction);
-  const bounds = new Map(flattenFlowchartNodes(diagram)
-    .map((entry) => [entry.node.id, { ...entry.position, ...nodeSize(entry.node) }] as const));
+  const flowchartIndex = new FlowchartIndex(diagram);
 
   for (const edge of edges) {
     if (edge.sourceAnchor && edge.targetAnchor) {
       continue;
     }
-    const source = bounds.get(edge.source);
-    const target = bounds.get(edge.target);
+    const source = flowchartIndex.getById(edge.source)?.bounds;
+    const target = flowchartIndex.getById(edge.target)?.bounds;
     const facing = source && target && edge.source !== edge.target ? facingAnchors(source, target) : null;
     edge.sourceAnchor = edge.sourceAnchor || facing?.source || forward.source;
     edge.targetAnchor = edge.targetAnchor || facing?.target || forward.target;

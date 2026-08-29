@@ -8,7 +8,7 @@ import {
   type FlowchartNode
 } from "../core/diagrams/schema";
 import { escapeHtml } from "../core/diagrams/parser";
-import { flattenFlowchartNodes } from "../core/diagrams/hierarchy";
+import { FlowchartIndex } from "../core/diagrams/hierarchy";
 import { getNamedStyle, getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { splitTextLines, renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
 import type { Obstacle } from "../core/diagrams/routing";
@@ -73,24 +73,14 @@ export function renderFlowchartDiagram(
 ): string {
   const { selectedNode, selectedEdge, editingNode, editingEdge, connectionDrag, diagramZooms, diagramCameraOffsets } = state;
   const isDiagramEditing = state.editingDiagramIndex === diagramIndex;
-  const nodeEntries = flattenFlowchartNodes(diagram);
-  const nodes = new Map(nodeEntries.map((entry) => [entry.node.id, entry]));
+  const flowchartIndex = new FlowchartIndex(diagram);
+  const nodeEntries = flowchartIndex.entries;
 
   // A container legitimately contains its own children, and an edge to or from one has to pass
   // through its box, so only nodes unrelated to an edge's endpoints count as obstacles for it.
-  const isRelated = (first: FlowchartNode, second: FlowchartNode): boolean => {
-    const contains = (parent: FlowchartNode, candidate: FlowchartNode): boolean =>
-      (parent.children || []).some((child) => child === candidate || contains(child, candidate));
-    return first === second || contains(first, second) || contains(second, first);
-  };
   const obstaclesFor = (sourceNode: FlowchartNode, targetNode: FlowchartNode): Obstacle[] => nodeEntries
-    .filter(({ node }) => !isRelated(node, sourceNode) && !isRelated(node, targetNode))
-    .map(({ node, position }) => ({
-      x: position.x,
-      y: position.y,
-      width: Number(node.size?.width) || defaultNode.width,
-      height: Number(node.size?.height) || defaultNode.height
-    }));
+    .filter(({ node }) => !flowchartIndex.isRelated(node, sourceNode) && !flowchartIndex.isRelated(node, targetNode))
+    .map(({ bounds }) => bounds);
 
   const edgeLabelLineHeight = 16;
   const edgeMarkerDefs: string[] = [];
@@ -103,8 +93,8 @@ export function renderFlowchartDiagram(
     .join("") : "";
 
   const edgeMarkup = diagram.edges.map((edge, edgeIndex) => {
-    const sourceEntry = nodes.get(edge.source);
-    const targetEntry = nodes.get(edge.target);
+    const sourceEntry = flowchartIndex.getById(edge.source);
+    const targetEntry = flowchartIndex.getById(edge.target);
 
     if (!sourceEntry || !targetEntry) {
       return "";

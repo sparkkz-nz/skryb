@@ -11,7 +11,7 @@ import {
   minimumNodeSize
 } from "./schema";
 import { clampNodeSize, getGridSize, getNodeColorPalette, snapToGrid } from "./styles";
-import { findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, getFlowchartNodePosition } from "./hierarchy";
+import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds } from "./hierarchy";
 
 function getNodeBounds(node: FlowchartNode): { x: number; y: number; width: number; height: number } {
   return {
@@ -37,14 +37,13 @@ function resizeCanvas(diagram: FlowchartDiagram, node: FlowchartNode | null, pad
   const width = Number(diagram.canvas?.width) || 1000;
   const height = Number(diagram.canvas?.height) || 560;
   const shrinks = forceShrink || Boolean(diagram.canvas?.auto);
-  const knownNodes = new Set(flattenFlowchartNodes(diagram).map((entry) => entry.node));
+  let flowchartIndex = new FlowchartIndex(diagram);
+  const knownNodes = new Set(flowchartIndex.entries.map((entry) => entry.node));
   const nodes = [...knownNodes];
   if (node && !nodes.includes(node)) {
     nodes.push(node);
   }
-  const boundsFor = (candidate: FlowchartNode) => knownNodes.has(candidate)
-    ? getFlowchartNodeBounds(diagram, candidate)
-    : getNodeBounds(candidate);
+  const boundsFor = (candidate: FlowchartNode) => flowchartIndex.getByNode(candidate)?.bounds || getNodeBounds(candidate);
   // Callout targets are canvas coordinates outside the node box, so they have to be covered too or
   // the pointer tip falls outside the viewBox.
   const occupiedBounds = () => [
@@ -69,7 +68,7 @@ function resizeCanvas(diagram: FlowchartDiagram, node: FlowchartNode | null, pad
   const shiftY = minimumY < 0 ? padding - minimumY : 0;
 
   if (shiftX || shiftY) {
-    for (const candidate of flattenFlowchartNodes(diagram).filter((entry) => entry.parent === null)) {
+    for (const candidate of flowchartIndex.entries.filter((entry) => entry.parent === null)) {
       const node = candidate.node;
       node.position = {
         ...node.position,
@@ -89,6 +88,7 @@ function resizeCanvas(diagram: FlowchartDiagram, node: FlowchartNode | null, pad
         edge.waypoint = { x: edge.waypoint.x + shiftX, y: edge.waypoint.y + shiftY };
       }
     }
+    flowchartIndex = new FlowchartIndex(diagram);
   }
 
   const expandedBounds = occupiedBounds();
@@ -139,6 +139,7 @@ function createDuplicateNodeId(ids: Set<string>, shape: string): string {
 
 function getAvailableNodePosition(
   diagram: FlowchartDiagram,
+  flowchartIndex: FlowchartIndex,
   width: number,
   height: number,
   preferred: Position
@@ -163,9 +164,9 @@ function getAvailableNodePosition(
         candidate.x + width > canvasWidth || candidate.y + height > canvasHeight) {
         continue;
       }
-      if (!flattenFlowchartNodes(diagram).some(({ node }) => rectanglesOverlap(
+      if (!flowchartIndex.entries.some(({ bounds }) => rectanglesOverlap(
         { ...candidate, width, height },
-        getFlowchartNodeBounds(diagram, node)
+        bounds
       ))) {
         return candidate;
       }
@@ -174,15 +175,13 @@ function getAvailableNodePosition(
 
   const rightmostEdge = Math.max(
     0,
-    ...flattenFlowchartNodes(diagram).map(({ node }) => {
-      const bounds = getFlowchartNodeBounds(diagram, node);
-      return bounds.x + bounds.width;
-    })
+    ...flowchartIndex.entries.map(({ bounds }) => bounds.x + bounds.width)
   );
   return { x: snapToGrid(rightmostEdge + step, grid), y: 0 };
 }
 
 export function getDefaultNodePosition(diagram: FlowchartDiagram): Position {
+  const flowchartIndex = new FlowchartIndex(diagram);
   const width = Number(diagram.canvas?.width) || 1000;
   const height = Number(diagram.canvas?.height) || 560;
   const grid = getGridSize(diagram);
@@ -203,9 +202,9 @@ export function getDefaultNodePosition(diagram: FlowchartDiagram): Position {
         candidate.x + defaultNode.width > width || candidate.y + defaultNode.height > height) {
         continue;
       }
-      if (!flattenFlowchartNodes(diagram).some(({ node }) => rectanglesOverlap(
+      if (!flowchartIndex.entries.some(({ bounds }) => rectanglesOverlap(
         { ...candidate, width: defaultNode.width, height: defaultNode.height },
-        getNodeBounds(node)
+        bounds
       ))) {
         return candidate;
       }
@@ -228,12 +227,13 @@ export function createNode(diagram: FlowchartDiagram): FlowchartNode {
 }
 
 export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): FlowchartNode | null {
-  const entry = findFlowchartNode(diagram, nodeId);
+  const flowchartIndex = new FlowchartIndex(diagram);
+  const entry = flowchartIndex.getById(nodeId);
   if (!entry) {
     return null;
   }
 
-  const ids = new Set(flattenFlowchartNodes(diagram).map(({ node }) => node.id));
+  const ids = new Set(flowchartIndex.entries.map(({ node }) => node.id));
   const clone = (node: FlowchartNode): FlowchartNode => ({
     id: createDuplicateNodeId(ids, node.shape),
     label: node.label,
@@ -248,14 +248,15 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
     ...(node.children ? { children: node.children.map(clone) } : {})
   });
   const duplicate = clone(entry.node);
-  const originalBounds = getFlowchartNodeBounds(diagram, entry.node);
+  const originalBounds = entry.bounds;
   const duplicateBounds = getAvailableNodePosition(
     diagram,
+    flowchartIndex,
     Number(duplicate.size?.width) || defaultNode.width,
     Number(duplicate.size?.height) || defaultNode.height,
     originalBounds
   );
-  const parentPosition = entry.parent ? getFlowchartNodePosition(diagram, entry.parent) : { x: 0, y: 0 };
+  const parentPosition = entry.parent ? flowchartIndex.getByNode(entry.parent)?.position || { x: 0, y: 0 } : { x: 0, y: 0 };
   duplicate.position = {
     x: duplicateBounds.x - parentPosition.x,
     y: duplicateBounds.y - parentPosition.y

@@ -23,7 +23,7 @@ import {
 } from "../core/diagrams/mutations";
 import { getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
 import { getNodeBounds } from "../renderers/flowchart";
-import { findFlowchartNode, flattenFlowchartNodes, getFlowchartNodeBounds, reparentFlowchartNode } from "../core/diagrams/hierarchy";
+import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds, reparentFlowchartNode, type FlowchartNodeBounds } from "../core/diagrams/hierarchy";
 import type { ConnectionDrag } from "../renderers/types";
 import { clearEditorState, isDiagramEditing, type EditorState } from "./state";
 
@@ -351,14 +351,20 @@ export class DiagramEditor {
     const diagramIndex = pointerNumber(group.getAttribute("data-diagram-index") || undefined);
     const nodeId = group.getAttribute("data-node-id") || "";
     const diagram = diagramAt(this.host.state, diagramIndex);
-    const node = diagram ? findFlowchartNode(diagram, nodeId)?.node : null;
-    if (!diagram || !node) {
+    if (!diagram) {
+      return;
+    }
+    const flowchartIndex = new FlowchartIndex(diagram);
+    const entry = flowchartIndex.getById(nodeId);
+    const node = entry?.node;
+    if (!entry || !node) {
       return;
     }
 
     event.preventDefault();
     const start = this.svgPoint(svg, event);
-    const origin = getFlowchartNodeBounds(diagram, node);
+    const origin = entry.bounds;
+    const parentPosition = entry.parent ? flowchartIndex.getByNode(entry.parent)?.position || { x: 0, y: 0 } : { x: 0, y: 0 };
     const grid = getGridSize(diagram);
     let moved = false;
     this.capturePointer(svg, event);
@@ -380,11 +386,10 @@ export class DiagramEditor {
           getSelectedNodeStrokeWidth(diagram, node)
         );
       }
-      const entry = findFlowchartNode(diagram, nodeId);
       node.position = {
         ...node.position,
-        x: x - (entry?.parent ? getFlowchartNodeBounds(diagram, entry.parent).x : 0),
-        y: y - (entry?.parent ? getFlowchartNodeBounds(diagram, entry.parent).y : 0)
+        x: x - parentPosition.x,
+        y: y - parentPosition.y
       };
     };
     const finish = (finishEvent: PointerEvent) => {
@@ -623,12 +628,16 @@ export class DiagramEditor {
     );
   }
 
-  private getNodePortPoint(node: FlowchartNode, anchor: string): Position {
-    const diagram = this.host.state.diagramModels.find((candidate): candidate is FlowchartDiagram => candidate.type === "flowchart" && findFlowchartNode(candidate, node.id)?.node === node);
-    if (!diagram) {
-      return { x: 0, y: 0 };
+  private getNodePortPoint(node: FlowchartNode, anchor: string, indexedBounds?: FlowchartNodeBounds): Position {
+    let bounds = indexedBounds;
+    if (!bounds) {
+      const diagram = this.host.state.diagramModels.find((candidate): candidate is FlowchartDiagram =>
+        candidate.type === "flowchart" && findFlowchartNode(candidate, node.id)?.node === node);
+      if (!diagram) {
+        return { x: 0, y: 0 };
+      }
+      bounds = getFlowchartNodeBounds(diagram, node);
     }
-    const bounds = getFlowchartNodeBounds(diagram, node);
     return getNodeGeometry(node, bounds.x, bounds.y, bounds.width, bounds.height).anchors[anchor];
   }
 
@@ -637,9 +646,9 @@ export class DiagramEditor {
     if (!diagram) {
       return;
     }
-    for (const { node } of flattenFlowchartNodes(diagram)) {
+    for (const { node, bounds } of new FlowchartIndex(diagram).entries) {
       for (const anchor of edgeAnchors) {
-        const point = this.getNodePortPoint(node, anchor);
+        const point = this.getNodePortPoint(node, anchor, bounds);
         const port = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         port.setAttribute("class", "docdiagram-connection-port docdiagram-connection-target-port");
         port.dataset.nodeId = node.id;
@@ -767,21 +776,22 @@ export class DiagramEditor {
     if (!diagram || !edge) {
       return;
     }
+    const flowchartIndex = new FlowchartIndex(diagram);
+    const sourceEntry = flowchartIndex.getById(edge.source);
+    const targetEntry = flowchartIndex.getById(edge.target);
+    if (!sourceEntry || !targetEntry) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     this.capturePointer(svg, event);
     const move = (moveEvent: PointerEvent) => {
       const point = this.svgPoint(svg, moveEvent);
       edge.waypoint = { x: snapToGrid(point.x, getGridSize(diagram)), y: snapToGrid(point.y, getGridSize(diagram)) };
-      const source = findFlowchartNode(diagram, edge.source)?.node;
-      const target = findFlowchartNode(diagram, edge.target)?.node;
-      if (!source || !target) {
-        return;
-      }
       const sourceAnchorName = edge.sourceAnchor || "right";
       const targetAnchorName = edge.targetAnchor || "left";
-      const sourceAnchor = this.getNodePortPoint(source, sourceAnchorName);
-      const targetAnchor = this.getNodePortPoint(target, targetAnchorName);
+      const sourceAnchor = this.getNodePortPoint(sourceEntry.node, sourceAnchorName, sourceEntry.bounds);
+      const targetAnchor = this.getNodePortPoint(targetEntry.node, targetAnchorName, targetEntry.bounds);
       const path = buildEdgePath(
         sourceAnchor,
         targetAnchor,

@@ -2,11 +2,11 @@
 // validateDocumentSource; what an authoring agent cannot see is whether the result *looks* right,
 // so these rules describe geometry. They live beside the geometry they describe, in the same
 // bundle as the renderer that draws it, so a rule cannot drift from what is actually drawn.
-import type { FlowchartDiagram, FlowchartNode } from "./diagrams/schema";
+import type { FlowchartDiagram } from "./diagrams/schema";
 import { defaultNode } from "./diagrams/schema";
 import { extractDiagramFences, resolveDocument, validateDocumentSource } from "./document";
 import { parseDiagram } from "./diagrams/parser";
-import { flattenFlowchartNodes, getFlowchartNodeBounds } from "./diagrams/hierarchy";
+import { FlowchartIndex } from "./diagrams/hierarchy";
 import {
   buildEdgePath,
   computeNodeTextLayout,
@@ -44,27 +44,18 @@ function boundsOverlap(first: Bounds, second: Bounds): { width: number; height: 
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
-function isRelated(first: FlowchartNode, second: FlowchartNode): boolean {
-  const contains = (parent: FlowchartNode, candidate: FlowchartNode): boolean =>
-    (parent.children || []).some((child) => child === candidate || contains(child, candidate));
-  return contains(first, second) || contains(second, first);
-}
-
-function lintNodeOverlaps(diagram: FlowchartDiagram, report: (rule: string, message: string) => void): void {
-  const entries = flattenFlowchartNodes(diagram);
-  for (let index = 0; index < entries.length; index += 1) {
-    for (let other = index + 1; other < entries.length; other += 1) {
-      const first = entries[index];
+function lintNodeOverlaps(index: FlowchartIndex, report: (rule: string, message: string) => void): void {
+  const entries = index.entries;
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    for (let other = entryIndex + 1; other < entries.length; other += 1) {
+      const first = entries[entryIndex];
       const second = entries[other];
       // A child is meant to sit inside its parent, and siblings of different parents are compared
       // in absolute coordinates, so only unrelated boxes can genuinely collide.
-      if (isRelated(first.node, second.node)) {
+      if (index.isRelated(first.node, second.node)) {
         continue;
       }
-      const overlap = boundsOverlap(
-        getFlowchartNodeBounds(diagram, first.node),
-        getFlowchartNodeBounds(diagram, second.node)
-      );
+      const overlap = boundsOverlap(first.bounds, second.bounds);
       if (overlap) {
         report(
           "node-overlap",
@@ -75,8 +66,8 @@ function lintNodeOverlaps(diagram: FlowchartDiagram, report: (rule: string, mess
   }
 }
 
-function lintNodeLabels(diagram: FlowchartDiagram, report: (rule: string, message: string) => void): void {
-  for (const { node } of flattenFlowchartNodes(diagram)) {
+function lintNodeLabels(index: FlowchartIndex, report: (rule: string, message: string) => void): void {
+  for (const { node } of index.entries) {
     const width = Number(node.size?.width) || defaultNode.width;
     const height = Number(node.size?.height) || defaultNode.height;
     const { textBounds } = getNodeGeometry(node, 0, 0, width, height);
@@ -107,12 +98,10 @@ function lintNodeLabels(diagram: FlowchartDiagram, report: (rule: string, messag
   }
 }
 
-function lintEdges(diagram: FlowchartDiagram, report: (rule: string, message: string, severity?: LintSeverity) => void): void {
-  const entries = new Map(flattenFlowchartNodes(diagram).map((entry) => [entry.node.id, entry]));
-
+function lintEdges(diagram: FlowchartDiagram, index: FlowchartIndex, report: (rule: string, message: string, severity?: LintSeverity) => void): void {
   for (const edge of diagram.edges || []) {
-    const source = entries.get(edge.source);
-    const target = entries.get(edge.target);
+    const source = index.getById(edge.source);
+    const target = index.getById(edge.target);
     // The renderer drops an edge naming an unknown node without a word, so the connector simply
     // vanishes. That is invisible unless you count your arrows, which makes it an error.
     for (const [role, id, entry] of [["source", edge.source, source], ["target", edge.target, target]] as const) {
@@ -128,15 +117,14 @@ function lintEdges(diagram: FlowchartDiagram, report: (rule: string, message: st
       continue;
     }
 
-    const sourceBounds = getFlowchartNodeBounds(diagram, source.node);
-    const targetBounds = getFlowchartNodeBounds(diagram, target.node);
+    const sourceBounds = source.bounds;
+    const targetBounds = target.bounds;
     const sourceAnchor = getNodeGeometry(source.node, sourceBounds.x, sourceBounds.y, sourceBounds.width, sourceBounds.height)
       .anchors[edge.sourceAnchor || "right"];
     const targetAnchor = getNodeGeometry(target.node, targetBounds.x, targetBounds.y, targetBounds.width, targetBounds.height)
       .anchors[edge.targetAnchor || "left"];
-    const obstacles = flattenFlowchartNodes(diagram).filter(({ node }) =>
-      node !== source.node && node !== target.node &&
-      !isRelated(node, source.node) && !isRelated(node, target.node)
+    const obstacles = index.entries.filter(({ node }) =>
+      !index.isRelated(node, source.node) && !index.isRelated(node, target.node)
     );
     // The rule reports what a reader would actually see, so the path is built the same way the
     // renderer builds it, obstacles included. What is left is a route too crowded to be cleared.
@@ -147,13 +135,12 @@ function lintEdges(diagram: FlowchartDiagram, report: (rule: string, message: st
       edge.targetAnchor || "left",
       edge.route || "orthogonal",
       edge.waypoint,
-      edge.waypoint ? undefined : obstacles.map((entry) => getFlowchartNodeBounds(diagram, entry.node))
+      edge.waypoint ? undefined : obstacles.map((entry) => entry.bounds)
     );
     const points = sampleEdgePath(path);
 
     for (const obstacle of obstacles) {
-      const bounds = getFlowchartNodeBounds(diagram, obstacle.node);
-      const crossed = points.slice(1).some((point, index) => segmentIntersectsRectangle(points[index], point, bounds));
+      const crossed = points.slice(1).some((point, pointIndex) => segmentIntersectsRectangle(points[pointIndex], point, obstacle.bounds));
       if (crossed) {
         report(
           "edge-crosses-node",
@@ -190,9 +177,10 @@ export function lintDocument(source: string): LintResult {
       messages.push({ severity, rule, message, diagram: name });
     };
 
-    lintEdges(diagram, report);
-    lintNodeOverlaps(diagram, report);
-    lintNodeLabels(diagram, report);
+    const flowchartIndex = new FlowchartIndex(diagram);
+    lintEdges(diagram, flowchartIndex, report);
+    lintNodeOverlaps(flowchartIndex, report);
+    lintNodeLabels(flowchartIndex, report);
   });
 
   return {

@@ -38,6 +38,7 @@ const {
   expandCanvasForNode,
   getResizeNodeOrigin,
   resizeFlowchartNode,
+  FlowchartIndex,
   flattenFlowchartNodes,
   getFlowchartNodeBounds,
   reparentFlowchartNode,
@@ -1015,6 +1016,49 @@ test("flowchart nodes support arbitrary nesting with relative coordinates and ed
   assert.match(markup, /data-node-id="platform"/);
   assert.match(markup, /data-node-id="store"/);
   assert.match(markup, /data-node-id="client"/);
+});
+
+test("FlowchartIndex preserves traversal order, hierarchy relationships, and snapshot boundaries", () => {
+  const diagram = parseDiagram(flowchartSource([
+    "nodes:",
+    "  - id: platform",
+    "    label: Platform",
+    "    shape: rounded-rectangle",
+    "    position: { x: 100, y: 80 }",
+    "    size: { width: 400, height: 300 }",
+    "    children:",
+    "      - id: service",
+    "        label: Service",
+    "        shape: rounded-rectangle",
+    "        position: { x: 40, y: 50 }",
+    "        children:",
+    "          - id: store",
+    "            label: Store",
+    "            shape: database",
+    "            position: { x: 30, y: 40 }",
+    "  - id: client",
+    "    label: Client",
+    "    shape: rounded-rectangle",
+    "    position: { x: 600, y: 180 }",
+    "edges:"
+  ]));
+  const index = new FlowchartIndex(diagram);
+  const platform = index.getById("platform").node;
+  const service = index.getById("service").node;
+  const store = index.getById("store").node;
+  const client = index.getById("client").node;
+
+  assert.deepEqual(Array.from(index.entries, (entry) => entry.node.id), ["platform", "service", "store", "client"]);
+  assert.equal(index.getByNode(store), index.getById("store"));
+  assert.deepEqual({ ...index.getById("store").bounds }, { x: 170, y: 170, width: 190, height: 80 });
+  assert.equal(index.contains(platform, store), true);
+  assert.equal(index.contains(service, client), false);
+  assert.equal(index.isRelated(platform, store), true);
+  assert.deepEqual(Array.from(index.descendants(platform), (entry) => entry.node.id), ["service", "store"]);
+
+  store.position.x = 60;
+  assert.equal(index.getById("store").position.x, 170, "an index remains stable for its operation");
+  assert.equal(new FlowchartIndex(diagram).getById("store").position.x, 200, "a rebuilt index sees mutations");
 });
 
 test("resizing from each corner anchors the opposite corner and preserves nested positions", () => {
@@ -3700,6 +3744,150 @@ function lintRules(source) {
   }
   return rules;
 }
+
+function linearFlowchartFixture(nodeCount) {
+  const lines = ["canvas: auto", "nodes:"];
+  for (let index = 0; index < nodeCount; index += 1) {
+    lines.push(
+      `  - id: node-${index}`,
+      `    label: Node ${index}`,
+      "    shape: rounded-rectangle",
+      `    position: { x: 0, y: ${index * 120} }`,
+      "    size: { width: 190, height: 80 }"
+    );
+  }
+  lines.push("edges:");
+  for (let index = 1; index < nodeCount; index += 1) {
+    lines.push(
+      `  - source: node-${index - 1}`,
+      `    target: node-${index}`,
+      "    sourceAnchor: bottom",
+      "    targetAnchor: top"
+    );
+  }
+  return lintSource(lines);
+}
+
+function nestedFlowchartFixture(groupCount, childrenPerGroup) {
+  const groupHeight = childrenPerGroup * 120 + 40;
+  const lines = ["canvas: auto", "nodes:"];
+  for (let group = 0; group < groupCount; group += 1) {
+    lines.push(
+      `  - id: group-${group}`,
+      `    label: Group ${group}`,
+      "    shape: rounded-rectangle",
+      `    position: { x: 0, y: ${group * (groupHeight + 40)} }`,
+      `    size: { width: 270, height: ${groupHeight} }`,
+      "    children:"
+    );
+    for (let child = 0; child < childrenPerGroup; child += 1) {
+      lines.push(
+        `      - id: group-${group}-node-${child}`,
+        `        label: Node ${group}-${child}`,
+        "        shape: rounded-rectangle",
+        `        position: { x: 40, y: ${20 + child * 120} }`,
+        "        size: { width: 190, height: 80 }"
+      );
+    }
+  }
+  lines.push("edges:");
+  for (let group = 0; group < groupCount; group += 1) {
+    for (let child = 1; child < childrenPerGroup; child += 1) {
+      lines.push(
+        `  - source: group-${group}-node-${child - 1}`,
+        `    target: group-${group}-node-${child}`,
+        "    sourceAnchor: bottom",
+        "    targetAnchor: top"
+      );
+    }
+    if (group > 0) {
+      lines.push(
+        `  - source: group-${group - 1}-node-${childrenPerGroup - 1}`,
+        `    target: group-${group}-node-0`,
+        "    sourceAnchor: bottom",
+        "    targetAnchor: top"
+      );
+    }
+  }
+  return lintSource(lines);
+}
+
+function assertLintWithinBudget(source, budgetMs) {
+  const started = performance.now();
+  const result = lintDocument(source);
+  const elapsed = performance.now() - started;
+
+  assert.equal(result.errorCount, 0, formatLintMessages(result));
+  assert.equal(result.warningCount, 0, formatLintMessages(result));
+  assert.deepEqual(JSON.parse(JSON.stringify(result.messages)), []);
+  assert.ok(elapsed < budgetMs, `expected lint to finish within ${budgetMs / 1000} seconds, took ${Math.round(elapsed)}ms`);
+}
+
+test("500-node flat flowchart lint stays within its CI performance budget", { timeout: 15_000 }, () => {
+  assertLintWithinBudget(linearFlowchartFixture(500), 10_000);
+});
+
+test("500-node nested flowchart lint stays within its CI performance budget", { timeout: 15_000 }, () => {
+  assertLintWithinBudget(nestedFlowchartFixture(50, 9), 10_000);
+});
+
+test("flat and nested lint fixtures keep warning content and order deterministic", () => {
+  const flat = linearFlowchartFixture(40);
+  const nested = lintSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: group",
+    "    label: Group",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "    size: { width: 600, height: 600 }",
+    "    children:",
+    "      - id: first",
+    "        label: First",
+    "        shape: rounded-rectangle",
+    "        position: { x: 40, y: 40 }",
+    "      - id: second",
+    "        label: Second",
+    "        shape: rounded-rectangle",
+    "        position: { x: 100, y: 80 }",
+    "  - id: outsider",
+    "    label: Outsider",
+    "    shape: rounded-rectangle",
+    "    position: { x: 120, y: 100 }",
+    "edges:"
+  ]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(lintDocument(flat).messages)), []);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(lintDocument(nested).messages)),
+    [
+      {
+        severity: "warning",
+        rule: "node-overlap",
+        message: "Nodes \"group\" and \"outsider\" overlap by 190 by 80 units.",
+        diagram: "diagram 1"
+      },
+      {
+        severity: "warning",
+        rule: "node-overlap",
+        message: "Nodes \"first\" and \"second\" overlap by 130 by 40 units.",
+        diagram: "diagram 1"
+      },
+      {
+        severity: "warning",
+        rule: "node-overlap",
+        message: "Nodes \"first\" and \"outsider\" overlap by 110 by 20 units.",
+        diagram: "diagram 1"
+      },
+      {
+        severity: "warning",
+        rule: "node-overlap",
+        message: "Nodes \"second\" and \"outsider\" overlap by 170 by 60 units.",
+        diagram: "diagram 1"
+      }
+    ]
+  );
+});
 
 test("lint reports an edge naming a node that does not exist as an error, because the renderer drops it silently", () => {
   const result = lintDocument(lintSource([

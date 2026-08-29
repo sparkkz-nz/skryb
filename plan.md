@@ -56,7 +56,7 @@ permanent targets.
 
 ## Block 1 — Runtime artifact split and size budgets
 
-**Status:** In progress
+**Status:** Complete
 **Pull request:** [#67](https://github.com/sparkkz-nz/skryb/pull/67)
 **Suggested branch:** `perf/runtime-artifact-split`  
 **Dependencies:** None
@@ -103,7 +103,7 @@ Recorded on 2026-08-30 for `perf/runtime-artifact-split`:
 
 ## Block 2 — Flowchart index and performance regression coverage
 
-**Status:** Planned  
+**Status:** In progress
 **Suggested branch:** `perf/flowchart-index`  
 **Dependencies:** None
 
@@ -133,6 +133,22 @@ mutation operations.
 - Warning content and order remain deterministic.
 - Nested-node absolute positions and containment behavior remain unchanged.
 - Existing tests pass and focused index tests cover invalidation boundaries.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `perf/flowchart-index`:
+
+- A per-operation `FlowchartIndex` preserves pre-order traversal while providing
+  node-ID, object-identity, absolute position, bounds, parent, descendant, and
+  constant-time containment lookups.
+- Rendering, linting, final layout anchor derivation, mutation placement, and
+  editor interaction loops reuse indexed entries rather than repeatedly walking
+  the hierarchy.
+- The deterministic 500-node flat and nested lint fixtures complete in
+  approximately 0.22 and 0.20 seconds respectively on the development baseline,
+  each with a generous 10-second CI budget.
+- Flat and nested fixtures verify deterministic warning content and order, and
+  focused tests document that an index is a snapshot rebuilt after mutation.
 
 ## Block 3 — Direct core entry point and test/tool boundaries
 
@@ -488,8 +504,8 @@ Record merged work here in chronological order.
 
 | Block | Status | Pull request | Result |
 |---|---|---|---|
-| 1 | Planned | — | — |
-| 2 | Planned | — | — |
+| 1 | Complete | [#67](https://github.com/sparkkz-nz/skryb/pull/67) | Split lean hosted and self-packaged runtime artifacts with enforced size budgets. |
+| 2 | In progress | — | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
 | 3 | Planned | — | — |
 | 4 | Planned | — | — |
 | 5 | Planned | — | — |
