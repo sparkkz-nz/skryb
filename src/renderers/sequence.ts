@@ -3,7 +3,7 @@ import { buildEdgeMarkerDef, renderTextBlock, splitTextLines } from "../core/dia
 import { getSequenceElementEffectiveStyle, getTheme } from "../core/diagrams/styles";
 import type { SequenceDiagram, SequenceNote } from "../core/diagrams/schema";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
-import { renderFigureAttributes, renderFigureCaption } from "./types";
+import { renderFigureAttributes, renderFigureCaption, renderSvgAccessibility } from "./types";
 import { renderInline } from "../core/markdown";
 
 type MessageRow = {
@@ -69,6 +69,7 @@ export function renderSequenceDiagram(
     ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
     : "";
   const sequenceMarkerId = `docdiagram-sequence-arrow-${diagramIndex}`;
+  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Sequence diagram", figure);
   const lifelineTop = headerTop + actorHeaderHeight + 12;
   const firstParticipant = participants[0];
   const lastParticipant = participants[participants.length - 1];
@@ -322,7 +323,8 @@ export function renderSequenceDiagram(
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "sequence", state),
-    `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Sequence diagram" data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
+    `<svg viewBox="0 0 ${width} ${height}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
+    accessibility.metadata,
     `<defs>${buildEdgeMarkerDef(sequenceMarkerId, "arrow", "end", theme.edge.stroke, 2)}</defs>`,
     groupFrameMarkup,
     lifelineMarkup,

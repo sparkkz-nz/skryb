@@ -21,7 +21,7 @@ import { fitCanvasToContent } from "./mutations";
 import { applyFlowchartLayout, resolveLayoutSettings } from "./layout";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
-const diagramMetadataFields = ["version", "id", "caption", "theme"] as const;
+const diagramMetadataFields = ["version", "id", "caption", "description", "theme"] as const;
 const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "styles", "canvas", "nodes", "edges"] as const;
 const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
 const flowchartNodeFields = ["id", "label", "shape", "class", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
@@ -260,7 +260,7 @@ function validateDiagramMetadata(diagram: ParsedObject): void {
   if (diagram.version !== undefined && (!Number.isInteger(diagram.version) || Number(diagram.version) < 1)) {
     throw new Error("Diagram version must be a positive integer.");
   }
-  for (const field of ["id", "caption"] as const) {
+  for (const field of ["id", "caption", "description"] as const) {
     if (diagram[field] !== undefined && typeof diagram[field] !== "string") {
       throw new Error(`Diagram ${field} must be a string.`);
     }

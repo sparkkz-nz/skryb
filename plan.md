@@ -227,7 +227,7 @@ Make invalid schema enum values unrepresentable after parsing.
 
 ## Block 5 — Browser runtime decomposition
 
-**Status:** In progress
+**Status:** Complete
 **Pull request:** [#71](https://github.com/sparkkz-nz/skryb/pull/71)
 **Suggested branch:** `refactor/browser-runtime-services`  
 **Dependencies:** Blocks 3 and 4
@@ -278,7 +278,8 @@ Recorded on 2026-08-30 for `refactor/browser-runtime-services`:
 
 ## Block 6 — Source-addressable lint model
 
-**Status:** In progress
+**Status:** Complete
+**Pull request:** [#72](https://github.com/sparkkz-nz/skryb/pull/72)
 **Suggested branch:** `feat/source-addressable-lint`  
 **Dependencies:** Blocks 2 through 4
 
@@ -325,6 +326,7 @@ Recorded on 2026-08-30 for `feat/source-addressable-lint`:
 ## Block 7 — Edge-label placement and clearance lint
 
 **Status:** Complete
+**Pull request:** [#74](https://github.com/sparkkz-nz/skryb/pull/74)
 **Suggested branch:** `feat/edge-label-clearance`  
 **Dependencies:** Blocks 2 and 6
 
@@ -372,7 +374,7 @@ clearly.
 
 ## Block 8 — Accessible diagram descriptions
 
-**Status:** Planned  
+**Status:** In progress
 **Suggested branch:** `feat/diagram-descriptions`  
 **Dependencies:** Block 4
 
@@ -395,6 +397,24 @@ each diagram's purpose and primary relationship.
 - Multiple diagrams on a page have distinct useful accessible descriptions.
 - Exported SVGs retain the description.
 - Documents without the field retain a sensible compatibility fallback.
+
+### Implementation result
+
+Recorded on 2026-08-30 for `feat/diagram-descriptions`:
+
+- Both diagram models accept a schema-validated optional `description` and
+  preserve it in canonical serialization and diagram-document exports.
+- An uncaptioned description becomes the SVG title and accessible name. With a
+  caption, the resolved caption is the SVG title and `description` is a related
+  SVG `desc`; standalone SVG and print exports retain both elements.
+- Diagrams without a description keep their existing generic accessible label.
+  Focused coverage verifies distinct flowchart and sequence metadata, correct
+  ARIA relationships, validation, and export round trips.
+- The reference, bundled authoring skill, and representative examples document
+  concise descriptions and retain nearby prose as the full explanation. All 291
+  tests and type checks pass, examples/templates/generated docs lint with no
+  warnings, and the hosted and self-packaged artifacts remain within budget at
+  206,956/58,491/50,284 and 422,426/117,455/60,257 raw/gzip/Brotli bytes.
 
 ## Block 9 — Balanced aspect-ratio lint and wrapped linear layout
 
@@ -581,12 +601,12 @@ Record merged work here in chronological order.
 | Block | Status | Pull request | Result |
 |---|---|---|---|
 | 1 | Complete | [#67](https://github.com/sparkkz-nz/skryb/pull/67) | Split lean hosted and self-packaged runtime artifacts with enforced size budgets. |
-| 2 | In progress | [#68](https://github.com/sparkkz-nz/skryb/pull/68) | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
-| 3 | Planned | — | — |
-| 4 | In progress | [#70](https://github.com/sparkkz-nz/skryb/pull/70) | Derived validated unions from schema constants, removed broad model index signatures, and guarded parser and editor boundaries. |
-| 5 | Planned | — | — |
-| 6 | Planned | — | — |
-| 7 | Planned | — | — |
+| 2 | Complete | [#68](https://github.com/sparkkz-nz/skryb/pull/68) | Added a reusable hierarchy index and reduced 500-node linting to approximately 0.22 seconds. |
+| 3 | Complete | [#69](https://github.com/sparkkz-nz/skryb/pull/69) | Added the direct core entry point and split tests by responsibility. |
+| 4 | Complete | [#70](https://github.com/sparkkz-nz/skryb/pull/70) | Derived validated unions from schema constants, removed broad model index signatures, and guarded parser and editor boundaries. |
+| 5 | Complete | [#71](https://github.com/sparkkz-nz/skryb/pull/71) | Decomposed browser persistence, rendering, export, chrome, and lifecycle responsibilities into explicit services. |
+| 6 | Complete | [#72](https://github.com/sparkkz-nz/skryb/pull/72) | Added source-addressable browser and CLI lint findings with stale-source protection. |
+| 7 | Complete | [#74](https://github.com/sparkkz-nz/skryb/pull/74) | Added deterministic edge-label placement and source-addressable clearance lint. |
 | 8 | Planned | — | — |
 | 9 | Planned | — | — |
 | 10 | Planned | — | — |

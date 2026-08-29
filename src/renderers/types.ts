@@ -1,5 +1,5 @@
 import { escapeHtml } from "../core/diagrams/parser";
-import type { ColourSchemeName, EdgeAnchor, Position, Theme } from "../core/diagrams/schema";
+import type { ColourSchemeName, Diagram, EdgeAnchor, Position, Theme } from "../core/diagrams/schema";
 
 export interface NodeSelection {
   diagramIndex: number;
@@ -71,4 +71,29 @@ export function renderFigureCaption(figure: DiagramFigure | undefined, renderInl
   // A figcaption inside the existing figure is both semantically correct and gives the hiding rule
   // for free: an expanded frame is a working view rather than a document view.
   return figure?.caption ? `<figcaption class="docdiagram-caption">${renderInline(figure.caption)}</figcaption>` : "";
+}
+
+export function renderSvgAccessibility(
+  diagram: Diagram,
+  diagramIndex: number,
+  fallbackLabel: string,
+  figure?: DiagramFigure
+): { attributes: string; metadata: string } {
+  if (diagram.description === undefined) {
+    return { attributes: `role="img" aria-label="${escapeHtml(fallbackLabel)}"`, metadata: "" };
+  }
+
+  const titleId = `docdiagram-title-${diagramIndex}`;
+  if (!figure?.caption) {
+    return {
+      attributes: `role="img" aria-labelledby="${titleId}"`,
+      metadata: `<title id="${titleId}">${escapeHtml(diagram.description)}</title>`
+    };
+  }
+
+  const descriptionId = `docdiagram-description-${diagramIndex}`;
+  return {
+    attributes: `role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionId}"`,
+    metadata: `<title id="${titleId}">${escapeHtml(figure.caption)}</title><desc id="${descriptionId}">${escapeHtml(diagram.description)}</desc>`
+  };
 }
