@@ -33,7 +33,8 @@ export function getMinimumNodeDimensions(shape: string): { width: number; height
 export function renderDiagramToolbar(
   diagramIndex: number,
   editingMode: "none" | "flowchart" | "sequence",
-  state: DiagramRenderState
+  state: DiagramRenderState,
+  allowsRelayout = false
 ): string {
   const allowsEditing = editingMode !== "none";
   const allowsNodeCreation = editingMode === "flowchart";
@@ -57,7 +58,7 @@ export function renderDiagramToolbar(
       ? state.editingDiagramIndex === diagramIndex
         ? `<button type="button" class="docdiagram-icon-button docdiagram-done-editing" aria-label="Done editing" title="Done editing">✓</button><button type="button" class="docdiagram-icon-button docdiagram-cancel-editing" aria-label="Cancel editing and discard changes" title="Cancel editing and discard changes">×</button>${allowsNodeCreation ? `<button type="button" class="docdiagram-icon-button docdiagram-create-node" data-diagram-index="${diagramIndex}" aria-label="New node" title="New node">+</button>` : ""}`
         : state.editingDiagramIndex === null
-          ? `<button type="button" class="docdiagram-icon-button docdiagram-start-editing" data-diagram-index="${diagramIndex}" aria-label="Edit diagram" title="Edit diagram">✎</button>`
+          ? `${allowsRelayout ? `<button type="button" class="docdiagram-icon-button docdiagram-relayout" data-diagram-index="${diagramIndex}" aria-label="Relayout diagram" title="Relayout diagram">↻</button>` : ""}<button type="button" class="docdiagram-icon-button docdiagram-start-editing" data-diagram-index="${diagramIndex}" aria-label="Edit diagram" title="Edit diagram">✎</button>`
           : ""
       : "",
     `</div>`
@@ -239,7 +240,7 @@ export function renderFlowchartDiagram(
 
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
-    renderToolbar(diagramIndex, "flowchart", state),
+    renderToolbar(diagramIndex, "flowchart", state, diagram.layout !== undefined),
     `<svg viewBox="0 0 ${width} ${height}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
     accessibility.metadata,
     `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,

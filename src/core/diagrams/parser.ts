@@ -19,12 +19,13 @@ import {
 } from "./schema";
 import { fitCanvasToContent } from "./mutations";
 import { applyFlowchartLayout, resolveLayoutSettings } from "./layout";
+import { applyOneShotRelayout } from "./relayout";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
 const diagramMetadataFields = ["version", "id", "caption", "description", "theme"] as const;
-const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "styles", "canvas", "nodes", "edges"] as const;
+const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "relayout", "styles", "canvas", "nodes", "edges"] as const;
 const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "class", "position", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
+const flowchartNodeFields = ["id", "label", "shape", "class", "position", "pinned", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
 const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
 const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
@@ -291,7 +292,11 @@ function parseFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic
   }
   validateFlowchartDiagram(diagram, colorScheme);
   // Layout runs before the canvas is measured, so a derived canvas fits the laid-out result.
-  applyFlowchartLayout(diagram);
+  if (diagram.relayout) {
+    applyOneShotRelayout(diagram, diagram.relayout);
+  } else {
+    applyFlowchartLayout(diagram);
+  }
   // Derived bounds are baked into the model so the renderer, exports, and the editor all read a
   // real width and height. The serializer writes `auto` back out rather than the baked numbers.
   if (diagram.canvas.auto) {
@@ -406,6 +411,12 @@ function validateLayout(diagram: FlowchartDiagram): void {
 
 function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "classic"): void {
   validateLayout(diagram);
+  if (diagram.relayout !== undefined && !["all", "unpinned", "autowrap"].includes(diagram.relayout)) {
+    throw new Error(`Unsupported relayout mode: ${String(diagram.relayout)}`);
+  }
+  if (diagram.relayout !== undefined && diagram.layout === undefined) {
+    throw new Error("Relayout requires a layout direction on the diagram.");
+  }
   // The `layout` key is what makes a diagram machine-managed, and that is the whole of the
   // difference: with it, positions and anchors may be left out for the layout engine to fill in;
   // without it, leaving them out is an error rather than a drawing silently stacked at the origin.
@@ -446,6 +457,12 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
       }
     } else {
       assertCoordinatePair(node.position, `node "${node.id}" position`);
+    }
+    if (node.pinned !== undefined && typeof node.pinned !== "boolean") {
+      throw new Error(`Node "${node.id}" pinned must be true or false.`);
+    }
+    if (node.pinned && node.position === undefined) {
+      throw new Error(`Pinned node "${node.id}" requires a position.`);
     }
 
     if (node.textVAlign !== undefined && !nodeTextVAlignments.includes(node.textVAlign)) {

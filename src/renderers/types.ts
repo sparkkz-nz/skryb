@@ -48,7 +48,8 @@ export type DiagramEditingMode = "none" | "flowchart" | "sequence";
 export type DiagramToolbarRenderer = (
   diagramIndex: number,
   editingMode: DiagramEditingMode,
-  state: DiagramRenderState
+  state: DiagramRenderState,
+  allowsRelayout?: boolean
 ) => string;
 
 /** The document-level identity of a rendered diagram: its anchor and its resolved caption. */

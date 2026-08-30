@@ -82,7 +82,13 @@ Everything happens inside the open document; there is no separate application.
   and gives each connector the anchors its final geometry implies. It only ever
   fills in what is missing, so a node you drag stays put and an anchor you wrote
   down is never overwritten. The result is written back into the document's own
-  source when it opens, so there are real coordinates there to adjust.
+  source when it opens, so there are real coordinates there to adjust. Add
+  `relayout: all` to replace every position, `relayout: unpinned` to keep only
+  positions marked `pinned: true`, or `relayout: autowrap` to replace every
+  position and wrap an eligible long linear flow. Every mode preserves node
+  sizes, regenerates all connector geometry, and consumes the `relayout` key so
+  later opens are non-destructive. The flowchart toolbar offers the `all`
+  operation behind a confirmation prompt.
   Connectors route around nodes in the way, labels
   wrap inside the width you gave them, and `canvas: auto` keeps the drawing's
   bounds matched to its content. Without a `layout`, every node needs a

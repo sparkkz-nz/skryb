@@ -5,6 +5,7 @@ export * from "./diagrams/hierarchy";
 export * from "./diagrams/layout";
 export * from "./diagrams/mutations";
 export * from "./diagrams/parser";
+export * from "./diagrams/relayout";
 export * from "./diagrams/routing";
 export * from "./diagrams/schema";
 export * from "./diagrams/serializer";
