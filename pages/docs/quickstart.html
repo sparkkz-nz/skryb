@@ -14,10 +14,10 @@ colourScheme: ice
 
 # Skryb Quickstart
 
-**Skryb** turns standard Markdown and simple YAML diagram blocks into an ordinary
-HTML file, viewable in any browser. The canonical Markdown and YAML source remains
-inside the file; the browser runtime renders them into a readable, editable document
-and saves updated copies.
+**Skryb** renders supported Markdown, formatting directives, and YAML diagrams
+from a portable HTML file. The canonical source remains inside the file. The browser
+runtime renders the document and provides tools for editing, checking, saving, and
+printing it.
 
 
 :::grid { columns=2 }
@@ -27,21 +27,20 @@ runtime, keeping the document small. Use **Save for Offline** to embed the
 runtime and make the document truly standalone.
 :::
 
-:::panel { title="This is a Skryb Document" palette=accent-soft}
-Use the document menu to change the theme. Open the built-in editor with
-shift-cmd/ctrl-E and explore the source, make live changes, and save a copy
-locally. Open a diagram editor to drag, drop, add and edit nodes and connectors.
-Explore, and have fun!
+:::panel { title="Try this document" palette=accent-soft }
+Use the document menu to change the theme. Press **Cmd/Ctrl+Shift+E** to open
+the source editor, make a change, and save an updated copy. Choose **Edit** on
+the flowchart below to move, add, or edit nodes and connectors.
 :::
 :::
 
-## Designed so that Agents and Humans can work together
+## Work with coding agents
 
-While its easy to start with the [basic document template](https://sparkkz-nz.github.io/skryb/templates/skryb-document-template.html)
-and add some standard markdown or yaml diagram blocks, the real power of **Skryb**
-comes when your agent is given the [skills](https://sparkkz-nz.github.io/skryb/docs/quickstart.html#use-skryb-with-coding-agents) to use it.
-Let your agents generate beautifil documentation for you, and then jump in with tweaks and
-edits as needed.
+Start with the [basic document template](https://sparkkz-nz.github.io/skryb/templates/skryb-document-template.html)
+or install the [Skryb authoring skill](https://sparkkz-nz.github.io/skryb/docs/quickstart.html#use-skryb-with-coding-agents)
+for a supported coding agent. The skill defines the document shell, supported
+syntax, diagram schema, layout workflow, and document checks. The resulting
+source remains available for direct review and editing.
 
 ## Create and open a document
 
@@ -63,18 +62,17 @@ either setting and writes the result back to frontmatter when you save.
 
 ## Add a flowchart
 
-This flowchart is YAML in the document source. It shows a browser submitting an
-order to an API. Flowchart edit mode can change node and connector presentation,
-resize or duplicate nodes, reconnect edges, and drag a selected edge waypoint.
-A waypoint handle is a circle until you drag it, then a diamond; **Remove
-waypoint** in the edge inspector clears it again. **Add pointer** in the node
-inspector gives a node a callout pointer you can drag at its target.
+This YAML flowchart shows a browser submitting an order to an API. Flowchart
+edit mode can change node and connector presentation, resize or duplicate nodes,
+reconnect edges, and move an optional edge waypoint. The edge inspector can
+remove the waypoint. The node inspector can add a draggable callout pointer.
 
 ```diagram
 type: flowchart
 version: 1
 id: first-flowchart
 caption: "Figure #: A browser submitting an order"
+description: A browser sends an authenticated order request to the Orders API.
 canvas:
   auto: true
   grid: 5
@@ -108,33 +106,28 @@ edges:
     end: arrow
 ```
 
-Use the diagram toolbar to zoom, fit, or pan. Panning is visual only: it does
-not alter the stored node, waypoint, and callout coordinates. A diagram frame sizes
-itself to its drawn shapes on first render; drag the frame's bottom edge to
-change that height, or press **Zoom to fit** to restore it. Choose **Edit** to
-make flowchart changes, then keep the edit to serialize them back into the
-matching diagram fence.
+Use the diagram toolbar to zoom, fit, or pan. Panning does not alter stored node,
+waypoint, or callout coordinates. A diagram frame initially fits its contents.
+Drag its bottom edge to change the visible height, or choose **Zoom to fit** to
+restore it. Choose **Edit** to change a flowchart, then **Done** to retain the
+changes in the matching diagram fence.
 
-`auto: true` on the canvas means you never have to work out how big the drawing
-is. It sizes itself to whatever is in it, growing and shrinking as you edit, and
-it will not leave a band of empty margin in a saved SVG or PDF the way a
-hand-written size does once you delete something. Set an explicit `width` and
-`height` when you want several diagrams to come out the same shape.
+`auto: true` derives the canvas size from the drawn content and updates it after
+edits. This avoids unused margins in SVG and PDF output. Set an explicit `width`
+and `height` only when a fixed aspect ratio matters.
 
-`grid: 5` snaps dragging and resizing to multiples of five. It is the difference
-between a diagram that looks deliberate and one where node edges miss each other
-by a pixel and connectors meet anchors slightly off. Five is small enough to
-place anything exactly. Leave it out, or set `0`, if you would rather it did not.
+`grid: 5` snaps dragged and resized geometry to multiples of five. This keeps
+nodes and connector anchors aligned while allowing small adjustments. Omit the
+grid or set it to `0` to disable snapping.
 
-The `caption` shows under the diagram. Put a `#` in it and that becomes the
-figure number, so `"Figure #: ..."` renumbers itself when you add a figure above.
+The `caption` appears below the diagram. A `#` placeholder becomes the figure
+number, so `"Figure #: ..."` follows the diagram's position in the document.
 
 ### Let Skryb place the nodes
 
-Every node in that first diagram has a `position`, because someone chose where
-to put it. You do not have to. Add `layout: right` - or `down`, `left`, `up` -
-leave the positions and the connector anchors out, and Skryb works out the
-arrangement from the connectors:
+The first diagram specifies each node position. For automatic layout, add
+`layout: right`, `down`, `left`, or `up`, then omit the positions and connector
+anchors that the runtime should derive:
 
 ```yaml
 type: flowchart
@@ -152,72 +145,70 @@ edges:
     target: api
 ```
 
-This happens when the document opens, and only to what you left out. Drag a node
-and it stays where you put it; write an anchor down and it is kept. Leave the
-`layout` line in afterwards and the next node you add without coordinates gets
-placed too.
+When the document opens, automatic layout fills in only missing geometry.
+Existing positions and anchors remain unchanged. Keep `layout` in the baked
+source so the runtime can place later additions that omit geometry.
 
-The `layout` line is also what marks the diagram as Skryb's to arrange. Leave it
-off and every node needs a `position` and every edge both anchors - which is what
-you want for a diagram you have arranged yourself, because then a missing
-coordinate is reported rather than quietly drawn in the corner.
+Without `layout`, every node requires a `position` and every edge requires both
+anchors. Use that form for manually arranged diagrams that should reject missing
+geometry.
 
-Those positions are written straight back into the document's own source when it
-opens, so there are real coordinates there to nudge. That also means the document
-now has unsaved changes: save it, and the geometry is on disk. Only diagrams that
-needed placing are rewritten - one you have already arranged is left exactly as
-you wrote it, comments and all.
+Baking writes generated positions and anchors into `template#source` in the
+loaded page and marks the document as changed. It does not overwrite the file on
+disk. Save the document to persist the baked source. A diagram fence is rewritten
+only when it needs layout or requests relayout; comments inside a rewritten fence
+are not preserved.
 
-Skryb checks the document at the same time. **Check document** in the document
-menu runs the checks whenever you want and shows what it found: a connector
-pointing at a node that does not exist, nodes overlapping, an edge crossing
-something unrelated, a label too big for its shape. Only the first is an error;
-the rest are advice you can take or leave.
+The runtime also checks the document. **Check document** runs the checks again.
+Schema failures and edges that reference unknown nodes are errors. Warnings
+report overlapping nodes, edges that cross unrelated nodes, overlapping edge
+labels, labels that overflow their shapes, and unbalanced aspect ratios. Review
+each warning and either correct it or confirm that the geometry is intentional.
 
-You also do not need to nudge connectors around obstacles or hand-break long
-labels. An edge that would cut through an unrelated node goes around it, and a
-label too wide for its shape wraps.
+Connectors use obstacle routing where possible, and node labels wrap within their
+shapes. Long edge labels may still need explicit line breaks at phrase boundaries
+to avoid overlaps.
 
-Most connectors read best as the default `orthogonal` route. Switch one to
-`curved` when a right-angled route is hard to follow, such as a long edge that
-doubles back or one that would otherwise run across an unrelated node.
+Use the default `orthogonal` route for most connectors. Change anchors first
+when a path is unclear. Use `curved` for a long back-edge, several edges sharing
+an anchor, or a route that would otherwise overlap another connector or node.
+Add a waypoint only when the default route remains ambiguous.
 
-Use the **text** shape for diagram annotations. Its existing **Label** editor
-accepts multiple lines and supports `# Heading`, `## Subheading`, `**bold**`,
-_italic_, and ``code`` formatting. A text shape is transparent by default;
-apply any palette, including **None**, to change or remove a shape's fill and
-stroke. See the [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#the-text-shape-and-its-markdown-subset)
+Use the **text** shape for diagram annotations. Its label supports multiple
+lines, `# Heading`, `## Subheading`, `**bold**`, _italic_, and ``code``. A text
+shape has no fill or border by default. Apply a palette to add them, or select
+**None** to remove them. See the [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#the-text-shape-and-its-markdown-subset)
 for the complete text-node syntax.
 
 ## Write a longer document
 
-Add `:::toc { depth=2 diagrams=true }` near the top and you get a contents list
-built from your headings. There is no closing `:::` on that one. Drop
-`diagrams=true` if you would rather it listed only headings.
+Add `:::toc { depth=2 diagrams=true }` near the top to create a contents list
+from headings and captioned diagrams. This directive has no closing `:::`.
+Omit `diagrams=true` to list only headings.
 
-Give a diagram an `id` and a `caption` and you can refer to it from your prose:
+Give a diagram an `id` and a `caption` to reference it from prose:
 
 ```markdown
 See Figure {ref=first-flowchart} for the order path.
 ```
 
-That renders as a link. If the caption is numbered, the link reads as the
-number; if not, it reads as the caption text. Either way you never have to
-renumber anything when you add a figure higher up the page. The `id` doubles as
-an anchor, so `#first-flowchart` links straight to the diagram.
+This renders as a link. For a numbered caption, the link uses the figure number;
+otherwise it uses the caption text. Figure numbers update from document order.
+The `id` is also an anchor, so `#first-flowchart` links directly to the diagram.
 
-Label your code fences with a language and they come out highlighted:
+Add a recognised language to a code fence to enable syntax highlighting:
 
     ```typescript
     export const total = items.length;
     ```
 
-Around forty names work, including `typescript`, `python`, `sql`, `bash`,
-`json`, `yaml`, `html`, `css` and `diff`. If a name is not recognised the block
-just renders plain, so nothing breaks.
+Recognised names include `typescript`, `python`, `sql`, `bash`, `json`, `yaml`,
+`html`, `css`, and `diff`. An unrecognised name renders as plain code. The
+[reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#syntax-highlighting)
+lists all recognised names.
 
-When several nodes should look the same, name the look once and point at it
-instead of repeating yourself:
+When several nodes share presentation, define a named style and apply it with
+`class`:
 
 ```yaml
 styles:
@@ -231,8 +222,8 @@ nodes:
     class: external
 ```
 
-Anything set on the node itself still beats the class, so you can make one node
-an exception without inventing a second style for it.
+Node-level values override the class, allowing individual exceptions without a
+second named style.
 
 ## Export a diagram
 
@@ -263,19 +254,18 @@ top to bottom in source order.
 
 ## Save the result
 
-- **Print / Save as PDF** prints the whole document. Toolbars are left out,
-  diagrams print at their full size rather than the size of the frame you are
-  looking at, and nothing gets split across a page break. Ctrl/Cmd+P does the
-  same. Pick *Save as PDF* in the print dialog if you want a file.
+- **Print / Save as PDF** prints the complete document without toolbars.
+  Diagrams use their natural size, and panels, diagrams, and tables remain
+  together across page boundaries. **Cmd/Ctrl+P** opens the same print dialog.
 - **Save As** downloads an updated portable HTML document and retains its hosted
   runtime URL.
-- **Save for Offline** downloads a self-contained HTML document with the
-  selected runtime embedded at the end of its body. The normal hosted runtime
-  is fetched during export. For a fully local `file:` workflow, distribute
-  `skryb-runtime-self-packaged.js` beside the document and load it with a
-  relative script URL; its included copy avoids that network request.
-- Cmd/Ctrl+S saves the latest valid source; Cmd/Ctrl+Shift+E opens or closes the
-  source tray.
+- **Save for Offline** downloads one self-contained HTML document with the
+  selected runtime embedded. When the document uses a hosted runtime, the
+  browser fetches it during export, so this step requires network access.
+  The [reference](https://sparkkz-nz.github.io/skryb/docs/reference.html#saving-printing-and-offline-use)
+  describes the uncommon fully local authoring workflow.
+- **Cmd/Ctrl+S** downloads the latest valid source. **Cmd/Ctrl+Shift+E** opens or
+  closes the source tray.
 
 ## Keep going
 

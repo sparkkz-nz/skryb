@@ -150,36 +150,38 @@ nodes:
     subtitle: "parse, validate, layout, route, serialize, lint"
     shape: rounded-rectangle
     class: core
-    position: { x: 350, y: 110 }
     size: { width: 260, height: 100 }
+    position: { x: 350, y: 100 }
   - id: runtime
     label: BrowserRuntime
     subtitle: orchestrator and state
     shape: rounded-rectangle
     class: ui
-    position: { x: 660, y: 110 }
+    position: { x: 730, y: 110 }
   - id: renderers
     label: HTML and SVG renderers
     subtitle: flowchart and sequence
     shape: rounded-rectangle
     class: ui
-    position: { x: 970, y: 40 }
+    position: { x: 1040, y: 110 }
   - id: editors
     label: Source and diagram editors
     subtitle: inspector and offline export
     shape: rounded-rectangle
     class: ui
-    position: { x: 970, y: 180 }
+    position: { x: 730, y: 250 }
   - id: reader
     label: Interactive document
     subtitle: browser view and exports
     shape: document
     class: output
-    position: { x: 1280, y: 110 }
+    position: { x: 1350, y: 110 }
 edges:
   - source: source
     target: core
-    label: resolve and validate
+    label: |
+      resolve and
+      validate
     sourceAnchor: right
     targetAnchor: left
   - source: core
@@ -189,25 +191,33 @@ edges:
     targetAnchor: left
   - source: runtime
     target: renderers
-    label: render cycle
+    label: |
+      render
+      cycle
     sourceAnchor: right
     targetAnchor: left
   - source: runtime
     target: editors
-    label: state and callbacks
-    sourceAnchor: right
-    targetAnchor: left
+    label: |
+      state and
+      callbacks
+    sourceAnchor: bottom
+    targetAnchor: top
   - source: renderers
     target: reader
-    label: rendered DOM and SVG
+    label: |
+      rendered DOM
+      and SVG
     sourceAnchor: right
     targetAnchor: left
   - source: editors
     target: source
-    label: serialize canonical source
+    label: |
+      serialize canonical
+      source
     route: curved
     sourceAnchor: left
-    targetAnchor: right
+    targetAnchor: bottom
 ```
 
 ```diagram
@@ -312,39 +322,45 @@ nodes:
     subtitle: event and draft handling
     shape: rounded-rectangle
     class: interaction
-    position: { x: 350, y: 40 }
+    position: { x: 380, y: 40 }
   - id: core
     label: "Mutate, validate, and serialize"
     subtitle: focused core operations
     shape: rounded-rectangle
     class: core
-    position: { x: 660, y: 40 }
+    position: { x: 720, y: 40 }
   - id: template
     label: "template#source"
     subtitle: persistent source of truth
     shape: document
     class: durable
-    position: { x: 970, y: 40 }
+    position: { x: 1060, y: 40 }
   - id: view
     label: Re-rendered document
     subtitle: "HTML, SVG, controls"
     shape: document
     class: durable
-    position: { x: 1280, y: 40 }
+    position: { x: 1400, y: 40 }
 edges:
   - source: person
     target: editor
-    label: "edit, drag, or type"
+    label: |
+      edit, drag,
+      or type
     sourceAnchor: right
     targetAnchor: left
   - source: editor
     target: core
-    label: model or source update
+    label: |
+      model or
+      source update
     sourceAnchor: right
     targetAnchor: left
   - source: core
     target: template
-    label: replace matching fence
+    label: |
+      replace
+      matching fence
     sourceAnchor: right
     targetAnchor: left
   - source: template

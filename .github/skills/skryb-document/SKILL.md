@@ -18,17 +18,16 @@ document.
 ## Authoring workflow
 
 1. Start from the required HTML shell below.
-2. Put all canonical document content in `template#source`; never author
-   content directly in `main#rendered-document`.
-3. Use only the Markdown and diagram YAML described in the syntax reference.
-4. Choose a runtime channel appropriate to the document's lifetime.
-5. Write accessible headings, concise prose, meaningful node labels, and prose
-   that lets a reader understand a diagram without relying only on its visuals.
-6. Validate the HTML shell, frontmatter, Markdown subset, and every diagram
-   field before returning the document.
-7. Open the document to bake and check it, adjust the source, and open it again.
-   You cannot see what you have written; this is the loop that closes that gap,
-   and it is described under "Reviewing a document" below.
+2. Put all canonical content in `template#source`. Leave
+   `main#rendered-document` empty.
+3. Use only the Markdown and diagram YAML documented in the schema reference.
+4. Select a hosted runtime channel for the document's expected lifetime.
+5. Write accessible headings, concise prose, and descriptive diagram labels.
+   Explain each diagram in adjacent prose.
+6. Bake automatic layout into the source, run the document checks, and correct
+   all errors and unintended warnings. See [Reviewing a document](#reviewing-a-document).
+7. Validate the HTML shell, frontmatter, Markdown, and diagram fields before
+   returning the document.
 
 ```html
 <!doctype html>
@@ -53,22 +52,28 @@ Readable fallback prose describes the document and any diagram's purpose.
 </html>
 ```
 
-## Runtime channel selection
+## Runtime selection and offline documents
 
-Use one of these script sources:
+Author documents with one of these hosted runtime URLs:
 
 | Document purpose | Script source |
 | --- | --- |
 | Normal local or shared use | `https://sparkkz-nz.github.io/skryb/latest/skryb-runtime.js` |
-| Short-lived pre-merge testing only | `https://sparkkz-nz.github.io/skryb/dev/skryb-runtime.js` |
+| Short-lived pre-merge testing | `https://sparkkz-nz.github.io/skryb/dev/skryb-runtime.js` |
 | Published or distributed document | `https://sparkkz-nz.github.io/skryb/releases/<tag>/skryb-runtime.js` |
-| Runtime distributed beside a local `file:` document | `./skryb-runtime-self-packaged.js` |
 
-Use the self-packaged artifact only when the HTML and runtime are deliberately
-distributed together and offline export must work without fetching. Use a real released tag, such as `v1.2.0`, in a pinned URL. Never use the shared
-development channel in an enduring document. A local relative runtime is valid
-only when the document and runtime are deliberately distributed together. Never
-put a machine-specific `file:///...` URL in a shareable document.
+Use a released tag such as `v1.2.0` in a pinned URL. Do not use the shared
+`dev` channel in a persistent document. Do not put a machine-specific
+`file:///...` URL in a document intended for other users.
+
+A standalone offline document contains the runtime within its HTML. Create one
+with **Save for Offline**; do not distribute a separate JavaScript file with it.
+
+`skryb-runtime-self-packaged.js` is a separate artifact for an uncommon
+air-gapped authoring workflow. A document that references this artifact by a
+relative URL can create an offline copy without fetching the runtime. Use it only
+when deliberately distributing an editable HTML template and its runtime
+together. It is not the runtime format for a standalone document.
 
 ## Formatting extensions
 
@@ -101,10 +106,10 @@ annotation for nesting readability, such as `::: (supporting stack)`.
 ## Diagram rules
 
 Every fenced `diagram` YAML block must declare `type: flowchart` or
-`type: sequence`. Flowchart nodes must have a supported `shape`. Node positions
-and edge anchors are required only when the flowchart has no `layout` - see
-"Let the layout engine place the diagram" below. Use only the values in the
-syntax reference, including:
+`type: sequence`. Every flowchart node requires a supported `shape`. A
+flowchart without `layout` requires a `position` on every node and both anchors
+on every edge. With `layout`, the runtime supplies omitted geometry. Use only
+values documented in the schema reference, including:
 
 - node shapes: `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`,
   `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, and
@@ -116,20 +121,22 @@ syntax reference, including:
 - node and connector stroke types: `solid`, `dotted`, `dashed`, and `double`;
 - endpoint markers: `none`, `arrow`, and `circle`.
 
-Use explicit, stable node IDs and labels that describe a reader-visible
-responsibility. A node's shape is geometry only; choose its appearance with a
-palette or explicit style values, never a domain-specific `type`. Write
-multiline node, subtitle, and edge labels as YAML literal block scalars. For a
-long edge label on a short connector, break at a meaningful phrase boundary;
-do not prefer a quoted `\n` scalar. Keep the diagram compact and include
-adjacent prose that explains the flow. Sequence diagrams use ordered
-participants and messages; do not add arbitrary positions or Mermaid syntax.
+Use stable node IDs and labels that state each node's responsibility. A node's
+shape defines geometry, not domain type. Set appearance with a palette, named
+class, or explicit style values. Write multiline node, subtitle, and edge
+labels as YAML literal block scalars rather than quoted `\n` strings. Break long
+edge labels at phrase boundaries. To resolve `edge-label-overlap`, wrap the
+label first, then move only the affected nodes by the smallest useful grid
+increment. Widen the diagram only if those changes are insufficient. Include
+adjacent prose that explains the flow.
 
-### Let the layout engine place the diagram
+Sequence diagrams use ordered participants and messages. Do not add positions,
+anchors, or Mermaid syntax to them.
 
-Placing nodes blind is the single largest source of untidy generated diagrams.
-Do not do it. Set `layout: right` (or `down`, `left`, `up`), leave every
-`position` and both anchors off every edge, and describe only the graph:
+### Use automatic layout
+
+For a new flowchart, set `layout` to `right`, `down`, `left`, or `up`. Omit node
+positions and edge anchors so the runtime can derive them from the graph:
 
 ```yaml
 type: flowchart
@@ -153,9 +160,8 @@ edges:
     target: db
 ```
 
-That is the whole diagram. Opening it fills in the geometry and writes it back
-into the source - nodes in stages along the flow, ordered to avoid crossings, and
-each connector given the anchors its final geometry implies:
+Baking adds deterministic positions and anchors. The resulting fence includes
+the generated geometry:
 
 ```yaml
 nodes:
@@ -183,91 +189,81 @@ edges:
     targetAnchor: left
 ```
 
-The engine only ever fills in what is missing, so it composes with whatever you
-do want to control. Give the one node whose placement carries meaning a position
-and `pinned: true`, then let the rest fall into stages around it. The pin matters
-when an intentional one-shot relayout would otherwise replace existing positions.
-Write an anchor on the one edge that needs to
-leave a particular side - a feedback edge doubling back, which the engine also
-reads as a deliberate back-edge and keeps out of the stage assignment - and
-leave the other edges alone.
+Automatic layout preserves existing positions and anchors and fills in only
+missing values. Set a position only when a node requires a specific location.
+Add `pinned: true` only when `relayout: unpinned` must preserve that position.
+Set an explicit anchor when an edge must use a particular side. An edge whose
+anchors oppose the layout direction is treated as a back-edge and excluded from
+stage assignment.
 
-### Constrained auto-layout geometry
+After layout or relayout, inspect every feedback edge even when lint reports no
+warnings. If an orthogonal return overlaps a forward connector or has an
+ambiguous destination, assign it unused anchors such as `bottom`-to-`bottom`.
+Use a curved route if the paths still overlap. Do not add a waypoint unless the
+default curve remains ambiguous.
+
+### Automatic layout geometry
 
 Flowchart nodes default to `190` by `80`. Automatic layout uses a `120`-unit
-gap between stages and a `60`-unit gap between siblings. When pinning a key
-node, leave room for the neighbouring node plus at least one stage gap in the
-flow direction, and one sibling gap perpendicular to it. With `canvas.grid: 5`,
-write manually positioned nodes on multiples of `5`.
+stage gap and a `60`-unit sibling gap. Leave at least those clearances around
+manually positioned nodes. With `canvas.grid: 5`, use multiples of `5` for
+manual geometry.
 
-For example, a default node immediately downstream from a `190`-wide node in a
-right-flowing diagram begins about `310` units to its right (`190 + 120`).
-These are layout guides, not constraints: add an explicit `size` when a label
-needs more room, and leave unimportant nodes and ordinary connectors without
-positions or anchors so the engine can place them around your pin.
+For example, in a right-flowing diagram, a default node placed after a
+`190`-unit-wide node starts about `310` units farther right (`190 + 120`). Add
+an explicit `size` when a label needs more room. Omit positions and anchors that
+do not carry specific meaning.
 
 Choose the direction from the content: `right` for a pipeline or request path,
 `down` for a decision tree or a sequence of steps. A diagram wider than about
 five stages usually reads better as `down`.
 
-Lint reports `unbalanced-aspect-ratio` when fitted content—not empty canvas—is a
-very long strip and at least eight nodes form a sufficiently linear dominant
-path. This is advisory and never changes source by itself. In **Check document**,
-use **Wrap this horizontal flow** or **Wrap this vertical flow**, review the
-before/after dimensions, and confirm only if replacing authored positions,
-anchors, routes, and waypoints is acceptable. The result is ordinary canonical,
-grid-aligned geometry; running the action again makes no change. An authoring
-agent working anywhere first opens the portable document with `?skryb=lint` and
-reads its report. If it contains `unbalanced-aspect-ratio`, open the original
-file again with `?skryb=autowrap`; the runtime wraps every eligible flow, refreshes
-the report, and exposes the updated Markdown in `template#source`.
+Lint reports `unbalanced-aspect-ratio` when fitted content forms a long strip
+and at least eight nodes form a sufficiently linear dominant path. The warning
+does not modify the source. In **Check document**, the corresponding wrap action
+shows the before and after dimensions. Confirming it replaces authored
+positions, anchors, routes, and waypoints with canonical, grid-aligned geometry.
+Repeating the action makes no further change. Automated remediation is described
+under [Reviewing a document](#reviewing-a-document).
 
-Keep the `layout` key in the baked source. A fully placed diagram is left
-untouched - it is not even rewritten - but the key is what places the next node
-you add, and what marks the diagram as yours to regenerate. Removing it is how a
-person freezes a diagram they have hand-tuned, so do not remove it for them.
+Keep `layout` in the baked source. A fully specified diagram is not rewritten,
+but the key enables automatic placement of later additions and explicit
+`relayout` operations. Remove it only when deliberately freezing manually tuned
+geometry.
 
-Without a `layout`, every node needs a `position` and every edge both anchors;
-leaving one out is an error, not a diagram drawn at the origin.
+Without `layout`, every node requires a `position` and every edge requires both
+anchors. Missing geometry is a schema error.
 
-Set `canvas.grid: 5` on a flowchart unless there is a reason not to. The layout
-engine snaps to it, and you should too on the nodes you place by hand. Shared
-coordinates are what make a diagram look deliberate: node edges line up, rows
-and columns align, and connectors meet anchors squarely instead of missing by a
-pixel or two. It also makes later graphical edits snap into the same alignment
-rather than drifting out of it.
-(This is `canvas.grid` inside a diagram, unrelated to the `:::grid` layout
-directive.)
+Set `canvas.grid: 5` unless the diagram needs a different grid. Use the same grid
+for manual positions and sizes so nodes, rows, columns, and connectors align.
+`canvas.grid` is unrelated to the `:::grid` formatting directive.
 
 Prefer `canvas: auto` on a flowchart (or `auto: true` alongside `grid`) so the
 canvas is derived from the content instead of being a dimension you maintain.
 Give explicit `width` and `height` only when a fixed aspect ratio matters.
 
-Node labels wrap inside the node's declared width, so a long label will not
-overflow its shape - but a wrapped label still reads better when it was sized to
-fit. Budget about 9px per label character and 7px per subtitle character, less
-24 units of horizontal inset, so a default 190-wide node holds roughly 18 label
-characters per line and two lines comfortably in the default 80 height.
+Node labels wrap within their declared width. Estimate 9px per label character
+and 7px per subtitle character, with 24 units reserved for horizontal inset. A
+default `190`-unit-wide node holds about 18 label characters per line and two
+lines within the default `80`-unit height. Set an explicit size when necessary.
 
-When several nodes share a presentation, declare it once in the flowchart's
-`styles:` block and apply it with `class:` rather than repeating an inline
-`style: { ... }`. It keeps a large diagram consistent and makes the source
-materially shorter, which matters when regenerating a whole document. A class
-overrides the theme, and anything written on the node itself overrides the
-class.
+Prefer straight connector geometry when a bend adds no information. After
+baking, align node centres on the dominant flow axis and move secondary branches
+perpendicular to it. Retain bends for branches, feedback, and obstacle
+avoidance. An `orthogonal` edge between aligned anchors renders as one straight
+segment and retains obstacle routing; `route: straight` is not required.
 
-Prefer `orthogonal` routes for most flows. Reach for `curved` when an orthogonal
-route would be hard to follow - a long edge doubling back, several edges
-converging on one anchor, or an edge that would otherwise run along or across an
-unrelated node. A curve separates from its neighbours and reads as one
-continuous line, so it can resolve a crowded layout that would otherwise need
-another right-angled detour.
+When nodes share a presentation, declare it in the flowchart's `styles:` block
+and apply it with `class:` instead of repeating inline styles. A class overrides
+the theme, and node-level values override the class.
 
-An edge that would cut through an unrelated node is routed around it
-automatically, keeping its route style. Where the geometry makes that impossible
-- most often a curve leaving an anchor that points straight at another node -
-the edge is left as authored and lint reports it; change the anchors rather than
-adding a waypoint.
+Use `orthogonal` for most routes. Use `curved` for a long back-edge, several
+edges converging on one anchor, or an edge that would otherwise overlap another
+route or unrelated node. Prefer changing anchors before adding a waypoint.
+
+The renderer routes edges around unrelated nodes when possible without changing
+the route style. If the selected anchors prevent a clear route, lint reports the
+crossing. Change the anchors before adding a waypoint.
 
 An edge may include one optional `waypoint: { x: number, y: number }` in canvas
 coordinates, which every route honours: orthogonal legs, a two-segment polyline
@@ -280,12 +276,14 @@ coordinates, which draws a callout pointer from the node centre out to that
 point in the node's own colours. Use it to tie an annotation - most often a
 `text` shape - to the thing it describes.
 
-For large or detailed diagrams, strongly prefer a `:::diagram { id=... }`
-reference at the intended reading position and place the matching fenced
-definition at the end of the document. This keeps the explanatory source easy
-to edit and review without changing where the diagram renders.
+For a large or detailed diagram, place a `:::diagram { id=... }` reference at
+the intended reading position and its matching fenced definition at the end of
+the document. This separates explanatory content from diagram YAML without
+changing render order.
 
-Give every diagram a concise plain-text `description` of its purpose and primary relationship. This becomes the SVG's accessible name or description and is retained by SVG and diagram-document exports. Keep the full explanation in nearby prose rather than turning this field into a transcript.
+Give every diagram a concise plain-text `description` of its purpose and primary
+relationship. The description becomes accessible SVG text and is retained by
+SVG and diagram-document exports. Put detailed explanation in adjacent prose.
 
 Give a diagram a `caption` when the prose refers to it. Write
 `caption: "Figure #: Authentication flow"` to have it numbered, and refer to it
@@ -298,80 +296,83 @@ Add `:::toc { depth=3 diagrams=true }` near the top of a long document. It takes
 no closing fence, and lists captioned diagrams under the heading they fall
 within.
 
-## Editing and saving
+## Editing, saving, and printing
 
 Use **Edit source** for canonical Markdown, document structure, and sequence
-diagram changes. The source tray's menu can insert valid flowchart, sequence,
-diagram-reference, contents, panel, and grid templates, and **Help** opens the published
-reference. Flowchart edit mode supports node and connector presentation,
-endpoints, an optional edge waypoint, and an optional node callout pointer.
+diagram changes. Its menu inserts valid flowchart, sequence, diagram-reference,
+contents, panel, and grid templates. **Help** opens the published reference.
+Flowchart edit mode supports node and connector presentation, endpoints, an
+optional edge waypoint, and an optional node callout pointer.
 
-**Print / Save as PDF** in the document menu prints the whole document, with
-diagrams at their natural size and without splitting panels, diagrams or tables
-across a page boundary.
+**Save As** downloads a portable document that references a hosted runtime.
+**Save for Offline** downloads one self-contained HTML file with the runtime
+embedded. When the current document uses a hosted runtime, this action fetches
+that runtime before embedding it. The self-packaged companion runtime supports
+the air-gapped authoring case described above.
 
-**Save As** keeps a hosted runtime URL in the downloaded portable document.
-**Save for Offline** embeds the selected runtime into a self-contained copy;
-the hosted artifact fetches its source, while the self-packaged artifact uses
-its included source without network access.
+**Print / Save as PDF** prints the complete document. Diagrams retain their
+natural size, and panels, diagrams, and tables do not split across page
+boundaries.
 
-Label every fenced code block with its language. A recognised language is syntax
-highlighted, and the label costs nothing when it is not.
+Label every fenced code block with its language so recognised languages receive
+syntax highlighting.
 
 ## Reviewing a document
 
-An authoring agent works blind: it emits a document and never sees the result.
-Opening the document is what closes that loop, because the runtime does the work
-itself the moment it loads:
+Bake and lint after changing a document. Baking resolves missing automatic
+layout. Lint runs after baking.
 
-- if any diagram needed laying out, the result is **baked into the document's own
-  source** there and then, so the source and the screen can never disagree;
-- **the checks are then run**, and the report is written into a live
-  `template[data-skryb-lint]` beside the source;
-- only baked source changes count as unsaved changes; checking alone does not
-  dirty the document or cause a save prompt.
+In a browser, these results exist in the loaded DOM:
 
-Both results therefore live in the current document DOM, and every route below
-returns the same two elements: `template#source` (the baked Markdown) and
-`template[data-skryb-lint]` (a JSON report). An explicit Save As includes the
-current report. Both are HTML-escaped, so decode entities when reading them.
+- `template#source` contains the baked Markdown;
+- `template[data-skryb-lint]` contains a JSON lint report.
 
-The lint report carries a `sourceHash` of the source it describes. Compare it
-against the source you hold: if they differ, the report predates your edits and
-its locations must not be trusted. Geometry messages carry a `location` with the
-diagram id/index, fence range, and node or edge subjects. Positions use one-based
-lines and columns plus zero-based UTF-16 offsets; ranges exclude their end.
+Loading a document does not overwrite its physical file. Persist browser-baked
+geometry by extracting and writing `template#source`, using **Save As**, or
+saving through the editor. Only baking marks the loaded document as changed;
+checking alone does not cause a save prompt. **Save As** includes the current
+lint report.
 
-Use the first of these routes available to you.
+Decode template entities when extracting content from serialized HTML. Escape
+`&`, `<`, and `>` when writing extracted Markdown back into an HTML template.
+The lint report's `sourceHash` identifies the source it checks; discard locations
+from a report whose hash does not match the current source.
+Geometry messages identify the diagram and affected nodes or edges. Locations
+use one-based lines and columns, zero-based UTF-16 offsets, and end-exclusive
+ranges.
+
+When screenshots are available, inspect each rendered diagram after linting.
+Check alignment, compactness, label spacing, and connector paths. In particular,
+look for overlapping connector segments and ambiguous feedback paths, which lint
+may not report.
+
+Use the first applicable review method.
 
 ### 1. Browser automation
 
-Open the document and call into it. Nothing is installed and nothing is
-downloaded; the runtime executes in the browser's sandbox.
+Open the document, then read the source and report from the DOM:
 
-```js
-await page.goto("file:///abs/path/doc.html");
+```javascript
+await page.goto("file:///abs/path/doc.html?skryb=lint");
 const { source, lint } = await page.evaluate(() => ({
   source: document.querySelector("#source").content.textContent,
   lint: JSON.parse(document.querySelector("template[data-skryb-lint]")?.content.textContent || "null")
 }));
 ```
 
-Write `source` back over the original file. Add `?skryb=lint` to the URL to force
-a check even when nothing needed baking. The legacy `?skryb-lint` form remains
-supported.
+HTML-escape `source` and replace the content of `template#source` in the original
+file. The hosted runtime may require network access. The legacy `?skryb-lint`
+query remains supported.
 
-If that report contains `unbalanced-aspect-ratio`, reopen the original document
-with `?skryb=autowrap`. This explicit mode wraps every eligible flow without a UI
-confirmation, writes the changed canonical Markdown to `template#source`, and
-replaces `template[data-skryb-lint]` with the post-wrap report. Extract and save
-the source in exactly the same way, then require a report with no unexpected
-warnings. Reopening the wrapped result with `?skryb=autowrap` is a no-op.
+If the report contains `unbalanced-aspect-ratio`, reopen the original document
+with `?skryb=autowrap`. This mode wraps every eligible flow, updates both DOM
+templates, and requires no UI confirmation. Extract and save `template#source`,
+then lint the saved file again. Repeating `?skryb=autowrap` on the wrapped result
+makes no further change.
 
-### 2. Any Chromium browser, no automation library
+### 2. Chromium command line
 
-Chrome, Edge, Brave, or Chromium can render the document and print the resulting
-DOM, which contains both templates:
+Chrome, Edge, Brave, or Chromium can serialize the rendered DOM:
 
 ```sh
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
@@ -379,60 +380,60 @@ DOM, which contains both templates:
   --dump-dom "file:///abs/path/doc.html?skryb=lint" > dom.html
 ```
 
-Extract `template#source` and `template[data-skryb-lint]` from `dom.html`, decode the
-entities, and write the source back over the original file. Use the browser's
-own path on the platform you are running on. `--virtual-time-budget` matters:
-without it the DOM may be dumped before the runtime has finished.
+Use the installed browser path for the current platform. Extract both templates
+from `dom.html`, decode entities, and write the source back into the original
+HTML file. Keep `--virtual-time-budget`; otherwise serialization may finish
+before the runtime.
 
-### 3. Ask a person
+### 3. Manual browser review
 
-With no browser at all, ask whoever you are working for to open the document and
-choose **Check document** from the document menu. Ask them to share the displayed
-findings. If opening the document baked layout, they should also save the changed
-source; checking alone does not dirty the document or prompt them to save. If you
-need the report embedded in a returned file, explicitly ask them to use Save As.
-Batch your edits before asking.
+If no automated method is available, ask the user to open the document and
+choose **Check document**. Ask for the findings and for the file to be saved if
+loading it baked layout. Checking alone does not prompt for a save. If the
+returned file must contain the lint report, ask the user to choose **Save As**.
+Batch changes before requesting another review.
 
-### What baking touches
+### Baking changes
 
-Only a fence that declares a `layout` **and** had something missing is rewritten,
-and it is rewritten into canonical form: fields reordered, comments inside that
-fence dropped. That is expected - such a diagram is generated output. A fence
-that is already complete, or has no `layout`, is copied through byte for byte,
-comments and all. Nothing outside the diagram fences is ever rewritten.
+Baking rewrites a flowchart fence only when it has `layout` and either missing
+geometry or a `relayout` instruction. Rewritten fences use canonical field order
+and do not preserve comments within the fence. A complete fence with no
+`relayout`, and any fence without `layout`, is preserved byte for byte. Content
+outside diagram fences is not changed.
 
-### The rules the checks apply
+### Lint rules
 
-| Rule | Severity | What it means |
+| Rule | Severity | Meaning |
 | --- | --- | --- |
-| `schema` | error | The document or a diagram fails validation. Nothing else runs until this is fixed. |
-| `unknown-edge-endpoint` | error | An edge names a node that does not exist. The renderer drops such an edge silently, so the connector simply vanishes - invisible unless you count your arrows. |
-| `node-overlap` | warning | Two unrelated nodes' boxes overlap. A child inside its own parent is not reported. |
-| `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
-| `edge-label-overlap` | warning | Every deterministic position for an edge label conflicts with a node, another label, or another route; the fallback label remains visible. |
-| `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
-| `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip and the graph is sufficiently linear to offer an explicit wrapped-layout action. |
+| `schema` | error | The document or a diagram fails validation. Other checks do not run until this is fixed. |
+| `unknown-edge-endpoint` | error | An edge references a node that does not exist, so the renderer omits the edge. |
+| `node-overlap` | warning | Two unrelated node bounds overlap. A child within its parent is excluded. |
+| `edge-crosses-node` | warning | An edge passes through a node other than its source or target. |
+| `edge-label-overlap` | warning | All deterministic label positions conflict with a node, another label, or another route. The fallback label remains visible. |
+| `label-overflow` | warning | A label does not fit within its shape after reducing its padding. |
+| `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip whose dominant path is eligible for wrapping. |
 
-Only errors are blocking; warnings are advisory, so a document is never held up
-on aesthetics. A node with no connector is never reported - a `text` shape used
-for annotation or a legend is a normal part of a diagram.
+Errors are blocking. Review every warning and either correct it or confirm that
+the geometry is intentional. Disconnected nodes are valid and are not reported;
+this supports annotations and legends.
 
-### Then adjust the baked source and check again
+### Adjusting baked source
 
-Because the engine only fills in what is missing, the baked source stays workable
-without any extra machinery:
+Automatic layout preserves existing geometry and fills in missing values:
 
-| To do this | Do this |
+| Goal | Action |
 | --- | --- |
-| Move a node | Edit its `position`, keeping to the `canvas.grid` multiple. |
-| Have one node re-placed in context | Delete its `position` and bake again. |
-| Add a node | Add it with no `position` and bake. Nothing already placed moves. |
-| Lay the whole diagram out afresh | Add `relayout: all` and bake. Node sizes survive; all positions and connector geometry are regenerated, then the modifier is consumed. Use `relayout: unpinned` to retain positions marked `pinned: true`, or `relayout: autowrap` to rebuild and wrap an eligible linear flow. |
-| Change where a connector leaves or lands | Edit that edge's anchors, or delete them and bake to have them derived again. |
+| Move a node | Edit its `position` using the `canvas.grid` multiple. |
+| Re-place one node | Delete its `position` and bake again. |
+| Add a node | Add it without `position` and bake. Existing positions remain unchanged. |
+| Regenerate all geometry | Add `relayout: all` and bake. Node sizes remain; positions, anchors, routes, and waypoints are regenerated. The `relayout` key is then removed. |
+| Regenerate geometry except selected positions | Mark retained nodes `pinned: true`, add `relayout: unpinned`, and bake. |
+| Wrap an eligible linear flow | Add `relayout: autowrap` and bake, or use the lint remediation described above. |
+| Change connector endpoints | Edit the edge anchors, or delete both anchors and bake to derive them again. |
 
-If you have none of the routes above and nobody to ask, place every node and
-anchor by hand and leave the `layout` key off. The document is then complete as
-written, and the schema will tell you if it is not.
+If no baking method is available, omit `layout` and specify every node position
+and both anchors on every edge. Validate the complete geometry against the
+schema.
 
 ## Validation checklist
 
@@ -441,7 +442,8 @@ Before returning a document, verify:
 - It has `<!doctype html>`, `lang`, UTF-8, viewport, a descriptive `title`,
   `template#source`, and `main#rendered-document`.
 - The template contains canonical Markdown and the rendered container is empty.
-- The script URL matches the document's intended lifetime.
+- The runtime selection matches the document's intended lifetime and offline
+  requirements.
 - Frontmatter, if present, is at the start and uses only supported values.
 - The Markdown uses only documented Markdown and formatting directives; grids
   contain only panels, callouts, or stacks as direct children.
@@ -452,8 +454,8 @@ Before returning a document, verify:
   and sizes are multiples of it.
 - A flowchart either declares `layout` or gives every node a `position` and every
   edge both anchors.
-- The document has been opened once since the last change, so its source carries
-  the positions and anchors it renders with, and the diagrams have been checked.
+- The document has been baked and linted since the last source change. The saved
+  source contains the geometry used for rendering.
 - The checks report no errors, and every warning is either fixed or a deliberate
   choice.
 - A reader can understand each diagram from its heading, labels, and nearby
