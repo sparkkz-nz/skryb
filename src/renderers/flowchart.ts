@@ -80,12 +80,11 @@ export function renderFlowchartDiagram(
   const edgeGeometries = buildFlowchartEdgeGeometries(diagram, flowchartIndex);
   const edgeMarkerDefs: string[] = [];
   const edgeEndpointMarkup: string[] = [];
-  const scheme = colourSchemes[state.documentColorScheme];
-  const palette = scheme?.[state.documentTheme === "dark" ? "dark" : "light"];
-  const paletteDefs = palette ? Object.entries(palette)
+  const palette = colourSchemes[state.documentColorScheme][state.documentTheme === "dark" ? "dark" : "light"];
+  const paletteDefs = Object.entries(palette)
     .filter(([, value]) => value.gradient)
     .map(([role, value]) => `<linearGradient id="docdiagram-${state.documentColorScheme}-${diagramIndex}-${role}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${escapeHtml(value.gradient || value.fill)}"/><stop offset="1" stop-color="${escapeHtml(value.fill)}"/></linearGradient>`)
-    .join("") : "";
+    .join("");
 
   const edgeMarkup = diagram.edges.map((edge, edgeIndex) => {
     const geometry = edgeGeometries[edgeIndex];
@@ -96,10 +95,12 @@ export function renderFlowchartDiagram(
     const labelX = edgeLabel?.center.x ?? edgePath.midpoint.x;
     const labelY = edgeLabel?.center.y ?? edgePath.midpoint.y - 10;
 
-    const style = getEdgeEffectiveStyle(diagram, edge, state.documentTheme);
+    const style = getEdgeEffectiveStyle(diagram, edge, state.documentTheme, state.documentColorScheme);
     const isSelected = selectedEdge?.diagramIndex === diagramIndex && selectedEdge.edgeIndex === edgeIndex;
     const isEditing = isSelected && editingEdge?.diagramIndex === diagramIndex && editingEdge.edgeIndex === edgeIndex;
-    const strokeWidth = (Number(style.strokeWidth) || 2) + (isSelected ? 2 : 0);
+    const baseStrokeWidth = Number(style.strokeWidth) || 2;
+    const strokeWidth = baseStrokeWidth + (isSelected ? 2 : 0);
+    const strokeType = edge.strokeType;
     const editorWidth = 220;
     const editorHeight = 72;
 
@@ -128,11 +129,15 @@ export function renderFlowchartDiagram(
       startMarkerStyle !== "none" ? ` marker-start="url(#${startMarkerId})"` : "",
       endMarkerStyle !== "none" ? ` marker-end="url(#${endMarkerId})"` : ""
     ].join("");
+    const strokeColor = escapeHtml(style.stroke || "");
+    const strokeMarkup = strokeType === "double"
+      ? `<path class="docdiagram-edge" d="${edgePath.path}" stroke="${strokeColor}" stroke-width="${strokeWidth + baseStrokeWidth * 2}"/><path d="${edgePath.path}" fill="none" stroke="${escapeHtml(palette.background.fill)}" stroke-width="${baseStrokeWidth}"/><path d="${edgePath.path}"${markerAttributes} fill="none" stroke="none"/>`
+      : `<path class="docdiagram-edge" d="${edgePath.path}"${markerAttributes} stroke="${strokeColor}" stroke-width="${strokeWidth}"${strokeType === "dotted" ? ` stroke-linecap="round" stroke-dasharray="1 6"` : ""}${strokeType === "dashed" ? ` stroke-dasharray="8 6"` : ""}/>`;
 
     return [
       `<g class="docdiagram-edge-group${isSelected ? " docdiagram-edge-selected" : ""}" data-diagram-index="${diagramIndex}" data-edge-index="${edgeIndex}">`,
       `<path class="docdiagram-edge-hit" d="${edgePath.hitPath}" fill="none" stroke="transparent" stroke-width="16"/>`,
-      `<path class="docdiagram-edge" d="${edgePath.path}"${markerAttributes} stroke="${escapeHtml(style.stroke || "")}" stroke-width="${strokeWidth}"/>`,
+      strokeMarkup,
       isEditing
         ? `<foreignObject class="docdiagram-inline-editor-host" x="${labelX - editorWidth / 2}" y="${labelY - editorHeight / 2}" width="${editorWidth}" height="${editorHeight}"><textarea class="docdiagram-inline-editor docdiagram-inline-editor-edge" aria-label="Edit edge label. Press Enter for a new line. Press Control or Command plus Enter to save. Press Escape to cancel.">${escapeHtml(edge.label || "")}</textarea></foreignObject>`
         : edgeLabel
@@ -186,7 +191,7 @@ export function renderFlowchartDiagram(
 
     return [
       `<g class="docdiagram-node${isSelected ? " docdiagram-node-selected" : ""}" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}">`,
-      renderNodeBody(geometry, style, strokeWidth),
+      renderNodeBody(geometry, style, strokeWidth, node.strokeType, palette.background.fill),
       calloutPointer
         ? renderNodeCalloutPointer(
           calloutPointer,

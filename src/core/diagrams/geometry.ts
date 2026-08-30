@@ -1,4 +1,4 @@
-import type { FlowchartNode, NodeStyle, Position } from "./schema";
+import type { FlowchartNode, NodeStrokeType, NodeStyle, Position } from "./schema";
 import { escapeHtml } from "./parser";
 import { type Obstacle, dropRedundantPoints, findClearRoute, getDetourWaypoint, routeIsBlocked, segmentIntersectsRectangle } from "./routing";
 
@@ -249,14 +249,27 @@ export function computeNodeTextLayout(
   };
 }
 
-export function renderNodeBody(geometry: { bodyMarkup: string }, style: NodeStyle, strokeWidth: number): string {
-  return geometry.bodyMarkup.replace(
-    "/>",
-    ` fill="${escapeHtml(style.fill || "")}" stroke="${escapeHtml(style.stroke || "")}" stroke-width="${strokeWidth}"/>`
-  ).replace(
-    'class="docdiagram-node-detail"',
-    `class="docdiagram-node-detail" stroke="${escapeHtml(style.stroke || "")}" stroke-width="${strokeWidth}"`
-  );
+export function renderNodeBody(
+  geometry: { bodyMarkup: string },
+  style: NodeStyle,
+  strokeWidth: number,
+  strokeType: NodeStrokeType = "solid",
+  gapColor = "#ffffff"
+): string {
+  const renderLayer = (fill: string, stroke: string, width: number, dash = "", gap = false): string => geometry.bodyMarkup
+    .replace('class="docdiagram-node-body"', `class="${gap ? "docdiagram-node-stroke-gap" : "docdiagram-node-body"}"`)
+    .replace("/>", ` fill="${escapeHtml(fill)}" stroke="${escapeHtml(stroke)}" stroke-width="${width}"${dash}/>`)
+    .replace(
+      'class="docdiagram-node-detail"',
+      `class="docdiagram-node-detail${gap ? " docdiagram-node-stroke-gap" : ""}" stroke="${escapeHtml(stroke)}" stroke-width="${width}"${dash}`
+    );
+  const dash = strokeType === "dotted"
+    ? ' stroke-linecap="round" stroke-dasharray="1 6"'
+    : strokeType === "dashed" ? ' stroke-dasharray="8 6"' : "";
+
+  return strokeType === "double"
+    ? renderLayer(style.fill || "", style.stroke || "", strokeWidth * 3) + renderLayer("none", gapColor, strokeWidth, "", true)
+    : renderLayer(style.fill || "", style.stroke || "", strokeWidth, dash);
 }
 
 function getAnchorDirection(anchor: string): Position {

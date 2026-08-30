@@ -97,12 +97,14 @@ export function getSequenceElementEffectiveStyle(
 export function getEdgeEffectiveStyle(
   diagram: { theme?: Theme; styles?: Record<string, NamedStyle> },
   edge: FlowchartEdge,
-  documentTheme: Theme = "light"
+  documentTheme: Theme = "light",
+  documentColorScheme: ColourSchemeName = "classic"
 ): EdgeStyle {
   const theme = getTheme(diagram, documentTheme);
+  const palette = colourSchemes[documentColorScheme][resolveTheme(documentTheme)];
   // An edge has no palette of its own, so a class contributes only its style fields.
   const named = getNamedStyle(diagram, edge.class);
-  return mergeStyle(mergeStyle(theme.edge, named?.style), edge.style);
+  return mergeStyle(mergeStyle({ ...theme.edge, stroke: palette.neutral.fill, text: palette.background.text }, named?.style), edge.style);
 }
 
 export function getEdgeMarkerStyle(edge: FlowchartEdge, endpoint: "start" | "end"): string {

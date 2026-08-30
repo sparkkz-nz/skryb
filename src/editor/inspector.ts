@@ -2,6 +2,7 @@ import {
   edgeAnchors,
   edgeMarkerStyles,
   edgeRoutes,
+  edgeStrokeTypes,
   colourSchemes,
   paletteRoles,
   nodeShapes,
@@ -27,11 +28,13 @@ import {
   setEdgeMarkerEnd,
   setEdgeMarkerStart,
   setEdgeRoute,
+  setEdgeStrokeType,
   setEdgeStyleOverride,
   setNodeColorPalette,
   setNodeLabel,
   setNodeShape,
   setNodeSize,
+  setNodeStrokeType,
   setNodeStyleOverride,
   setNodeSubtitle,
   setNodeTextAlignment,
@@ -49,6 +52,10 @@ export interface InspectorHost {
 
 type ControlElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 type SequenceInspectable = SequenceParticipant | SequenceNote | SequenceMessage;
+
+function strokeTypeMarkup(selected: string): string {
+  return `<select class="docdiagram-inspector-node-stroke-type" aria-label="Stroke type">${edgeStrokeTypes.map((strokeType) => `<option value="${strokeType}"${strokeType === selected ? " selected" : ""}>${strokeType}</option>`).join("")}</select>`;
+}
 
 function paletteMarkup(
   colourScheme: ColourSchemeName,
@@ -92,16 +99,23 @@ export function buildNodeInspectorFields(
     `<label class="docdiagram-inspector-shape-row"><span>Shape</span><select class="docdiagram-inspector-shape">${nodeShapes.map(
       (shape) => `<option value="${shape}"${shape === node.shape ? " selected" : ""}>${shape}</option>`
     ).join("")}</select></label>`,
-    `<div class="docdiagram-inspector-row docdiagram-inspector-colour-row"><span>Fill</span><input type="color" class="docdiagram-inspector-fill" value="${escapeHtml(style.fill || "")}"><span>Stroke</span><input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-stroke-width">Stroke width</label><input id="docdiagram-inspector-stroke-width" type="number" aria-label="Stroke width" class="docdiagram-inspector-stroke-width" value="${Number(style.strokeWidth) || 2}" min="1" step="1"></div>`,
-    `<label class="docdiagram-inspector-text-row"><span>Text</span><input type="color" class="docdiagram-inspector-text" value="${escapeHtml(style.text || "")}"></label>`,
+    `<div class="docdiagram-inspector-row docdiagram-inspector-colour-row"><span>Fill</span><input type="color" class="docdiagram-inspector-fill" value="${escapeHtml(style.fill || "")}"></div>`,
+    `<div class="docdiagram-inspector-row docdiagram-inspector-stroke-row"><span>Stroke</span><input type="color" class="docdiagram-inspector-stroke" value="${escapeHtml(style.stroke || "")}">${strokeTypeMarkup(node.strokeType || "solid")}<label class="docdiagram-visually-hidden" for="docdiagram-inspector-stroke-width">Stroke width</label><input id="docdiagram-inspector-stroke-width" type="number" aria-label="Stroke width" class="docdiagram-inspector-stroke-width" value="${Number(style.strokeWidth) || 2}" min="1" step="1"></div>`,
+    `<div class="docdiagram-inspector-row docdiagram-inspector-colour-row"><span>Text</span><input type="color" class="docdiagram-inspector-text" value="${escapeHtml(style.text || "")}"></div>`,
     `<div class="docdiagram-inspector-paired-controls"><span>Align</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-v-align">Vertical alignment</label><select id="docdiagram-inspector-text-v-align" class="docdiagram-inspector-text-v-align" aria-label="Vertical alignment"><option value="top"${node.textVAlign === "top" ? " selected" : ""}>Top</option><option value="center"${node.textVAlign !== "top" ? " selected" : ""}>Middle</option></select><label class="docdiagram-visually-hidden" for="docdiagram-inspector-text-h-align">Horizontal alignment</label><select id="docdiagram-inspector-text-h-align" class="docdiagram-inspector-text-h-align" aria-label="Horizontal alignment"><option value="left"${node.textHAlign === "left" ? " selected" : ""}>Left</option><option value="center"${node.textHAlign !== "left" && node.textHAlign !== "right" ? " selected" : ""}>Center</option><option value="right"${node.textHAlign === "right" ? " selected" : ""}>Right</option></select><span>Size</span><label class="docdiagram-visually-hidden" for="docdiagram-inspector-width">Width</label><input id="docdiagram-inspector-width" type="number" aria-label="Width" class="docdiagram-inspector-width" value="${width}" min="${widthMinimum}" step="${step}"><label class="docdiagram-visually-hidden" for="docdiagram-inspector-height">Height</label><input id="docdiagram-inspector-height" type="number" aria-label="Height" class="docdiagram-inspector-height" value="${height}" min="${heightMinimum}" step="${step}"><span>Callout</span><button type="button" class="docdiagram-inspector-callout">${node.arrow ? "Remove pointer" : "Add pointer"}</button><span></span><button type="button" class="docdiagram-inspector-delete">Delete</button><button type="button" class="docdiagram-inspector-duplicate">Duplicate</button></div>`
   ].join("");
 }
 
-export function buildEdgeInspectorFields(diagram: { theme?: Theme }, edge: FlowchartEdge): string {
-  const style = getEdgeEffectiveStyle(diagram, edge);
+export function buildEdgeInspectorFields(
+  diagram: { theme?: Theme },
+  edge: FlowchartEdge,
+  colourScheme: ColourSchemeName = "classic",
+  documentTheme: Theme = "light"
+): string {
+  const style = getEdgeEffectiveStyle(diagram, edge, documentTheme, colourScheme);
   const strokeWidth = Number(style.strokeWidth) || 2;
   const route = edge.route || "orthogonal";
+  const strokeType = edge.strokeType || "solid";
   const startMarkerStyle = edge.start || "none";
   const endMarkerStyle = edge.end || "arrow";
 
@@ -109,6 +123,9 @@ export function buildEdgeInspectorFields(diagram: { theme?: Theme }, edge: Flowc
     `<label class="docdiagram-field docdiagram-field-wide">Label<textarea class="docdiagram-inspector-label docdiagram-inspector-textarea" rows="2">${escapeHtml(edge.label || "")}</textarea></label>`,
     `<label class="docdiagram-field">Route<select class="docdiagram-inspector-route">${edgeRoutes.map(
       (candidate) => `<option value="${candidate}"${candidate === route ? " selected" : ""}>${candidate}</option>`
+    ).join("")}</select></label>`,
+    `<label class="docdiagram-field">Stroke type<select class="docdiagram-inspector-stroke-type">${edgeStrokeTypes.map(
+      (candidate) => `<option value="${candidate}"${candidate === strokeType ? " selected" : ""}>${candidate}</option>`
     ).join("")}</select></label>`,
     `<label class="docdiagram-field">Source side<select class="docdiagram-inspector-source-anchor">${edgeAnchors.map(
       (candidate) => `<option value="${candidate}"${candidate === edge.sourceAnchor ? " selected" : ""}>${candidate}</option>`
@@ -262,6 +279,7 @@ export function wireNodeInspector(host: InspectorHost, container: ParentNode, di
   change(container, ".docdiagram-inspector-shape", (value) => withNode((_, node) => setNodeShape(node, value)));
   change(container, ".docdiagram-inspector-fill", (value) => withNode((_, node) => setNodeStyleOverride(node, "fill", value)));
   change(container, ".docdiagram-inspector-stroke", (value) => withNode((_, node) => setNodeStyleOverride(node, "stroke", value)));
+  change(container, ".docdiagram-inspector-node-stroke-type", (value) => withNode((_, node) => setNodeStrokeType(node, value)));
   change(container, ".docdiagram-inspector-text", (value) => withNode((_, node) => setNodeStyleOverride(node, "text", value)));
   change(container, ".docdiagram-inspector-text-v-align", (value) => withNode((_, node) => setNodeTextAlignment(node, "textVAlign", value)));
   change(container, ".docdiagram-inspector-text-h-align", (value) => withNode((_, node) => setNodeTextAlignment(node, "textHAlign", value)));
@@ -302,6 +320,7 @@ export function wireEdgeInspector(host: InspectorHost, container: ParentNode, di
 
   change(container, ".docdiagram-inspector-label", (value) => withEdge((_, edge) => setEdgeLabel(edge, value)));
   change(container, ".docdiagram-inspector-route", (value) => withEdge((_, edge) => setEdgeRoute(edge, value)));
+  change(container, ".docdiagram-inspector-stroke-type", (value) => withEdge((_, edge) => setEdgeStrokeType(edge, value)));
   change(container, ".docdiagram-inspector-source-anchor", (value) => withEdge((_, edge) => setEdgeAnchor(edge, "source", value)));
   change(container, ".docdiagram-inspector-target-anchor", (value) => withEdge((_, edge) => setEdgeAnchor(edge, "target", value)));
   change(container, ".docdiagram-inspector-marker-start", (value) => withEdge((_, edge) => setEdgeMarkerStart(edge, value)));

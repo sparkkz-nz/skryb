@@ -7,6 +7,7 @@ import {
   edgeAnchors,
   edgeMarkerStyles,
   edgeRoutes,
+  edgeStrokeTypes,
   layoutDirections,
   paletteRoles,
   nodeTextHAlignments,
@@ -25,8 +26,8 @@ const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "a
 const diagramMetadataFields = ["version", "id", "caption", "description", "theme"] as const;
 const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "relayout", "styles", "canvas", "nodes", "edges"] as const;
 const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "class", "position", "pinned", "size", "style", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
-const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "label", "style", "start", "end", "waypoint"] as const;
+const flowchartNodeFields = ["id", "label", "shape", "class", "position", "pinned", "size", "style", "strokeType", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
+const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "strokeType", "label", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
 const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
@@ -477,6 +478,9 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
         throw new Error(`Unsupported node palette: ${String(node.palette || "unknown")}`);
       }
     }
+    if (node.strokeType !== undefined && !edgeStrokeTypes.includes(node.strokeType as (typeof edgeStrokeTypes)[number])) {
+      throw new Error(`Unsupported node strokeType: ${node.strokeType}`);
+    }
 
     if ((node.style as { width?: unknown } | undefined)?.width !== undefined) {
       throw new Error("Node style.width is not supported; use style.strokeWidth.");
@@ -526,6 +530,9 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
 
     if (edge.route !== undefined && !edgeRoutes.includes(edge.route as (typeof edgeRoutes)[number])) {
       throw new Error(`Unsupported edge route: ${edge.route}`);
+    }
+    if (edge.strokeType !== undefined && !edgeStrokeTypes.includes(edge.strokeType as (typeof edgeStrokeTypes)[number])) {
+      throw new Error(`Unsupported edge strokeType: ${edge.strokeType}`);
     }
     if (edge.waypoint !== undefined) {
       assertCoordinatePair(edge.waypoint, `edge "${edge.source}" -> "${edge.target}" waypoint`);

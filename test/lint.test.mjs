@@ -416,6 +416,34 @@ test("lint keeps an edge label visible and source-addressable when unrelated nod
   assert.ok(warning.location.subjects[0].sourceRange?.start.line);
 });
 
+test("lint reports labels that overlap their endpoint nodes", () => {
+  const result = lintDocument(lintSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: source",
+    "    label: Source",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 100 }",
+    "    size: { width: 190, height: 90 }",
+    "  - id: target",
+    "    label: Target",
+    "    shape: rounded-rectangle",
+    "    position: { x: 260, y: 100 }",
+    "    size: { width: 220, height: 100 }",
+    "edges:",
+    "  - source: source",
+    "    target: target",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    "    route: orthogonal",
+    "    label: POST /payments (idempotent)"
+  ]));
+  const warning = result.messages.find((message) => message.rule === "edge-label-overlap");
+
+  assert.ok(warning);
+  assert.ok(warning.location.subjects.some((subject) => subject.kind === "node" && subject.id === "source"));
+});
+
 test("lint reports an edge label blocked by a nearby unrelated route", () => {
   const rules = lintRules(lintSource([
     "canvas: auto",

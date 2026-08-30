@@ -639,34 +639,24 @@ export function injectStyles(): void {
     }
     .docdiagram-inspector-colour-row {
       display: grid;
-      grid-template-columns: 2.8rem 2.6rem 1fr auto 3.2rem;
+      grid-template-columns: 2.8rem 2.6rem;
       width: 100%;
     }
-    .docdiagram-inspector-colour-row > span:nth-of-type(2) {
-      justify-self: end;
+    .docdiagram-inspector-stroke-row {
+      display: grid;
+      grid-template-columns: 2.8rem 2.6rem 5rem 0 3.2rem;
+      width: 100%;
     }
-    .docdiagram-inspector-colour-row input[type="color"] {
+    .docdiagram-inspector-colour-row input[type="color"],
+    .docdiagram-inspector-stroke-row input[type="color"] {
       height: 1.9rem;
       padding: 2px;
       width: 2.6rem;
     }
-    .docdiagram-inspector-colour-row .docdiagram-inspector-stroke-width {
+    .docdiagram-inspector-stroke-row .docdiagram-inspector-stroke-width {
       box-sizing: border-box;
       min-width: 0;
       width: 3.2rem;
-    }
-    .docdiagram-inspector-text-row {
-      align-items: center;
-      color: var(--docdiagram-muted);
-      display: grid;
-      font-size: .9rem;
-      gap: .4rem;
-      grid-template-columns: 2.8rem 2.6rem;
-    }
-    .docdiagram-inspector-text-row input[type="color"] {
-      height: 1.9rem;
-      padding: 2px;
-      width: 2.6rem;
     }
     .docdiagram-inspector-shape-row {
       align-items: center;

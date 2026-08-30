@@ -10,6 +10,7 @@ import {
   edgeMarkerDefaults,
   edgeMarkerStyles,
   edgeRoutes,
+  edgeStrokeTypes,
   minimumNodeSize,
   nodeShapes,
   paletteRoles
@@ -250,6 +251,7 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
     ...(node.size ? { size: { ...node.size } } : {}),
     ...(node.style ? { style: { ...node.style } } : {}),
     ...(node.palette ? { palette: node.palette } : {}),
+    ...(node.strokeType ? { strokeType: node.strokeType } : {}),
     ...(node.subtitle !== undefined ? { subtitle: node.subtitle } : {}),
     ...(node.textVAlign !== undefined ? { textVAlign: node.textVAlign } : {}),
     ...(node.textHAlign !== undefined ? { textHAlign: node.textHAlign } : {}),
@@ -348,6 +350,13 @@ export function setNodeShape(node: FlowchartNode, shape: string): FlowchartNode 
 
 export function setNodeSubtitle(node: FlowchartNode, subtitle: string): FlowchartNode {
   node.subtitle = String(subtitle ?? "").trim();
+  return node;
+}
+
+export function setNodeStrokeType(node: FlowchartNode, strokeType: string): FlowchartNode {
+  if (includesValue(edgeStrokeTypes, strokeType)) {
+    node.strokeType = strokeType;
+  }
   return node;
 }
 
@@ -493,6 +502,13 @@ export function setEdgeLabel(edge: FlowchartEdge, label: string): FlowchartEdge 
 export function setEdgeRoute(edge: FlowchartEdge, route: string): FlowchartEdge {
   if (includesValue(edgeRoutes, route)) {
     edge.route = route;
+  }
+  return edge;
+}
+
+export function setEdgeStrokeType(edge: FlowchartEdge, strokeType: string): FlowchartEdge {
+  if (includesValue(edgeStrokeTypes, strokeType)) {
+    edge.strokeType = strokeType;
   }
   return edge;
 }

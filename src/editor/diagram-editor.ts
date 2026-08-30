@@ -1,4 +1,5 @@
 import {
+  colourSchemes,
   edgeAnchors,
   type EdgeAnchor,
   type FlowchartDiagram,
@@ -598,13 +599,17 @@ export class DiagramEditor {
     if (!nodeBody) {
       return;
     }
-    const style = getNodeEffectiveStyle(diagram, node);
+    const style = getNodeEffectiveStyle(diagram, node, this.host.state.documentTheme, this.host.state.documentColorScheme);
+    const palette = colourSchemes[this.host.state.documentColorScheme][this.host.state.documentTheme === "dark" ? "dark" : "light"];
     const geometry = getNodeGeometry(node, x, y, width, height);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
+    for (const gap of group.querySelectorAll(".docdiagram-node-stroke-gap")) {
+      gap.remove();
+    }
     for (const detail of group.querySelectorAll(".docdiagram-node-detail")) {
       detail.remove();
     }
-    nodeBody.outerHTML = renderNodeBody(geometry, style, Number(style.strokeWidth) || 2);
+    nodeBody.outerHTML = renderNodeBody(geometry, style, Number(style.strokeWidth) || 2, node.strokeType, palette.background.fill);
     for (const text of [label, subtitle]) {
       if (!text) {
         continue;
