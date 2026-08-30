@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constrained relayout demonstration</title>
+  <script src="../dist/skryb-runtime-self-packaged.js" defer></script>
+</head>
+<body>
+  <template id="source" type="text/markdown">
+---
+theme: light
+colourScheme: ice
+---
+
+# Constrained relayout demonstration
+
+This decision flow keeps the externally meaningful request and durable record in
+fixed positions. The layout engine places the validation and decision stages
+between them. The return connector represents a controlled retry: its authored
+anchors and curved route keep it visually distinct from the forward path.
+
+Add `relayout: unpinned` to the diagram source to regenerate the automatic
+positions around the two pinned constraints. The diagram toolbar's **Relayout
+diagram** action instead performs `relayout: all`: after confirmation it replaces
+every position and all connector geometry while preserving node sizes.
+
+```diagram
+type: flowchart
+version: 1
+id: constrained-request-flow
+caption: "Figure #: Constrained request processing flow"
+description: "A request passes through validation and a decision into a pinned record, with a controlled retry returning for validation."
+layout: right
+canvas:
+  auto: true
+  grid: 5
+nodes:
+  - id: request
+    label: External request
+    shape: rounded-rectangle
+    palette: accent-soft
+    position: { x: 40, y: 180 }
+    pinned: true
+    size: { width: 220, height: 80 }
+  - id: validate
+    label: Validate request
+    shape: rounded-rectangle
+    position: { x: 380, y: 80 }
+  - id: decide
+    label: "Accept request?"
+    shape: diamond
+    position: { x: 690, y: 135 }
+  - id: record
+    label: Durable decision record
+    shape: database
+    palette: success
+    position: { x: 970, y: 180 }
+    pinned: true
+    size: { width: 220, height: 100 }
+edges:
+  - source: request
+    target: validate
+    sourceAnchor: right
+    targetAnchor: left
+  - source: validate
+    target: decide
+    sourceAnchor: right
+    targetAnchor: left
+  - source: decide
+    target: record
+    label: |+
+      Accepted and ready
+      for durable storage
+    sourceAnchor: right
+    targetAnchor: left
+  - source: record
+    target: validate
+    label: Controlled retry
+    sourceAnchor: bottom
+    targetAnchor: bottom
+    route: curved
+```
+  </template>
+  <main id="rendered-document"></main>
+</body>
+</html>

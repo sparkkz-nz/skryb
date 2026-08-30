@@ -435,6 +435,30 @@ test("an unsupported layout is an error rather than a silent no-op", () => {
   assert.throws(() => parseDiagram(withLayout("{ direction: right, spacing: 10 }")), /Unsupported layout field: spacing/);
 });
 
+test("one-shot relayout validates its mode and pinned-node constraint", () => {
+  const base = [
+    "layout: right",
+    "nodes:",
+    "  - id: a",
+    "    label: A",
+    "    shape: rounded-rectangle",
+    "edges:"
+  ];
+
+  assert.throws(
+    () => parseDiagram(layoutSource(["relayout: sideways", ...base])),
+    /Unsupported relayout mode: sideways/
+  );
+  assert.throws(
+    () => parseDiagram(layoutSource(["relayout: unpinned", ...base.slice(0, 5), "    pinned: true", "edges:"])),
+    /Pinned node "a" requires a position/
+  );
+  assert.throws(
+    () => parseDiagram(flowchartSource(["relayout: all", "nodes:", "edges:"])),
+    /Relayout requires a layout direction/
+  );
+});
+
 test("a laid-out diagram lints clean", () => {
   const result = lintDocument(["# Document", "", "```diagram", chain("right", "right", "left"), "```"].join("\n"));
 
@@ -465,6 +489,17 @@ function longLinearDiagram(direction = "horizontal", count = 12) {
     ]).flat()
   ]));
 }
+
+test("the autowrap one-shot mode wraps an eligible flow and is consumed on serialization", () => {
+  const source = serializeDiagram(longLinearDiagram("horizontal")).replace("layout: right", "layout: right\nrelayout: autowrap");
+  const diagram = parseDiagram(source);
+  const serialized = serializeDiagram(diagram);
+
+  assert.doesNotMatch(serialized, /^relayout:/m);
+  assert.equal(analyseBalancedLayoutCandidate(diagram), null);
+  assert.equal(lintDocument(["```diagram", serialized, "```"].join("\n")).messages
+    .some((message) => message.rule === "unbalanced-aspect-ratio"), false);
+});
 
 test("balanced-layout analysis diagnoses fitted horizontal and vertical linear content", () => {
   const horizontal = analyseBalancedLayoutCandidate(longLinearDiagram("horizontal"));

@@ -183,8 +183,10 @@ edges:
 ```
 
 The engine only ever fills in what is missing, so it composes with whatever you
-do want to control. Pin the one node whose placement carries meaning and let the
-rest fall into stages around it. Write an anchor on the one edge that needs to
+do want to control. Give the one node whose placement carries meaning a position
+and `pinned: true`, then let the rest fall into stages around it. The pin matters
+when an intentional one-shot relayout would otherwise replace existing positions.
+Write an anchor on the one edge that needs to
 leave a particular side - a feedback edge doubling back, which the engine also
 reads as a deliberate back-edge and keeps out of the stage assignment - and
 leave the other edges alone.
@@ -424,7 +426,7 @@ without any extra machinery:
 | Move a node | Edit its `position`, keeping to the `canvas.grid` multiple. |
 | Have one node re-placed in context | Delete its `position` and bake again. |
 | Add a node | Add it with no `position` and bake. Nothing already placed moves. |
-| Lay the whole diagram out afresh | Strip every `position` and bake. This discards any hand tuning, so be sure. |
+| Lay the whole diagram out afresh | Add `relayout: all` and bake. Node sizes survive; all positions and connector geometry are regenerated, then the modifier is consumed. Use `relayout: unpinned` to retain positions marked `pinned: true`, or `relayout: autowrap` to rebuild and wrap an eligible linear flow. |
 | Change where a connector leaves or lands | Edit that edge's anchors, or delete them and bake to have them derived again. |
 
 If you have none of the routes above and nobody to ask, place every node and

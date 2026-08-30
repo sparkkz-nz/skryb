@@ -44,6 +44,7 @@ export interface FlowchartNode {
   shape: NodeShape;
   class?: string;
   position?: Position;
+  pinned?: boolean;
   size?: Size;
   style?: NodeStyle;
   palette?: PaletteRole;
@@ -89,9 +90,12 @@ export interface LayoutOptions {
   siblingGap?: number;
 }
 
+export type RelayoutMode = "all" | "unpinned" | "autowrap";
+
 export interface FlowchartDiagram extends DiagramMetadata {
   type: "flowchart";
   layout?: LayoutDirection | LayoutOptions;
+  relayout?: RelayoutMode;
   styles?: Record<string, NamedStyle>;
   canvas: Canvas;
   nodes: FlowchartNode[];

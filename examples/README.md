@@ -12,6 +12,9 @@ the two supported runtime distribution models.
 - [skryb-codebase-architecture.html](skryb-codebase-architecture.html) is a
   portable technical architecture document with flowchart and sequence diagrams.
   It loads the shareable latest runtime URL.
+- [constrained-relayout.html](constrained-relayout.html) demonstrates pinned
+  constraints, automatically placed neighbours, a multiline connector label,
+  controlled feedback routing, and the confirmation-gated relayout action.
 
 All documents preserve their canonical Markdown and diagram YAML in
 `template#source`. Use **Save As** to retain a hosted runtime in a downloaded

@@ -84,6 +84,7 @@ import {
   bakeDocumentSource,
   balanceDocumentDiagram,
   balanceDocumentLinearFlows,
+  relayoutDocumentDiagram,
   hashSource,
   spliceBakedFences,
   extractDiagramFences,
@@ -794,6 +795,23 @@ export class BrowserRuntime {
         this.state.diagramCameraOffsets.delete(diagramIndex);
         this.pendingViewportFits.add(diagramIndex);
         this.renderDocument();
+      });
+    }
+    for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-relayout")) {
+      button.addEventListener("click", () => {
+        const diagramIndex = Number(button.dataset.diagramIndex);
+        const confirmed = globalThis.confirm(
+          "Relayout this entire diagram?\n\n" +
+          "All node positions and connector anchors, routes, and waypoints will be replaced. Node sizes will be preserved."
+        );
+        if (!confirmed) {
+          return;
+        }
+        const result = relayoutDocumentDiagram(this.getSource(), diagramIndex);
+        if (result.changed) {
+          this.renderDocument(result.source);
+          this.sourceEditor?.syncSource(result.source);
+        }
       });
     }
     for (const button of this.outputElement.querySelectorAll<HTMLButtonElement>(".docdiagram-start-editing")) {

@@ -1,3 +1,6 @@
+import { spawnSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { assert, core, fs, test, testDirectory } from "./support/core-context.mjs";
 
 const __dirname = testDirectory;
@@ -5,7 +8,10 @@ const __dirname = testDirectory;
 const {
   flattenFlowchartNodes,
   parseDiagram,
+  lintDocument,
   bakeDocumentSource,
+  DocumentSession,
+  relayoutDocumentDiagram,
   spliceBakedFences,
   hashSource
 } = core;
@@ -169,6 +175,95 @@ test("baking is idempotent, so a baked document reparses to the same text", () =
   const once = bakeDocumentSource(bakeableFence).source;
 
   assert.equal(bakeDocumentSource(once).source, once);
+});
+
+const oneShotRelayoutFence = fence([
+  "type: flowchart",
+  "layout: right",
+  "relayout: unpinned",
+  "canvas: auto",
+  "nodes:",
+  "  - id: pinned",
+  "    label: Pinned",
+  "    shape: rounded-rectangle",
+  "    position: { x: 500, y: 200 }",
+  "    pinned: true",
+  "    size: { width: 240, height: 100 }",
+  "  - id: placed",
+  "    label: Placed again",
+  "    shape: rounded-rectangle",
+  "    position: { x: 10, y: 10 }",
+  "    size: { width: 220, height: 80 }",
+  "edges:",
+  "  - source: pinned",
+  "    target: placed",
+  "    sourceAnchor: left",
+  "    targetAnchor: right",
+  "    route: curved",
+  "    waypoint: { x: 25, y: 25 }"
+]);
+
+test("an unpinned relayout preserves pinned constraints, consumes its modifier, and is then idempotent", () => {
+  const first = bakeDocumentSource(oneShotRelayoutFence);
+  const second = bakeDocumentSource(first.source);
+  const [diagramSource] = readDiagramSources(first.source);
+  const diagram = parseDiagram(diagramSource);
+  const pinned = diagram.nodes.find((node) => node.id === "pinned");
+  const placed = diagram.nodes.find((node) => node.id === "placed");
+
+  assert.equal(first.baked, 1);
+  assert.doesNotMatch(first.source, /^relayout:/m);
+  assert.deepEqual(pinned.position, { x: 500, y: 200 });
+  assert.equal(pinned.pinned, true);
+  assert.deepEqual(pinned.size, { width: 240, height: 100 });
+  assert.deepEqual(placed.size, { width: 220, height: 80 });
+  assert.notDeepEqual(placed.position, { x: 10, y: 10 });
+  assert.equal(diagram.edges[0].waypoint, undefined);
+  assert.notEqual(diagram.edges[0].route, "curved");
+  assert.equal(lintDocument(first.source).messages.some((message) => message.rule === "node-overlap"), false);
+  assert.equal(second.source, first.source);
+  assert.equal(second.baked, 0);
+});
+
+test("browser session, headless core, and repository bake routes produce identical relayout source", () => {
+  const expected = bakeDocumentSource(oneShotRelayoutFence).source;
+  let browserSource = oneShotRelayoutFence;
+  const session = new DocumentSession({
+    read: () => browserSource,
+    write: (source) => { browserSource = source; }
+  });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "skryb-relayout-"));
+  const file = path.join(directory, "diagram.md");
+  fs.writeFileSync(file, oneShotRelayoutFence);
+
+  try {
+    assert.deepEqual(session.bake(), { baked: 1, failed: false });
+    const result = spawnSync(process.execPath, ["scripts/bake.mjs", file], {
+      cwd: path.resolve(testDirectory, ".."),
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(browserSource, expected);
+    assert.equal(fs.readFileSync(file, "utf8"), expected);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the editor relayout route replaces all positions by default", () => {
+  const ordinary = bakeDocumentSource(oneShotRelayoutFence).source;
+  const sourceWithOldGeometry = ordinary.replace(
+    /(id: placed[\s\S]*?position:) \{[^}]+\}/,
+    "$1 { x: 15, y: 15 }"
+  );
+  const result = relayoutDocumentDiagram(sourceWithOldGeometry, 0);
+  const diagram = parseDiagram(readDiagramSources(result.source)[0]);
+
+  assert.equal(result.changed, true);
+  assert.doesNotMatch(result.source, /^relayout:/m);
+  assert.notDeepEqual(diagram.nodes[0].position, { x: 500, y: 200 });
+  assert.notDeepEqual(diagram.nodes[1].position, { x: 15, y: 15 });
+  assert.deepEqual(diagram.nodes[0].size, { width: 240, height: 100 });
 });
 
 test("a diagram with no layout key is hand-managed, so baking copies it through untouched", () => {

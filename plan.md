@@ -557,7 +557,7 @@ stable order, spacing, and collision clearance.
 
 ## Block 11 — One-shot relayout and constrained-layout example
 
-**Status:** Planned  
+**Status:** Complete
 **Suggested branch:** `feat/one-shot-relayout`  
 **Dependencies:** Blocks 9 and 10
 
@@ -639,5 +639,5 @@ Record merged work here in chronological order.
 | 8 | Complete | [#75](https://github.com/sparkkz-nz/skryb/pull/75) | Added canonical accessible descriptions for flowchart and sequence diagrams. |
 | 9 | Complete | [#76](https://github.com/sparkkz-nz/skryb/pull/76) | Added aspect-ratio lint and explicit wrapped layout for long linear flows. |
 | 10 | In progress | — | Added median-based layered coordinate assignment with stable spacing and grid alignment. |
-| 11 | Planned | — | — |
+| 11 | Complete | [#78](https://github.com/sparkkz-nz/skryb/pull/78) | Added one-shot `all`, `unpinned`, and `autowrap` relayout modes plus a constrained-layout example and confirmed editor action. |
 | 12 | Planned | — | — |

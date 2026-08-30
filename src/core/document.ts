@@ -2,7 +2,9 @@ import { colourSchemes, themes, type ColourSchemeName, type Theme } from "./diag
 import { applyBalancedFlowchartLayout, type BalancedLayoutResult } from "./diagrams/balanced-layout";
 import { parseDiagram, parseScalar } from "./diagrams/parser";
 import { layoutFilledDiagram } from "./diagrams/layout";
+import { applyOneShotRelayout, relayoutApplied } from "./diagrams/relayout";
 import { serializeDiagram } from "./diagrams/serializer";
+import type { RelayoutMode } from "./diagrams/schema";
 import { resolveTheme } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen, stripFencePrefix } from "./fences";
 
@@ -324,10 +326,9 @@ export function bakeDocumentSource(source: string): BakeResult {
     if (fence.info === "diagram") {
       const body = plain.slice(index + 1, closeIndex).map((line) => stripFencePrefix(line)).join("\n");
       const diagram = parseDiagram(body, colourScheme);
-      // Only a diagram the engine had to fill something in for is rewritten. A `layout` diagram that
-      // already carries every position and anchor is complete, so reserialising it would churn its
-      // formatting and drop its comments to no purpose.
-      if (diagram.type === "flowchart" && layoutFilledDiagram(diagram)) {
+      // Only a diagram the engine filled or explicitly relaid is rewritten. A complete `layout`
+      // diagram without the one-shot modifier is preserved byte for byte.
+      if (diagram.type === "flowchart" && (layoutFilledDiagram(diagram) || relayoutApplied(diagram))) {
         // A block-quoted fence keeps its quoting, taken from the line that opened it.
         const opener = plain[index];
         const quote = opener.slice(0, opener.length - stripFencePrefix(opener).length);
@@ -419,6 +420,40 @@ export function balanceDocumentDiagram(source: string, diagramIndex: number): Ba
     throw new Error(`Diagram ${diagramIndex + 1} does not exist.`);
   }
   return balanceExtractedDiagram(source, extracted, resolved.colourScheme);
+}
+
+export interface RelayoutDocumentResult {
+  source: string;
+  changed: boolean;
+}
+
+/** Applies the same destructive relayout exposed by the source-only one-shot modifier. */
+export function relayoutDocumentDiagram(
+  source: string,
+  diagramIndex: number,
+  mode: RelayoutMode = "all"
+): RelayoutDocumentResult {
+  const resolved = validateDocumentSource(source);
+  const extracted = extractDiagramFences(source).find((diagram) => diagram.index === diagramIndex);
+  if (!extracted) {
+    throw new Error(`Diagram ${diagramIndex + 1} does not exist.`);
+  }
+  const diagram = parseDiagram(extracted.source, resolved.colourScheme);
+  if (diagram.type !== "flowchart") {
+    return { source, changed: false };
+  }
+  applyOneShotRelayout(diagram, mode);
+
+  const lines = source.split("\n");
+  const openerIndex = extracted.fenceRange.start.line - 1;
+  const closeIndex = extracted.fenceRange.end.line - 1;
+  const opener = lines[openerIndex].endsWith("\r") ? lines[openerIndex].slice(0, -1) : lines[openerIndex];
+  const quote = opener.slice(0, opener.length - stripFencePrefix(opener).length);
+  const carriageReturns = lines.filter((line) => line.endsWith("\r")).length;
+  const lineEnd = carriageReturns * 2 > lines.length - 1 ? "\r" : "";
+  const replacement = serializeDiagram(diagram).split("\n").map((line) => `${quote}${line}${lineEnd}`);
+  lines.splice(openerIndex + 1, closeIndex - openerIndex - 1, ...replacement);
+  return { source: lines.join("\n"), changed: true };
 }
 
 /** Rewrites a diagram's `id:` line, adding one when the diagram has no id yet. */

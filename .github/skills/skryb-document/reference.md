@@ -334,6 +334,7 @@ The directive may appear anywhere, including before the headings it lists.
 | `caption` | No | Caption rendered below the diagram. A `#` in it is replaced by the figure number; `\#` is a literal `#`. |
 | `description` | No | Concise plain-text summary of the diagram's purpose and primary relationship for screen readers and exported SVGs. Nearby prose should provide the full explanation. |
 | `layout` | No | Flowchart only. Marks the diagram machine-managed: nodes may omit `position` and edges may omit anchors, and the engine fills in what is missing. |
+| `relayout` | No | Flowchart only; requires `layout`. `all` replaces all positions, `unpinned` preserves positions marked `pinned: true`, and `autowrap` replaces all positions and wraps an eligible long linear flow. The field is consumed during serialization. |
 | `styles` | No | Flowchart only. Named styles applied to nodes and edges with `class`. |
 | `canvas` | No | Canvas mapping, or the scalar `auto` for a flowchart. Flowcharts support `width`, `height`, `auto`, and optional `grid`; sequences support `width`, `height`, `participantSpacing`, and `participantSize`. Omitted canvases default to `1000` by `560`. |
 | `nodes` | Flowchart | List of flowchart nodes. |
@@ -506,6 +507,49 @@ These values are guides rather than limits. Give a key node an explicit `size`
 when its label needs more room; use a deliberate anchor or waypoint only where
 the route itself carries meaning, such as a feedback edge or side branch.
 
+A `pinned: true` node must have an explicit `position`. Ordinary incremental
+layout preserves every existing position. The pin distinguishes constraints
+that `relayout: unpinned` must retain from previously generated positions.
+
+#### One-shot relayout
+
+Add one of these modifiers to a flowchart with `layout` when its baked geometry
+should be regenerated on the next open or repository bake:
+
+- `relayout: all` clears every node position and starts ordinary layout afresh;
+- `relayout: unpinned` clears every position except those marked `pinned: true`
+  and places the remaining nodes around those constraints; or
+- `relayout: autowrap` clears every position, starts afresh, and wraps an eligible
+  long linear flow into rows or columns.
+
+Every form preserves node sizes, clears and regenerates every connector's
+anchors, route, and waypoint, and removes `relayout` from the serialized source
+while leaving the persistent `layout` setting in place.
+
+The consumed modifier makes reopening idempotent. A fully positioned diagram
+without `relayout` remains untouched, so ordinary opens never discard hand-tuned
+geometry. The flowchart toolbar's **Relayout diagram** action applies `all` only
+after confirmation.
+
+```yaml
+type: flowchart
+layout: right
+relayout: unpinned
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: boundary
+    label: System boundary
+    shape: rounded-rectangle
+    position: { x: 350, y: 180 }
+    pinned: true
+  - id: worker
+    label: Worker
+    shape: rounded-rectangle
+edges:
+  - source: boundary
+    target: worker
+```
+
 #### Wrapping a long linear flow
 
 After geometry has baked, lint diagnoses fitted content that remains a very long
@@ -665,6 +709,7 @@ child nodes at any depth:
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Its values sit below the node's own `palette` and `style`. |
 | `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, or `text`. The `document` shape is a sheet of paper with a folded top-right corner. The `text` shape is a plain text box: it renders its (multiline) `label` with a native-SVG Markdown subset, and its fill and stroke default to transparent unless a `palette` or `style` override is set. |
 | `position` | **Required unless the diagram declares a `layout`.** `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
+| `pinned` | Optional Boolean. `true` requires `position` and preserves that position during `relayout: unpinned`; `all` and `autowrap` replace it. |
 | `size` | `{ width: number, height: number }`. Nodes have a minimum size; circles remain square. |
 | `palette` | Optional semantic palette role; selects the scheme-aware node treatment and clears explicit node colour overrides. |
 | `style` | Optional overrides: `fill`, `stroke`, `text`, and `strokeWidth`. `style.width` is rejected. |
