@@ -9,7 +9,9 @@ const {
   resolveDocument,
   renderMarkdown,
   validateDocumentSource,
-  findSourceTextRange
+  findSourceTextRange,
+  balanceDocumentDiagram,
+  balanceDocumentLinearFlows
 } = core;
 
 function readTemplateSource(filePath) {
@@ -33,6 +35,57 @@ function sequenceSource(source) {
   const body = Array.isArray(source) ? source.join("\n") : String(source);
   return `type: sequence\n${body}`;
 }
+
+function longFlowSource(count = 8) {
+  return flowchartSource([
+    "id: quoted-long-flow",
+    "layout: right",
+    "nodes:",
+    ...Array.from({ length: count }, (_, index) => [
+      `  - id: n${index}`,
+      `    label: Node ${index}`,
+      "    shape: rounded-rectangle",
+      `    position: { x: 20, y: ${index * 180} }`,
+      "    size: { width: 180, height: 80 }"
+    ]).flat(),
+    "edges:",
+    ...Array.from({ length: count - 1 }, (_, index) => [
+      `  - source: n${index}`,
+      `    target: n${index + 1}`,
+      "    sourceAnchor: bottom",
+      "    targetAnchor: top"
+    ]).flat()
+  ]);
+}
+
+test("portable autowrap rewrites every eligible flow and is idempotent", () => {
+  const firstFence = ["```diagram", longFlowSource(), "```"].join("\n");
+  const secondFence = ["```diagram", longFlowSource().replace("quoted-long-flow", "second-long-flow"), "```"].join("\n");
+  const source = ["# Two flows", "", firstFence, "", "Preserved prose.", "", secondFence].join("\n");
+
+  const first = balanceDocumentLinearFlows(source);
+  const second = balanceDocumentLinearFlows(first.source);
+
+  assert.equal(first.changed, true);
+  assert.equal(first.layouts.length, 2);
+  assert.match(first.source, /Preserved prose\./);
+  assert.equal(second.changed, false);
+  assert.equal(second.layouts.length, 0);
+  assert.equal(second.source, first.source);
+});
+
+test("balanced source rewriting preserves CRLF block quotes and bytes outside the selected fence", () => {
+  const fence = ["```diagram", longFlowSource(), "```"].join("\n");
+  const quotedFence = fence.split("\n").map((line) => `> ${line}`).join("\r\n");
+  const source = `Before\r\n\r\n${quotedFence}\r\n\r\nAfter`;
+  const result = balanceDocumentDiagram(source, 0);
+
+  assert.ok(result.changed);
+  assert.ok(result.source.startsWith("Before\r\n\r\n> ```diagram\r\n"));
+  assert.ok(result.source.endsWith("\r\n> ```\r\n\r\nAfter"));
+  assert.equal(result.source.replaceAll("\r\n", "").includes("\n"), false);
+  assert.ok(result.source.split("\r\n").slice(3, -3).every((line) => line.startsWith("> ")));
+});
 
 test("render authoring skill fixtures use the required shell and valid source", () => {
   const fixtureDirectory = path.resolve(__dirname, "fixtures", "render-document");

@@ -245,9 +245,12 @@ being slightly untidy. The rules live in the runtime next to the geometry they
 describe, so they cannot drift from what actually gets drawn.
 
 Because this all happens in the browser, it needs nothing installed and runs in
-the browser's sandbox. An agent with browser automation reads the two templates
-directly; with only a Chromium binary, `--headless --dump-dom` prints a DOM
-containing both. See the
+the browser's sandbox. An agent uses `?skryb=lint` to request a report. If it
+contains an `unbalanced-aspect-ratio` warning, a separate
+`?skryb=autowrap` load explicitly wraps every eligible flow and publishes the
+updated source and refreshed report. An agent with browser automation reads the
+two templates directly; with only a Chromium binary, `--headless --dump-dom`
+prints a DOM containing both. See the
 [syntax reference](https://sparkkz-nz.github.io/skryb/docs/reference.html) for
 the details.
 

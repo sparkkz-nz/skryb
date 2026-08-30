@@ -23,6 +23,7 @@ import {
   splitTextLines
 } from "./diagrams/geometry";
 import { buildFlowchartEdgeGeometries } from "./diagrams/edge-labels";
+import { analyseBalancedLayoutCandidate } from "./diagrams/balanced-layout";
 
 export type LintSeverity = "error" | "warning";
 
@@ -49,12 +50,19 @@ export interface LintLocation {
   subjects: LintSubject[];
 }
 
+export interface LintSuggestedAction {
+  id: "wrap-linear-flow";
+  label: string;
+  diagramIndex: number;
+}
+
 export interface LintMessage {
   severity: LintSeverity;
   rule: string;
   message: string;
   diagram?: string;
   location?: LintLocation;
+  suggestedAction?: LintSuggestedAction;
 }
 
 export interface LintResult {
@@ -293,6 +301,20 @@ export function lintDocument(source: string): LintResult {
     lintEdges(diagram, flowchartIndex, report);
     lintNodeOverlaps(flowchartIndex, report);
     lintNodeLabels(flowchartIndex, report);
+
+    const balance = analyseBalancedLayoutCandidate(diagram);
+    if (balance) {
+      report(
+        "unbalanced-aspect-ratio",
+        `Fitted content is ${balance.width} by ${balance.height} units (${balance.aspectRatio.toFixed(1)}:1 ${balance.direction}); ${balance.reason}.`,
+        "warning"
+      );
+      messages[messages.length - 1].suggestedAction = {
+        id: "wrap-linear-flow",
+        label: `Wrap this ${balance.direction} flow`,
+        diagramIndex: extracted.index
+      };
+    }
   });
 
   return {

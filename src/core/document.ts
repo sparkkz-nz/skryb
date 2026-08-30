@@ -1,4 +1,5 @@
 import { colourSchemes, themes, type ColourSchemeName, type Theme } from "./diagrams/schema";
+import { applyBalancedFlowchartLayout, type BalancedLayoutResult } from "./diagrams/balanced-layout";
 import { parseDiagram, parseScalar } from "./diagrams/parser";
 import { layoutFilledDiagram } from "./diagrams/layout";
 import { serializeDiagram } from "./diagrams/serializer";
@@ -354,6 +355,70 @@ export function spliceBakedFences(lines: string[], fences: BakedFence[]): string
     output.splice(fence.start, fence.end - fence.start, ...fence.lines);
   }
   return output;
+}
+
+export interface BalanceDocumentResult {
+  source: string;
+  changed: boolean;
+  layout: BalancedLayoutResult | null;
+}
+
+export interface BalanceDocumentFlowsResult {
+  source: string;
+  changed: boolean;
+  layouts: BalancedLayoutResult[];
+}
+
+/** Applies the wrapped-layout fix to every eligible linear flow in a document. */
+export function balanceDocumentLinearFlows(source: string): BalanceDocumentFlowsResult {
+  const resolved = validateDocumentSource(source);
+  const extractedDiagrams = extractDiagramFences(source).reverse();
+  const layouts: BalancedLayoutResult[] = [];
+  let balancedSource = source;
+  for (const extracted of extractedDiagrams) {
+    const result = balanceExtractedDiagram(balancedSource, extracted, resolved.colourScheme);
+    if (result.changed && result.layout) {
+      balancedSource = result.source;
+      layouts.unshift(result.layout);
+    }
+  }
+  return { source: balancedSource, changed: layouts.length > 0, layouts };
+}
+
+function balanceExtractedDiagram(
+  source: string,
+  extracted: ExtractedDiagram,
+  colourScheme: ColourSchemeName
+): BalanceDocumentResult {
+  const diagram = parseDiagram(extracted.source, colourScheme);
+  if (diagram.type !== "flowchart") {
+    return { source, changed: false, layout: null };
+  }
+  const layout = applyBalancedFlowchartLayout(diagram);
+  if (!layout) {
+    return { source, changed: false, layout: null };
+  }
+
+  const lines = source.split("\n");
+  const openerIndex = extracted.fenceRange.start.line - 1;
+  const closeIndex = extracted.fenceRange.end.line - 1;
+  const opener = lines[openerIndex].endsWith("\r") ? lines[openerIndex].slice(0, -1) : lines[openerIndex];
+  const quote = opener.slice(0, opener.length - stripFencePrefix(opener).length);
+  const carriageReturns = lines.filter((line) => line.endsWith("\r")).length;
+  const lineEnd = carriageReturns * 2 > lines.length - 1 ? "\r" : "";
+  const replacement = serializeDiagram(diagram).split("\n").map((line) => `${quote}${line}${lineEnd}`);
+  lines.splice(openerIndex + 1, closeIndex - openerIndex - 1, ...replacement);
+  return { source: lines.join("\n"), changed: true, layout };
+}
+
+/** Applies the explicit wrapped-layout fix to one lint-addressed diagram fence. */
+export function balanceDocumentDiagram(source: string, diagramIndex: number): BalanceDocumentResult {
+  const resolved = validateDocumentSource(source);
+  const extracted = extractDiagramFences(source).find((diagram) => diagram.index === diagramIndex);
+  if (!extracted) {
+    throw new Error(`Diagram ${diagramIndex + 1} does not exist.`);
+  }
+  return balanceExtractedDiagram(source, extracted, resolved.colourScheme);
 }
 
 /** Rewrites a diagram's `id:` line, adding one when the diagram has no id yet. */

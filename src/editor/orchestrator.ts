@@ -82,6 +82,8 @@ import {
 import { parseTextShapeInlineRuns, renderTextShapeContent } from "../core/diagrams/text-shape";
 import {
   bakeDocumentSource,
+  balanceDocumentDiagram,
+  balanceDocumentLinearFlows,
   hashSource,
   spliceBakedFences,
   extractDiagramFences,
@@ -386,16 +388,33 @@ export class BrowserRuntime {
    */
   private bakeOnOpen(): void {
     const { baked, failed } = this.session.bake();
-    // Linting follows a bake because the geometry has just changed and nobody has seen the result.
-    // It is also available on demand, for a reader who wants it without having changed anything.
-    if (baked || failed || this.lintRequestedByUrl()) {
+    const autowrapRequested = this.skrybActionRequestedByUrl("autowrap");
+    let wrapped = false;
+    if (!failed && autowrapRequested) {
+      try {
+        const result = balanceDocumentLinearFlows(this.getSource());
+        if (result.changed) {
+          this.setSource(result.source);
+          wrapped = true;
+        }
+      } catch {
+        // The refreshed lint report below carries the actionable schema error.
+      }
+    }
+    // Linting follows source-changing operations and is also available on demand. Autowrap always
+    // emits a report so a browser-driven author can verify that the warning was removed.
+    if (baked || failed || wrapped || autowrapRequested || this.skrybActionRequestedByUrl("lint")) {
       this.writeLintReport();
     }
   }
 
-  private lintRequestedByUrl(): boolean {
+  private skrybActionRequestedByUrl(action: "lint" | "autowrap"): boolean {
     const search = globalThis.location?.search || "";
-    return /(^|[?&])skryb-lint(=|&|$)/.test(search);
+    const parameters = new URLSearchParams(search);
+    if (parameters.getAll("skryb").includes(action)) {
+      return true;
+    }
+    return action === "lint" && /(^|[?&])skryb-lint(=|&|$)/.test(search);
   }
 
   /**
@@ -477,6 +496,31 @@ export class BrowserRuntime {
         });
       }
       body.append(item);
+      if (message.suggestedAction?.id === "wrap-linear-flow") {
+        const action = document.createElement("button");
+        action.type = "button";
+        action.textContent = message.suggestedAction.label;
+        action.addEventListener("click", () => {
+          const balanced = balanceDocumentDiagram(this.getSource(), message.suggestedAction!.diagramIndex);
+          if (!balanced.changed || !balanced.layout) {
+            return;
+          }
+          const { before, after } = balanced.layout;
+          const confirmed = globalThis.confirm(
+            `Preview: fitted content changes from ${before.width} by ${before.height} (${before.aspectRatio.toFixed(1)}:1) ` +
+            `to ${after.width} by ${after.height} (${after.aspectRatio.toFixed(1)}:1).\n\n` +
+            "This replaces node positions, connector anchors, routes, and waypoints. Apply the wrapped layout?"
+          );
+          if (!confirmed) {
+            return;
+          }
+          dialog.close();
+          this.renderDocument(balanced.source);
+          this.sourceEditor?.syncSource(balanced.source);
+          this.writeLintReport();
+        });
+        body.append(action);
+      }
     }
     const close = document.createElement("button");
     close.type = "button";

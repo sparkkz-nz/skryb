@@ -516,6 +516,85 @@ These values are guides rather than limits. Give a key node an explicit `size`
 when its label needs more room; use a deliberate anchor or waypoint only where
 the route itself carries meaning, such as a feedback edge or side branch.
 
+#### Wrapping a long linear flow
+
+After geometry has baked, lint diagnoses fitted content that remains a very long
+strip. `unbalanced-aspect-ratio` requires at least eight nodes, a dominant path
+of at least eight nodes covering 75% of the graph, and no more than 20% branching
+nodes. Horizontal content warns at a 4:1 fitted ratio; vertical content warns at
+5:1. Cycles, containers, small diagrams, branching trees, and wide disconnected
+maps are not candidates. Canvas dimensions and empty canvas space do not affect
+the diagnosis.
+
+The warning is advice, not automatic layout. From **Check document**, choose the
+suggested **Wrap this … flow** action. The confirmation shows the before/after
+fitted dimensions and warns that the fix replaces every authored position,
+anchor, route, and waypoint. Confirming writes deterministic, grid-snapped rows
+or columns, with orthogonal transitions routed outside the occupied lines. The
+result remains ordinary `layout: right` or `layout: down` YAML and applying the
+fix again is a no-op. A fixed canvas only expands when the wrapped content needs
+more room; an automatic canvas remains automatic.
+
+A portable agent workflow must opt in explicitly. Open the document with
+`?skryb=lint` and inspect `template[data-skryb-lint]`. Only when that report
+contains `unbalanced-aspect-ratio`, reopen the original document with
+`?skryb=autowrap`. The hosted runtime then wraps every eligible flow, writes the
+updated canonical Markdown to `template#source`, and refreshes the lint report.
+Extract the source through browser automation or Chromium DOM dumping and save
+it over the original file. Running autowrap on the result again is a no-op; no
+repository checkout or local CLI is required.
+
+For example, author this eight-stage request path as a graph rather than trying
+to guess wrapped coordinates. Open it once to bake and check it, then use the
+suggested action if the resulting strip is difficult to read:
+
+```yaml
+type: flowchart
+id: checkout-request
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: browser
+    label: Browser
+    shape: rounded-rectangle
+  - id: gateway
+    label: API gateway
+    shape: rounded-rectangle
+  - id: auth
+    label: Authorisation
+    shape: rounded-rectangle
+  - id: checkout
+    label: Checkout API
+    shape: rounded-rectangle
+  - id: pricing
+    label: Pricing
+    shape: rounded-rectangle
+  - id: inventory
+    label: Inventory
+    shape: rounded-rectangle
+  - id: payment
+    label: Payment
+    shape: rounded-rectangle
+  - id: receipt
+    label: Receipt store
+    shape: database
+edges:
+  - source: browser
+    target: gateway
+  - source: gateway
+    target: auth
+  - source: auth
+    target: checkout
+  - source: checkout
+    target: pricing
+  - source: pricing
+    target: inventory
+  - source: inventory
+    target: payment
+  - source: payment
+    target: receipt
+```
+
 ### Named styles
 
 Repeating the same inline `style: { ... }` across many nodes is where a large
@@ -965,8 +1044,9 @@ zero-based UTF-16 `offset` values. Ranges are start-inclusive and end-exclusive,
 matching browser text selection APIs.
 
 The report is written only when there was something to report on - a bake
-happened, `?skryb-lint` was on the URL, or a reader chose **Check document** from
-the document menu. It is live derived metadata: writing or replacing it does not
+happened, `?skryb=lint` (or legacy `?skryb-lint`) was on the URL,
+`?skryb=autowrap` was requested, or a reader chose **Check document** from the
+document menu. It is live derived metadata: writing or replacing it does not
 mark the document as changed or cause a save prompt. If the source was already
 changed by editing or layout baking, it remains changed. An explicit Save As
 includes the current report; a document that needed neither baking nor checking
@@ -995,7 +1075,10 @@ addressable by `diagramIndex`, and a rendered `:::diagram` reference points back
 to the original fence rather than the reference directive.
 
 The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
-`edge-crosses-node`, `edge-label-overlap`, and `label-overflow`. Only errors are blocking: warnings
+`edge-crosses-node`, `edge-label-overlap`, `label-overflow`, and
+`unbalanced-aspect-ratio`. The last rule may carry a `suggestedAction` with the
+`wrap-linear-flow` id and zero-based diagram index; lint itself never executes
+it. Only errors are blocking: warnings
 describe things a reader would notice, but a generated document is not held up
 on aesthetics. Message text remains stable for consumers that do not use the
 structured location.
@@ -1006,6 +1089,7 @@ is available:
 ```sh
 npm run lint -- document.md
 npm run lint -- document.md --json
+npm run lint -- document.md --fix-balanced
 ```
 
 `--json` emits aggregate `errors` and `warnings` plus a `documents` array. Each
