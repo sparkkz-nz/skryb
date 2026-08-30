@@ -207,6 +207,18 @@ Choose the direction from the content: `right` for a pipeline or request path,
 `down` for a decision tree or a sequence of steps. A diagram wider than about
 five stages usually reads better as `down`.
 
+Lint reports `unbalanced-aspect-ratio` when fitted content—not empty canvas—is a
+very long strip and at least eight nodes form a sufficiently linear dominant
+path. This is advisory and never changes source by itself. In **Check document**,
+use **Wrap this horizontal flow** or **Wrap this vertical flow**, review the
+before/after dimensions, and confirm only if replacing authored positions,
+anchors, routes, and waypoints is acceptable. The result is ordinary canonical,
+grid-aligned geometry; running the action again makes no change. An authoring
+agent working anywhere first opens the portable document with `?skryb=lint` and
+reads its report. If it contains `unbalanced-aspect-ratio`, open the original
+file again with `?skryb=autowrap`; the runtime wraps every eligible flow, refreshes
+the report, and exposes the updated Markdown in `template#source`.
+
 Keep the `layout` key in the baked source. A fully placed diagram is left
 untouched - it is not even rewritten - but the key is what places the next node
 you add, and what marks the diagram as yours to regenerate. Removing it is how a
@@ -342,8 +354,16 @@ const { source, lint } = await page.evaluate(() => ({
 }));
 ```
 
-Write `source` back over the original file. Add `?skryb-lint` to the URL to force
-a check even when nothing needed baking.
+Write `source` back over the original file. Add `?skryb=lint` to the URL to force
+a check even when nothing needed baking. The legacy `?skryb-lint` form remains
+supported.
+
+If that report contains `unbalanced-aspect-ratio`, reopen the original document
+with `?skryb=autowrap`. This explicit mode wraps every eligible flow without a UI
+confirmation, writes the changed canonical Markdown to `template#source`, and
+replaces `template[data-skryb-lint]` with the post-wrap report. Extract and save
+the source in exactly the same way, then require a report with no unexpected
+warnings. Reopening the wrapped result with `?skryb=autowrap` is a no-op.
 
 ### 2. Any Chromium browser, no automation library
 
@@ -353,7 +373,7 @@ DOM, which contains both templates:
 ```sh
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --headless --disable-gpu --virtual-time-budget=5000 \
-  --dump-dom "file:///abs/path/doc.html?skryb-lint" > dom.html
+  --dump-dom "file:///abs/path/doc.html?skryb=lint" > dom.html
 ```
 
 Extract `template#source` and `template[data-skryb-lint]` from `dom.html`, decode the
@@ -388,6 +408,7 @@ comments and all. Nothing outside the diagram fences is ever rewritten.
 | `edge-crosses-node` | warning | An edge's route passes through a node that is neither its source nor its target. |
 | `edge-label-overlap` | warning | Every deterministic position for an edge label conflicts with a node, another label, or another route; the fallback label remains visible. |
 | `label-overflow` | warning | A label cannot fit inside its shape even with its padding given up. |
+| `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip and the graph is sufficiently linear to offer an explicit wrapped-layout action. |
 
 Only errors are blocking; warnings are advisory, so a document is never held up
 on aesthetics. A node with no connector is never reported - a `text` shape used

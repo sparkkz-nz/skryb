@@ -1,3 +1,6 @@
+import { spawnSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { assert, core, fs, test, testDirectory } from "./support/core-context.mjs";
 
 const __dirname = testDirectory;
@@ -120,19 +123,63 @@ function nestedFlowchartFixture(groupCount, childrenPerGroup) {
   return lintSource(lines);
 }
 
-function assertLintWithinBudget(source, budgetMs) {
+function assertLintWithinBudget(source, budgetMs, expectedRules = []) {
   const started = performance.now();
   const result = lintDocument(source);
   const elapsed = performance.now() - started;
 
   assert.equal(result.errorCount, 0, formatLintMessages(result));
-  assert.equal(result.warningCount, 0, formatLintMessages(result));
-  assert.deepEqual(JSON.parse(JSON.stringify(result.messages)), []);
+  assert.deepEqual(result.messages.map((message) => message.rule), expectedRules);
   assert.ok(elapsed < budgetMs, `expected lint to finish within ${budgetMs / 1000} seconds, took ${Math.round(elapsed)}ms`);
 }
 
+test("lint reports a source-addressed explicit action for an unbalanced linear flow", () => {
+  const result = lintDocument(linearFlowchartFixture(12));
+  const finding = result.messages.find((message) => message.rule === "unbalanced-aspect-ratio");
+
+  assert.ok(finding);
+  assert.equal(finding.severity, "warning");
+  assert.equal(finding.location.diagramIndex, 0);
+  assert.deepEqual(finding.location.subjects, []);
+  assert.deepEqual(finding.suggestedAction, {
+    id: "wrap-linear-flow",
+    label: "Wrap this vertical flow",
+    diagramIndex: 0
+  });
+  assert.match(finding.message, /fitted content/i);
+  assert.match(finding.message, /dominant path contains 12 of 12 nodes/i);
+});
+
+test("the CLI applies the explicit fix idempotently and refuses unsafe embedded entities", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "skryb-balanced-cli-"));
+  const repositoryRoot = path.resolve(__dirname, "..");
+  const run = (file) => spawnSync(process.execPath, ["scripts/lint.mjs", file, "--fix-balanced"], {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  });
+  try {
+    const markdown = path.join(directory, "flow.md");
+    fs.writeFileSync(markdown, linearFlowchartFixture(12));
+    const fixed = run(markdown);
+    assert.equal(fixed.status, 0, fixed.stderr || fixed.stdout);
+    assert.match(fixed.stdout, /applied wrapped layout to 1 diagram/);
+    const once = fs.readFileSync(markdown, "utf8");
+    assert.equal(run(markdown).status, 0);
+    assert.equal(fs.readFileSync(markdown, "utf8"), once);
+
+    const html = path.join(directory, "flow.html");
+    const unsafeSource = linearFlowchartFixture(12).replace("label: Node 0", "label: Node &copy; 0");
+    fs.writeFileSync(html, `<template id="source">${unsafeSource}</template>`);
+    const refused = run(html);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stdout, /cannot be rewritten safely/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("500-node flat flowchart lint stays within its CI performance budget", { timeout: 15_000 }, () => {
-  assertLintWithinBudget(linearFlowchartFixture(500), 10_000);
+  assertLintWithinBudget(linearFlowchartFixture(500), 10_000, ["unbalanced-aspect-ratio"]);
 });
 
 test("500-node nested flowchart lint stays within its CI performance budget", { timeout: 15_000 }, () => {
@@ -165,7 +212,12 @@ test("flat and nested lint fixtures keep warning content and order deterministic
     "edges:"
   ]);
 
-  assert.deepEqual(JSON.parse(JSON.stringify(lintDocument(flat).messages)), []);
+  assert.deepEqual(lintDocument(flat).messages.map((message) => message.rule), ["unbalanced-aspect-ratio"]);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(lintDocument(flat).messages)),
+    JSON.parse(JSON.stringify(lintDocument(flat).messages)),
+    "the advisory content and source location are deterministic"
+  );
   const nestedMessages = lintDocument(nested).messages;
   assert.deepEqual(
     JSON.parse(JSON.stringify(nestedMessages.map(({ location: _location, ...message }) => message))),

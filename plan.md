@@ -418,7 +418,7 @@ Recorded on 2026-08-30 for `feat/diagram-descriptions`:
 
 ## Block 9 — Balanced aspect-ratio lint and wrapped linear layout
 
-**Status:** Planned  
+**Status:** Complete
 **Suggested branch:** `feat/balanced-diagram-layout`  
 **Dependencies:** Blocks 2, 6, and the coordinate work in Block 10 may be
 implemented first if investigation shows it is required
@@ -445,19 +445,34 @@ as shorter rows or columns with readable connectors.
 
 ### Investigation and decision record
 
-Before fixing, record fixtures and choose defaults for:
+The implemented defaults and fixture measurements are:
 
-- Fitted aspect-ratio threshold, with separate consideration for horizontal and
-  vertical flows.
-- Minimum node count and minimum dominant path length.
-- A linearity score based on the dominant path, degree distribution, branching,
-  cycles, and proportion of nodes represented by that path.
-- Target row/column count or target aspect ratio.
-- Whether wrapping is expressed as expanded layout settings, a one-shot relayout
-  modifier, or an editor/CLI fix that bakes ordinary positions. Do not add
-  multiple overlapping syntax forms.
-- Treatment of pinned nodes, containers, waypoints, deliberate back-edges, and
-  manually authored anchors.
+- Fitted horizontal content warns at `4:1`; vertical content warns at `5:1`.
+  Canvas dimensions are deliberately excluded.
+- Candidates require at least eight nodes, a dominant path of at least eight
+  nodes covering 75% of the graph, and no more than 20% branching nodes. Cycles,
+  containers, disconnected wide maps, and strongly branching trees are excluded.
+- The fix chooses a deterministic number of rows or columns from node count and
+  configured along/across gaps, targeting a compact fitted ratio rather than a
+  hard canvas ratio. The 12-node default-size fixtures improve from `43:1` to
+  `1.6:1` horizontally and from `10.8:1` to about `1:1` vertically.
+- Wrapping is an explicit fix, not new source syntax. The editor shows fitted
+  before/after dimensions and requires confirmation. Portable authoring agents
+  first request `?skryb=lint`, then request `?skryb=autowrap` only after finding
+  the aspect-ratio warning; the runtime rewrites every eligible flow and emits
+  the refreshed source and report through the same DOM templates. A repository
+  checkout can alternatively use `--fix-balanced`.
+- The fix intentionally replaces all pinned positions, authored anchors, routes,
+  and waypoints, then bakes ordinary canonical geometry. Containers and cycles
+  are not offered the action. Dominant-path stages order side branches beside
+  their attachment, and cross-line connectors use an outside waypoint.
+- On the 500-node flat fixture, detection completed in under 70 ms in repeated
+  test runs and remained within the existing 10-second CI guard.
+- The browser feature increased artifacts from the `origin/main` baseline of
+  `206,956` raw / `58,491` gzip / `50,284` brotli bytes to `213,553` /
+  `60,788` / `52,187` for hosted, with the self-packaged artifact increasing
+  from `422,426` / `117,455` / `60,257` to `435,706` / `121,979` / `62,357`.
+  Budgets were raised narrowly to retain approximately the previous headroom.
 
 ### Work
 

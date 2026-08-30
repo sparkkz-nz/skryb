@@ -6,7 +6,10 @@ const {
   flattenFlowchartNodes,
   parseDiagram,
   serializeDiagram,
-  lintDocument
+  lintDocument,
+  analyseBalancedLayoutCandidate,
+  applyBalancedFlowchartLayout,
+  balanceDocumentDiagram
 } = core;
 
 function readTemplateSource(filePath) {
@@ -397,5 +400,137 @@ test("a laid-out diagram lints clean", () => {
 
   assert.equal(result.errorCount, 0);
   assert.equal(result.warningCount, 0);
+});
+
+function longLinearDiagram(direction = "horizontal", count = 12) {
+  const horizontal = direction === "horizontal";
+  return parseDiagram(flowchartSource([
+    "id: long-flow",
+    "layout: right",
+    "canvas: auto",
+    "nodes:",
+    ...Array.from({ length: count }, (_, index) => [
+      `  - id: n${index}`,
+      `    label: Node ${index}`,
+      "    shape: rounded-rectangle",
+      `    position: { x: ${horizontal ? index * 310 : 40}, y: ${horizontal ? 40 : index * 180} }`,
+      "    size: { width: 190, height: 80 }"
+    ]).flat(),
+    "edges:",
+    ...Array.from({ length: count - 1 }, (_, index) => [
+      `  - source: n${index}`,
+      `    target: n${index + 1}`,
+      `    sourceAnchor: ${horizontal ? "right" : "bottom"}`,
+      `    targetAnchor: ${horizontal ? "left" : "top"}`
+    ]).flat()
+  ]));
+}
+
+test("balanced-layout analysis diagnoses fitted horizontal and vertical linear content", () => {
+  const horizontal = analyseBalancedLayoutCandidate(longLinearDiagram("horizontal"));
+  const vertical = analyseBalancedLayoutCandidate(longLinearDiagram("vertical"));
+
+  assert.equal(horizontal.direction, "horizontal");
+  assert.equal(vertical.direction, "vertical");
+  assert.equal(horizontal.dominantPathLength, 12);
+  assert.equal(vertical.pathCoverage, 1);
+});
+
+test("balanced-layout analysis ignores small, balanced, branching, and disconnected wide maps", () => {
+  const small = longLinearDiagram("horizontal", 7);
+  const balanced = longLinearDiagram("horizontal");
+  balanced.nodes.forEach((node, index) => { node.position = { x: (index % 4) * 310, y: Math.floor(index / 4) * 140 }; });
+  const branching = longLinearDiagram("horizontal");
+  branching.edges = branching.nodes.slice(1).map((node) => ({
+    source: "n0", target: node.id, sourceAnchor: "right", targetAnchor: "left"
+  }));
+  const wideMap = longLinearDiagram("horizontal");
+  wideMap.edges = [];
+  const disconnected = longLinearDiagram("horizontal");
+  disconnected.nodes.push(
+    { id: "note-a", label: "Note A", shape: "text", position: { x: 40, y: 180 } },
+    { id: "note-b", label: "Note B", shape: "text", position: { x: 350, y: 180 } },
+    { id: "note-c", label: "Note C", shape: "text", position: { x: 660, y: 180 } }
+  );
+  const cyclic = longLinearDiagram("horizontal");
+  cyclic.edges.push({ source: "n11", target: "n0", sourceAnchor: "right", targetAnchor: "left" });
+  const selfCyclic = longLinearDiagram("horizontal");
+  selfCyclic.edges.push({ source: "n0", target: "n0", sourceAnchor: "right", targetAnchor: "left" });
+
+  assert.equal(analyseBalancedLayoutCandidate(small), null);
+  assert.equal(analyseBalancedLayoutCandidate(balanced), null);
+  assert.equal(analyseBalancedLayoutCandidate(branching), null);
+  assert.equal(analyseBalancedLayoutCandidate(wideMap), null);
+  assert.equal(analyseBalancedLayoutCandidate(disconnected), null);
+  assert.equal(analyseBalancedLayoutCandidate(cyclic), null);
+  assert.equal(analyseBalancedLayoutCandidate(selfCyclic), null);
+});
+
+test("wrapped layout is deterministic, grid-aligned, balanced, and routes row transitions outside nodes", () => {
+  const first = longLinearDiagram("horizontal");
+  first.canvas.grid = 10;
+  const result = applyBalancedFlowchartLayout(first);
+  const second = longLinearDiagram("horizontal");
+  second.canvas.grid = 10;
+  applyBalancedFlowchartLayout(second);
+
+  assert.ok(result.after.aspectRatio < result.before.aspectRatio);
+  assert.ok(result.after.aspectRatio < 4);
+  assert.ok(first.nodes.every((node) => node.position.x % 10 === 0 && node.position.y % 10 === 0));
+  assert.deepEqual(JSON.parse(JSON.stringify(first)), JSON.parse(JSON.stringify(second)));
+  const transition = first.edges.find((edge) => edge.waypoint);
+  assert.ok(transition, "a row transition receives an explicit outside route");
+  assert.equal(transition.route, "orthogonal");
+  assert.equal(transition.sourceAnchor, "right");
+  assert.equal(transition.targetAnchor, "top");
+  const geometricWarnings = lintDocument(["```diagram", serializeDiagram(first), "```"].join("\n")).messages
+    .filter((message) => ["node-overlap", "edge-crosses-node"].includes(message.rule));
+  assert.deepEqual(geometricWarnings, []);
+});
+
+test("vertical wrapping uses columns and expands but never shrinks a fixed canvas", () => {
+  const diagram = longLinearDiagram("vertical");
+  diagram.canvas = { auto: false, width: 300, height: 300, grid: 10 };
+  const result = applyBalancedFlowchartLayout(diagram);
+  const transition = diagram.edges.find((edge) => edge.waypoint);
+
+  assert.ok(result.after.aspectRatio < result.before.aspectRatio);
+  assert.ok(diagram.canvas.width >= result.after.width + 80);
+  assert.ok(diagram.canvas.height >= result.after.height + 80);
+  assert.equal(transition.sourceAnchor, "bottom");
+  assert.equal(transition.targetAnchor, "left");
+  assert.equal(transition.waypoint.x % 10, 0);
+  assert.equal(transition.waypoint.y % 10, 0);
+});
+
+test("wrapped layout keeps a side branch beside its dominant-path attachment stage", () => {
+  const diagram = longLinearDiagram("horizontal");
+  diagram.nodes.push({
+    id: "branch", label: "Side branch", shape: "rounded-rectangle",
+    position: { x: 1280, y: 220 }, size: { width: 190, height: 80 }
+  });
+  diagram.edges.push(
+    { source: "n4", target: "branch", sourceAnchor: "right", targetAnchor: "left" },
+    { source: "branch", target: "n6", sourceAnchor: "right", targetAnchor: "left" }
+  );
+  applyBalancedFlowchartLayout(diagram);
+  const byId = new Map(diagram.nodes.map((node) => [node.id, node]));
+  const attachment = byId.get("n4").position;
+  const branch = byId.get("branch").position;
+  const step = 310;
+
+  assert.ok(Math.abs(branch.x - attachment.x) <= step && Math.abs(branch.y - attachment.y) <= 140);
+});
+
+test("the explicit source fix bakes once and is idempotent after serialization", () => {
+  const source = ["# Document", "", "```diagram", serializeDiagram(longLinearDiagram("horizontal")), "```", "", "Unchanged prose."].join("\n");
+  const first = balanceDocumentDiagram(source, 0);
+  const second = balanceDocumentDiagram(first.source, 0);
+
+  assert.ok(first.changed);
+  assert.equal(second.changed, false);
+  assert.equal(second.source, first.source);
+  assert.match(first.source, /Unchanged prose\.$/);
+  assert.equal(lintDocument(first.source).messages.some((message) => message.rule === "unbalanced-aspect-ratio"), false);
 });
 
