@@ -36,26 +36,21 @@ colourScheme: ice
 | `colourScheme` | `classic`, `fire`, `ice`, `midnight`, `paper` | `classic` |
 | `doctype` | `document`, `diagram` | `document` |
 
-Unknown or malformed frontmatter is not a supported extension point. The
-runtime reports unsupported `theme`, `colourScheme`, and `doctype` values.
-`auto` follows the viewer's system preference. The selected colour scheme
-supplies designed light and dark variants to document chrome, components,
-diagrams, edges, and markers. The document menu can change any of the three;
-those changes become canonical when the document is saved.
+The runtime reports malformed frontmatter and unsupported `theme`,
+`colourScheme`, or `doctype` values. `auto` follows the viewer's system
+preference. The selected colour scheme supplies light and dark variants for
+document chrome, components, diagrams, edges, and markers. Changes made through
+the document menu become canonical when the document is saved.
 
-`doctype: diagram` opens the document with its first diagram already expanded
-to fill the window, which suits a file that exists to hold one diagram. It is a
-presentation default rather than a separate format: the document is otherwise
-unchanged, the rest of its Markdown still renders behind the expanded frame,
-and collapsing the frame reveals it. Every editing, export, and save feature
-behaves identically under either doctype.
+`doctype: diagram` opens the first diagram at full-window size. It is a
+presentation default, not a separate format. Other Markdown still renders and
+becomes visible when the diagram is collapsed. Editing, export, and save
+behaviour is unchanged.
 
 ## Markdown compatibility
 
-Skryb supports a deliberately defined compatibility target: CommonMark-style
-document structure plus the GFM additions listed below. It is not an open-ended
-Markdown implementation; unsupported syntax remains visible source instead of
-being silently removed or converted.
+Skryb supports CommonMark-style document structure and the GFM additions listed
+below. Unsupported syntax remains visible in the source and is not converted.
 
 | Construct | Status | Notes |
 | --- | --- | --- |
@@ -68,10 +63,10 @@ being silently removed or converted.
 | Links | Supported with safe URLs | Relative URLs, fragments, `http:`, `https:`, and `mailto:` are rendered. Other schemes, including `javascript:`, stay readable Markdown source. |
 | Fenced code blocks | Supported | Three or more backticks open a block; the closing run must be at least as long, so a longer fence can contain a shorter one. The fence language produces a `language-<name>` class on `<code>`, and a recognised language is syntax highlighted. |
 | Tables | Supported | Header rows, left/centre/right alignment, and escaped cell separators (`\|`) are supported. |
-| Task lists | Supported | `- [ ]` and `- [x]` render as disabled checkboxes because prose editing is not available. |
+| Task lists | Supported | `- [ ]` and `- [x]` render as disabled checkboxes. Prose editing is not available. |
 | Images | Supported with safe URLs | Relative images and safe `http:`, `https:`, or `data:image/(gif\|jpeg\|png\|webp);base64,...` sources render with their Markdown alt text. |
 | Raw HTML | Intentionally literal | HTML is escaped and displayed as source; it is never executed or interpreted. |
-| Other Markdown extensions | Intentionally literal | Keep unsupported input readable rather than relying on undocumented output. |
+| Other Markdown extensions | Intentionally literal | Unsupported input is displayed as source. |
 
 `diagram` remains a skryb-specific fence rather than an ordinary code block.
 All other fenced blocks, including a `text` block containing the word `diagram`,
@@ -113,9 +108,9 @@ closing annotation, so `::: (panel)` and `::: End panel` close exactly like
 `:::`. Annotations are for human readability only and are not checked against
 the opening directive name.
 
-Void directives hold no content and therefore take **no closing fence**.
-`:::diagram` and `:::toc` are void, and each is a single self-contained line. A
-closing `:::` written after one out of habit is tolerated and produces nothing.
+Void directives take **no closing fence**. `:::diagram` and `:::toc` are each a
+single self-contained line. An extra closing `:::` after either directive is
+ignored.
 
 Directives nest. Invalid attributes, unknown directive names, unclosed
 directives, and layout content that does not follow the rules below remain
@@ -236,25 +231,21 @@ A referenced diagram must have exactly one matching definition. When a document
 uses a diagram reference, every diagram fence in that document must declare an
 `id`. `:::diagram` is a void directive, so it takes no closing `:::`.
 
-For a large or detailed diagram, strongly prefer this pattern: put the
-`:::diagram` reference beside the explanatory prose and collect its fenced
-definition at the end of the document. Keeping large YAML blocks out of the
-reading flow makes the canonical source substantially easier to edit and
-review, while the reference preserves the diagram's intended rendered position.
+For a large or detailed diagram, put the `:::diagram` reference beside the
+explanatory prose and its fenced definition at the end of the document. The
+reference determines the rendered position.
 
 ### Captions, anchors, and cross-references
 
-A diagram's `id` is also its anchor, so `#payment-flow` deep-links to it exactly
-as `#some-heading` links to a heading. A diagram id wins a collision with a
-heading slug - it is explicitly declared and already load-bearing for `{ref=}`
-and `:::diagram`, whereas a heading slug is derived - so the heading takes the
-numeric suffix a repeated heading would get.
+A diagram's `id` is also its anchor, so `#payment-flow` links directly to it.
+When a diagram id matches a generated heading slug, the diagram retains the id
+and the heading slug receives a numeric suffix.
 
 A `caption` renders below the diagram, centred, as a `<figcaption>` inside the
-diagram's own `<figure>`. It is hidden while the frame is expanded, because a
-full-window frame is a working view rather than a document view. Caption text
-renders through the inline Markdown subset, so `**bold**` and `` `code` `` work
-but block content does not.
+diagram's own `<figure>`. It is hidden while the frame is expanded, since the
+expanded frame is a working view for editing the diagram, not the document
+view. Caption text renders through the inline Markdown subset, so `**bold**`
+and `` `code` `` work but block content does not.
 
 ```yaml
 type: flowchart
@@ -262,21 +253,18 @@ id: auth-flow
 caption: "Figure #: Authentication flow"
 ```
 
-`#` is replaced by the figure number. A caption without one is simply a title:
+`#` is replaced by the figure number. A caption without one is a title:
 
 ```yaml
 caption: Authentication flow
 ```
 
-**Only a caption containing the placeholder consumes a number.** That keeps
-numbering contiguous: an unnumbered titled figure sitting between Figure 1 and
-Figure 2 does not create a visible gap. Write `\#` for a literal `#`.
+**Only a caption containing the placeholder consumes a number.** Write `\#` for
+a literal `#`.
 
 Numbers follow **render order, not definition order**. A diagram referenced with
-`:::diagram` is numbered where the reference sits, not where its fenced
-definition appears, which is what makes the recommended
-reference-beside-the-prose pattern number correctly. A diagram may be referenced
-at most once, so each has exactly one number.
+`:::diagram` is numbered at the reference, not at its fenced definition. A
+diagram may be referenced at most once.
 
 `{ref=auth-flow}` renders a link to the diagram, whose text is:
 
@@ -285,9 +273,7 @@ at most once, so each has exactly one number.
 - **the caption text**, when it has none, so `See {ref=auth-flow}` renders as
   "See Authentication flow".
 
-A reference to an unknown or uncaptioned id renders a visible error rather than
-nothing, because a silently wrong cross-reference is worse than a visible
-failure.
+A reference to an unknown or uncaptioned id renders a visible error.
 
 There is a single figure counter shared by every diagram type.
 
@@ -317,10 +303,8 @@ content, so like `:::diagram` it takes no closing fence:
 | `depth` | Deepest heading level to list, `1` to `6`. Default `3`. |
 | `diagrams` | `true` or `false` (default). Lists captioned diagrams alongside headings, nested under the heading they fall within. |
 
-Only captioned diagrams are ever listed: the caption, with its number resolved,
-is the human-facing name, and a diagram without one would otherwise surface a
-raw id as a reading-list entry. Diagrams are listed in render order, the same
-rule numbering follows and for the same reason.
+Only captioned diagrams are listed. Each entry uses the resolved caption and
+appears in render order.
 
 The directive may appear anywhere, including before the headings it lists.
 
@@ -354,8 +338,8 @@ Set `grid: 5` on a flowchart unless there is a reason not to. Snapping keeps
 dragged nodes, resized nodes, waypoints, and callout targets on shared
 coordinates, so edges meet anchors squarely and node edges line up instead of
 missing each other by a pixel or two. A grid of `5` is fine enough to place
-anything precisely while still doing the alignment work for you; larger values
-align more aggressively but make small adjustments coarse.
+anything precisely while still aligning automatically; larger values align
+more aggressively but make small adjustments coarse.
 
 #### Derived canvas bounds
 
@@ -374,15 +358,13 @@ canvas:
 ```
 
 A derived canvas is recomputed on every load as the content extent plus 40
-units of padding, and it both grows and shrinks, so deleting a node from the
-right-hand edge does not leave dead space in exports. It round-trips as `auto`:
-the computed `width` and `height` are never written back to the source.
+units of padding. It grows or shrinks when the content changes. It serialises as
+`auto`; computed `width` and `height` values are not written to the source.
 
-Prefer `canvas: auto` when authoring. The canvas is only the SVG `viewBox`, so
-its only lasting effects are export and print bounds and the diagram's aspect
-ratio — it is not a boundary nodes must sit inside. Give explicit `width` and
-`height` when a fixed aspect ratio matters, for instance so several diagrams in
-one document share a shape.
+Prefer `canvas: auto` when authoring. The canvas defines the SVG `viewBox`,
+export and print bounds, and the diagram aspect ratio. It does not constrain node
+positions. Set explicit `width` and `height` when a fixed aspect ratio is
+required.
 
 ### Auto-layout
 
@@ -409,43 +391,34 @@ edges:
 
 `layout` takes `right`, `down`, `left`, or `up`.
 
-**`layout` is what makes a diagram machine-managed, and that is the whole of the
-difference.** With it, nodes may omit `position` and edges may omit either
-anchor, and the engine fills in whatever is missing. Without it, a node with no
-`position` or an edge with no anchors is an error - because a drawing that
-silently stacks every node at the origin is worse than one that refuses to
-render.
+**`layout` determines whether a diagram is machine-managed.** When it is set,
+nodes may omit `position` and edges may omit either anchor, and the engine
+fills in whatever is missing. Without it, a node with no `position` or an edge
+with no anchors is an error.
 
-**This is a seeding step, not a layout mode.** Layout runs when a diagram is
-loaded and something is missing, fills in exactly what is missing, and the
-result goes into the model immediately. Serialisation always writes the current
-positions, so layout can never fight a hand edit, and there is no
-`layout: manual` and no state to track.
+**Layout runs only when geometry is missing.** It fills in missing values when
+the diagram loads and updates the model immediately. Serialisation writes the
+current positions. Layout does not override existing positions; there is no
+`layout: manual` mode or persistent layout state.
 
-**Bake it into the source before you review it.** Until you do, the positions
-exist only while the document is open and the file still says nothing about
-where anything is - so there is nothing in the source to adjust. Use one of the
-browser review routes to read the baked `template#source` and write it back over
-the original file. Only fences declaring a `layout` are rewritten; a diagram
-without one is copied through untouched, comments and all.
+**Bake positions into the source before reviewing the diagram.** Before baking,
+generated positions exist only in the open document. Use one of the browser
+review routes to read the baked `template#source` and write it back to the
+original file. Only fences declaring a `layout` are rewritten; a diagram
+without one is copied unchanged, including its comments.
 
-**Keep the `layout` key after baking.** It becomes a no-op for a fully specified
-diagram, but it declares *how to place anything left unspecified*, so a node
-appended later with no coordinates is placed on the next bake. That is what
-makes incremental edits work without re-laying out the whole diagram. Delete it
-only to freeze a diagram deliberately.
+**Keep the `layout` key after baking.** It has no effect on a fully specified
+diagram, but controls the placement of geometry omitted by later edits. Delete
+the key only when no further automatic layout is required.
 
 The rules:
 
-- **An existing `position` always wins.** It is never moved and never re-flowed.
-- **An anchor written down always wins.** Only the side left out is derived, so
-  an edge can pin the anchor that carries intent - a deliberate back-edge - and
-  leave the other to be worked out.
-- Containers lay out recursively inside their parent's box. A container with no
-  `size` grows to hold the result; a container with a `size` keeps it.
-- Layout runs before the canvas is measured, so `canvas: auto` fits the result.
-- The same source always produces the same positions, so a document that is
-  opened many times before it is ever saved looks the same every time.
+- Existing `position` values are preserved.
+- Explicit anchors are preserved. Only omitted anchors are derived.
+- Containers are laid out recursively inside their parent. A container without
+  `size` expands to contain the result; an explicit `size` is preserved.
+- Layout runs before canvas measurement, so `canvas: auto` fits the result.
+- Layout is deterministic: the same source produces the same positions.
 
 How a node is placed depends on what the diagram already says:
 
@@ -454,18 +427,16 @@ How a node is placed depends on what the diagram already says:
 stage is drawn perpendicular to the flow, so `right` gives columns and `down`
 gives rows. Nodes within a stage are then ordered to reduce edge crossings.
 
-**Some nodes have positions** - a diagram that has been appended to. Nothing is
-re-flowed. An edge that carries anchors already states a spatial relationship,
-and a node sits on the side its own anchor faces away from: a connector entering
-the new node's `left` means the neighbour is to its left, so the node goes to
-that neighbour's right, centred on it and one stage gap clear. An edge with no
-anchors has the diagram's own direction as its stated intent instead, so the new
-node lands downstream of its neighbour. Several connectors are reconciled by
-clearing every neighbour along the flow and sitting between them across it.
+**Some nodes have positions** - existing positions are preserved. Explicit edge
+anchors determine placement relative to connected nodes. For example, a
+connector entering a new node at `left` places that node to the right of its
+neighbour, centred with one stage gap between them. When an edge has no anchors,
+the diagram direction determines placement. For multiple connectors, placement
+clears every neighbour along the flow and is centred between them on the
+perpendicular axis.
 
-**A node with no connectors at all** - a standalone text or legend node - is the
-only case with nothing to infer from, and takes the first free, grid-snapped slot
-that clears everything already placed.
+**A node with no connectors** - such as standalone text or a legend - takes the
+first free, grid-snapped position that does not overlap existing nodes.
 
 **Anchors left out are derived from where the nodes ended up**, once placement
 has finished - not from the declared direction. Two nodes side by side face
@@ -473,15 +444,13 @@ has finished - not from the declared direction. Two nodes side by side face
 geometry to read, a self connector or a node overlapping its neighbour, falls
 back to the declared direction.
 
-An edge whose anchors contradict the declared direction is a hint, not an error:
-it is read as a deliberate back-edge and left out of stage assignment so it
-cannot stretch the graph. If every edge contradicts the direction the hint says
-nothing useful, so the whole graph is used instead. Cycles are broken the same
-way.
+An edge whose anchors contradict the declared direction is treated as a
+back-edge and excluded from stage assignment. If every edge contradicts the
+direction, all edges participate in stage assignment. Cycles are handled the
+same way.
 
-Spacing defaults to a stage gap of 120 and a sibling gap of 60. Because the
-result bakes immediately, an author who dislikes the spacing can simply drag a
-node, but the scalar can widen without breaking the short form:
+Spacing defaults to a stage gap of 120 and a sibling gap of 60. Use the expanded
+layout form to change these values:
 
 ```yaml
 layout: { direction: right, stageGap: 120, siblingGap: 60 }
@@ -503,9 +472,9 @@ diagram, a default node immediately after a `190`-wide node begins about `310`
 units to its right (`190 + 120`). With `canvas.grid: 5`, use multiples of `5`
 for manually written positions and sizes.
 
-These values are guides rather than limits. Give a key node an explicit `size`
-when its label needs more room; use a deliberate anchor or waypoint only where
-the route itself carries meaning, such as a feedback edge or side branch.
+These values are not limits. Set an explicit `size` when a label needs more
+room. Set an anchor or waypoint only when required for a feedback edge, side
+branch, or other specific route.
 
 A `pinned: true` node must have an explicit `position`. Ordinary incremental
 layout preserves every existing position. The pin distinguishes constraints
@@ -516,20 +485,19 @@ that `relayout: unpinned` must retain from previously generated positions.
 Add one of these modifiers to a flowchart with `layout` when its baked geometry
 should be regenerated on the next open or repository bake:
 
-- `relayout: all` clears every node position and starts ordinary layout afresh;
+- `relayout: all` clears every node position and runs layout again;
 - `relayout: unpinned` clears every position except those marked `pinned: true`
   and places the remaining nodes around those constraints; or
-- `relayout: autowrap` clears every position, starts afresh, and wraps an eligible
-  long linear flow into rows or columns.
+- `relayout: autowrap` clears every position, runs layout again, and wraps an
+  eligible long linear flow into rows or columns.
 
 Every form preserves node sizes, clears and regenerates every connector's
 anchors, route, and waypoint, and removes `relayout` from the serialized source
 while leaving the persistent `layout` setting in place.
 
-The consumed modifier makes reopening idempotent. A fully positioned diagram
-without `relayout` remains untouched, so ordinary opens never discard hand-tuned
-geometry. The flowchart toolbar's **Relayout diagram** action applies `all` only
-after confirmation.
+The modifier is removed during serialisation, making subsequent opens
+idempotent. A fully positioned diagram without `relayout` is unchanged. The
+flowchart toolbar's **Relayout diagram** action applies `all` after confirmation.
 
 ```yaml
 type: flowchart
@@ -560,14 +528,13 @@ nodes. Horizontal content warns at a 4:1 fitted ratio; vertical content warns at
 maps are not candidates. Canvas dimensions and empty canvas space do not affect
 the diagnosis.
 
-The warning is advice, not automatic layout. From **Check document**, choose the
-suggested **Wrap this … flow** action. The confirmation shows the before/after
-fitted dimensions and warns that the fix replaces every authored position,
-anchor, route, and waypoint. Confirming writes deterministic, grid-snapped rows
-or columns, with orthogonal transitions routed outside the occupied lines. The
-result remains ordinary `layout: right` or `layout: down` YAML and applying the
-fix again is a no-op. A fixed canvas only expands when the wrapped content needs
-more room; an automatic canvas remains automatic.
+The warning does not change the layout. **Check document** provides a **Wrap
+this … flow** action. Its confirmation shows the dimensions before and after
+wrapping and states that the action replaces every authored position, anchor,
+route, and waypoint. The result uses deterministic, grid-snapped rows or columns
+with orthogonal transitions outside the occupied lines. It retains `layout:
+right` or `layout: down`, and repeated application makes no further changes. A
+fixed canvas expands only when required; an automatic canvas remains automatic.
 
 A portable agent workflow must opt in explicitly. Open the document with
 `?skryb=lint` and inspect `template[data-skryb-lint]`. Only when that report
@@ -578,9 +545,9 @@ Extract the source through browser automation or Chromium DOM dumping and save
 it over the original file. Running autowrap on the result again is a no-op; no
 repository checkout or local CLI is required.
 
-For example, author this eight-stage request path as a graph rather than trying
-to guess wrapped coordinates. Open it once to bake and check it, then use the
-suggested action if the resulting strip is difficult to read:
+For example, author this eight-stage request path as a graph rather than
+computing wrapped coordinates by hand. Open it once to bake and check it, then
+use the suggested action if the resulting strip is difficult to read:
 
 ```yaml
 type: flowchart
@@ -631,9 +598,7 @@ edges:
 
 ### Named styles
 
-Repeating the same inline `style: { ... }` across many nodes is where a large
-diagram's consistency drifts - one node ends up a shade off. A flowchart may
-declare a presentation once in a `styles:` block and apply it by name:
+Use a `styles:` block to define presentation shared by multiple nodes or edges:
 
 ```yaml
 type: flowchart
@@ -657,24 +622,19 @@ edges:
     class: external
 ```
 
-A style definition takes the same two presentation keys a node does, `palette`
-and `style`, so it needs no new mental model. It must declare at least one of
-them.
+A style definition must declare `palette`, `style`, or both.
 
-A class sits **between the theme and the element's own values**: it overrides
-the theme defaults, and anything written directly on the node or edge overrides
-it. So `class` declares the intent once and a one-off exception is still written
-where the exception is.
+Precedence is **theme, class, then element values**. Values written directly on
+a node or edge override its class.
 
-A node reached through a class renders exactly as if the same palette had been
-written inline, gradients included.
+A class palette renders identically to the same palette written inline,
+including gradients.
 
 An edge has no palette of its own, so a class contributes only its `style`
 values to an edge; a `palette` in that class is ignored there.
 
-Naming a class that is not declared is an error, not a silent no-op. Named
-styles are a flowchart feature; sequence diagrams keep `palette` and `style` on
-their elements.
+An undeclared class is an error. Named styles apply only to flowcharts;
+sequence diagrams define `palette` and `style` on individual elements.
 
 ### Nodes
 
@@ -707,7 +667,7 @@ child nodes at any depth:
 | `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
-| `class` | Optional name of a style declared in the diagram's `styles:` block. Its values sit below the node's own `palette` and `style`. |
+| `class` | Optional name of a style declared in the diagram's `styles:` block. Node-level `palette` and `style` values take precedence. |
 | `shape` | **Required.** `rounded-rectangle`, `circle`, `oval`, `database`, `diamond`, `rhombus`, `flattened-hexagon`, `chevron`, `right-chevron`, `document`, or `text`. The `document` shape is a sheet of paper with a folded top-right corner. The `text` shape is a plain text box: it renders its (multiline) `label` with a native-SVG Markdown subset, and its fill and stroke default to transparent unless a `palette` or `style` override is set. |
 | `position` | **Required unless the diagram declares a `layout`.** `{ x: number, y: number }` top-left canvas position for top-level nodes, or top-left position relative to its parent for children. |
 | `pinned` | Optional Boolean. `true` requires `position` and preserves that position during `relayout: unpinned`; `all` and `autowrap` replace it. |
@@ -715,7 +675,7 @@ child nodes at any depth:
 | `palette` | Optional semantic palette role; selects the scheme-aware node treatment and clears explicit node colour overrides. |
 | `style` | Optional overrides: `fill`, `stroke`, `text`, and `strokeWidth`. `style.width` is rejected. |
 | `strokeType` | `solid`, `dotted`, `dashed`, or `double`. Omit for `solid`. This applies to the node outline and detail lines. A double stroke uses two visibly separated rails. |
-| `arrow` | Optional `{ x: number, y: number }` canvas coordinate. Draws a callout pointer from the node centre out to that point, in the node's own fill and stroke, so the node and pointer read as one speech bubble. Works on any shape. A node with no fill and no stroke (a plain `text` shape) draws the pointer in its text colour, starting at the node outline. |
+| `arrow` | Optional `{ x: number, y: number }` canvas coordinate. Draws a callout pointer from the node centre out to that point, in the node's own fill and stroke, so the pointer renders as part of the same shape as the node. Works on any shape. A node with no fill and no stroke (a plain `text` shape) draws the pointer in its text colour, starting at the node outline. |
 | `children` | Optional list of child nodes. Any shape can contain children, nesting has no depth limit, and child positions are relative to their parent. |
 
 Palette roles are `background`, `pale`, `light`, `neutral`, `dark`,
@@ -729,16 +689,14 @@ per-diagram scheme overrides are not supported.
 #### Label wrapping and node width
 
 Node labels and subtitles wrap on word boundaries inside the node's declared
-width, so an over-long label no longer overflows its shape. Nodes are never
-resized to fit their text: widths stay exactly as authored, which keeps a
-diagram's boxes uniform. Explicit line breaks in a label are always honoured;
-wrapping only applies to a line that does not fit. A single word wider than the
-line is left whole rather than broken.
+width. Nodes are not resized to fit their text; authored widths are preserved.
+Explicit line breaks in a label are always honoured. Wrapping applies only to a
+line that does not fit. A single word wider than the line is not broken.
 
-Wrapping is a safety net, not a substitute for choosing a width. Labels still
-read best when they fit in one or two lines, so budget roughly **9px per label
-character** and **7px per subtitle character** — the label is 16px semibold and
-the subtitle 13px regular, and text is inset 12 units on each side:
+Choose a width that keeps labels to one or two lines. For approximate sizing,
+allow **9px per label character** and **7px per subtitle character**. The label
+is 16px semibold, the subtitle is 13px regular, and text is inset 12 units on
+each side:
 
 | Node width | Label characters per line | Subtitle characters per line |
 | --- | --- | --- |
@@ -747,9 +705,9 @@ the subtitle 13px regular, and text is inset 12 units on each side:
 | 220 | ~21 | ~28 |
 | 260 | ~26 | ~33 |
 
-Label line height is 20 and subtitle line height is 15, so a default 80-high
-node holds two label lines comfortably and three at a squeeze. Uppercase or
-`W`/`M`-heavy text runs wider than these averages.
+Label line height is 20 and subtitle line height is 15. A default 80-unit-high
+node fits two label lines. Text dominated by wide characters may require more
+width than these averages indicate.
 
 #### The `text` shape and its Markdown subset
 
@@ -825,42 +783,50 @@ does not affect another. The default connector uses the colour scheme's neutral
 mid-contrast fill while its label uses the normal document text colour, keeping
 labels readable where they overlap a line.
 
-Edge labels use their rendered 15px text bounds and 16-unit line height when
-choosing a position. Candidates on both sides of the longest route segments are
-tried in deterministic order against unrelated nodes, labels already placed,
-and other edge routes. If no candidate is clear, the first candidate remains
-visible and lint emits `edge-label-overlap`. For a long label on a short
-connector, use a literal block scalar and put the line break at a meaningful
-phrase boundary; the renderer does not rewrite or automatically wrap it.
+Edge-label placement uses the rendered 15px text bounds and a 16-unit line
+height. Candidate positions on both sides of the longest route segments are
+tested in deterministic order against unrelated nodes, placed labels, and edge
+routes. If all candidates overlap, the first candidate remains visible and lint
+emits `edge-label-overlap`. For a long label on a short connector, use a literal
+block scalar with a line break at a phrase boundary; labels are not wrapped
+automatically. Resolve overlap by wrapping the label first, then moving only the
+involved nodes by the smallest useful grid increment. Widen the full diagram
+only if those changes are insufficient.
 
-`orthogonal` suits most flows and reads as a conventional box-and-line diagram.
-`curved` is worth reaching for when an orthogonal route would be hard to
-follow: a long edge that doubles back, several edges converging on one anchor,
-or an edge that would otherwise run along or across an unrelated node. A curve
-separates from its neighbours and reads as one continuous line, which is often
-clearer than adding another right-angled detour.
+Prefer straight connector geometry unless a bend distinguishes a branch,
+feedback path, or obstacle detour. After automatic layout, align node centres on
+the dominant flow axis and place secondary branches perpendicular to it.
+Retain `orthogonal` routing for aligned edges; it renders a single straight
+segment when unobstructed and can still route around obstacles.
+
+After automatic layout, inspect back-edges and feedback loops even when lint is
+clean. An orthogonal return can overlap a forward connector without crossing a
+node. First use separate anchors, such as `bottom`-to-`bottom` on a horizontal
+flow. If the routes still overlap, use `curved`. Leave the waypoint unset unless
+the default curve is ambiguous.
+
+Use `orthogonal` for most flows. Use `curved` for a long back-edge, several
+edges converging on one anchor, or an edge that would otherwise run along or
+across an unrelated node.
 
 #### Routing around obstacles
 
-An edge that would run through a node which is neither its source nor its target
-is routed around it. This only engages on a route that is actually blocked, so a
-clear edge is drawn exactly as it always was.
+An edge that intersects a node other than its source or target is routed around
+the node. Unobstructed routes are unchanged.
 
-Routing charges for a turn as well as for distance, so it prefers a straight run
-and adds a bend only where one is needed. An `orthogonal` edge steps around the
-obstacle; a `straight` or `curved` edge detours through an implicit waypoint,
-keeping its character rather than being replaced by a right-angled route.
+The routing cost includes distance and turns. An `orthogonal` edge adds segments
+around an obstacle; a `straight` or `curved` edge uses an implicit waypoint and
+retains its route type.
 
-Two cases are deliberately left alone:
+Automatic obstacle routing does not change:
 
-- **An edge with an authored `waypoint`.** The author has already said where the
-  edge should go.
-- **An edge that cannot be cleared.** Where no route clears the obstacle - for
-  instance a curve leaving an anchor with a node directly beyond it - the edge
-  keeps the path it was authored with rather than being redrawn worse, and lint
-  still reports the crossing so the anchors can be changed instead. A node
-  containing, or contained by, an edge's own endpoints is never an obstacle for
-  that edge.
+- an edge with an explicit `waypoint`; or
+- an edge for which no clear route can be calculated, such as a curve whose
+  anchor points directly towards an adjacent node. The authored path is retained
+  and lint reports the crossing.
+
+A node containing, or contained by, an edge endpoint is not treated as an
+obstacle for that edge.
 
 ### Sequence diagrams
 
@@ -929,16 +895,13 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
-The runtime provides per-diagram zoom, fit, pan, and edit controls. Over a
-diagram, the wheel pans it and Ctrl or Cmd with the wheel zooms it around the
-pointer, keeping whatever sits under the cursor in place. Shift with a wheel that
-reports only a vertical delta pans sideways. Both gestures replace a browser
-default over that frame, so the page neither scrolls nor zooms while the pointer
-is over a diagram.
+The runtime provides per-diagram zoom, fit, pan, and edit controls. The wheel
+pans a diagram. Ctrl or Cmd with the wheel zooms around the pointer. Shift with
+a wheel that reports only a vertical delta pans horizontally. These gestures
+prevent page scrolling or browser zoom while the pointer is over a diagram.
 
-Neither panning nor scrolling has bounds: a diagram can be pushed into a corner
-to clear working space, or moved out of view entirely, and **Zoom to fit**
-returns it. Zoom is bounded between a quarter and eight times the frame width.
+Panning is unbounded. **Zoom to fit** restores the full diagram to the frame.
+Zoom ranges from one quarter to eight times the frame width.
 Panning does not change diagram coordinates. In edit mode, authors can select
 nodes and edges, edit supported
 properties, drag nodes, resize nodes, duplicate or delete nodes, change
@@ -965,13 +928,12 @@ diagram scroll positions where possible.
 
 The source tray menu can insert a valid flowchart, sequence diagram, diagram
 reference, panel, or grid template at the cursor. **Import diagram…** reads a
-diagram out of another saved Skryb document (or a plain Markdown file) and
-inserts it at the cursor; when the file holds several diagrams it asks which
-one. An imported diagram is validated before it is inserted, and its `id` is
-rewritten when the current document already uses that id, because duplicate
-diagram ids stop the whole document rendering. Its **Help** option opens
-this reference. Use the tray for document structure and sequence-diagram
-changes; the graphical editor is for flowchart presentation and connections.
+diagram from another saved Skryb document or a plain Markdown file. If the file
+contains multiple diagrams, it prompts for a selection. Imported diagrams are
+validated. Conflicting `id` values are rewritten; duplicate diagram ids prevent
+document rendering. **Help** opens this reference. Use the tray for
+document structure and sequence-diagram changes; use the graphical editor for
+flowchart presentation and connections.
 
 If a draft has a frontmatter or diagram schema error, the last valid rendered
 document and its canonical source remain unchanged. The tray retains the draft
@@ -1003,14 +965,11 @@ A hosted runtime is fetched for that export; the explicitly named
 `file:` workflow with no network access. The export reports an error rather than
 producing a partial document if the runtime cannot be obtained.
 
-Each diagram frame has an **Expand** control that grows it to fill the window,
-and collapses it again from the same button or with Escape. An expanded frame
-stops above an open source tray rather than hiding behind it, so source and
-diagram stay usable together, and its controls dock into the document toolbar
-beside the document menu, since a frame filling the window has no free corner
-of its own. Expanding and collapsing both
-zoom the diagram to fit the new frame width; neither alters stored coordinates,
-and a frame returns to its previous height when it collapses.
+Each diagram frame has an **Expand** control that fills the window. The same
+control or Escape collapses it. An expanded frame stops above an open source
+tray, and its controls move to the document toolbar. Expanding and collapsing
+fit the diagram to the new frame width without changing stored coordinates. A
+collapsed frame returns to its previous height.
 
 Each rendered diagram has an **Export** menu in its toolbar. **Open full
 diagram** opens a standalone SVG in a new tab without editor controls. **Save
@@ -1025,9 +984,9 @@ standalone export never includes editing controls, current zoom, or pan state.
 
 ## Syntax highlighting
 
-A fenced block whose language is recognised is highlighted. Highlighting is
-purely presentational: the code itself is never altered, and a block in an
-unrecognised language renders as plain text exactly as before.
+A fenced block with a recognised language is syntax highlighted. Highlighting
+does not alter the code. Blocks with unrecognised languages render as plain
+text.
 
 Recognised languages, by the names that select them:
 
@@ -1048,34 +1007,30 @@ Recognised languages, by the names that select them:
 Names are matched case-insensitively. Tokens are wrapped in
 `<span class="docdiagram-token-...">` with one of `comment`, `string`, `number`,
 `keyword`, `literal`, `type`, `tag`, `attribute`, `meta`, `inserted`, or
-`deleted`, and coloured from theme-aware custom properties. Highlighting is
-colour layered over the normal code text, so a block stays readable wherever
-colour is unavailable.
+`deleted`, and coloured with theme-aware custom properties. The underlying code
+text remains readable without these colours.
 
-This is a tokeniser, not a parser: it recognises comments, strings, numbers,
-keywords and a little markup structure, which is where nearly all of the
-perceived quality comes from. The C-like family shares one keyword list rather
-than carrying a dozen near-identical tables, so a keyword may occasionally be
-highlighted in a language of that family which does not have it.
+The highlighter is a tokeniser, not a parser. It recognises comments, strings,
+numbers, keywords, and limited markup structure. C-like languages share a
+keyword list, so some keywords may be highlighted in languages that do not use
+them.
 
 ## Baking and checking a document
 
-Opening a document is what does both. When the runtime loads it lays out any
-diagram that needs it, writes the result back into the document's own source,
-runs the checks, and publishes the report. Baked source changes count as unsaved
-and prompt the reader to save; publishing the derived report alone does not.
+When a document opens, the runtime lays out incomplete diagrams, writes the
+result to the source, runs the checks, and publishes the report. Baked source
+changes are unsaved changes and prompt the reader to save. Publishing the report
+does not.
 
-Two elements carry the live result, and every route returns the same two:
+The results are available in these elements:
 
 | Element | Contents |
 | --- | --- |
 | `template#source` | The document's Markdown, with diagram geometry baked in. |
 | `template[data-skryb-lint]` | A JSON report: `errors`, `warnings`, `sourceHash`, and `messages`. |
 
-The report is addressed by attribute rather than by id, because ids belong to the
-document's own anchor namespace - a heading called "Lint" would take `#lint`.
-Both elements are HTML-escaped inside the file, so decode entities when reading
-them.
+The report uses an attribute selector. IDs are reserved for document anchors. Both elements are HTML-escaped inside the file; decode entities when
+reading them.
 
 `sourceHash` is the eight-character FNV-1a digest of the exact UTF-16 source the
 report describes. Recompute it before following locations: if it does not match
@@ -1084,25 +1039,20 @@ treated as stale. Locations use one-based `line` and `column` values and
 zero-based UTF-16 `offset` values. Ranges are start-inclusive and end-exclusive,
 matching browser text selection APIs.
 
-The report is written only when there was something to report on - a bake
-happened, `?skryb=lint` (or legacy `?skryb-lint`) was on the URL,
-`?skryb=autowrap` was requested, or a reader chose **Check document** from the
-document menu. It is live derived metadata: writing or replacing it does not
-mark the document as changed or cause a save prompt. If the source was already
-changed by editing or layout baking, it remains changed. An explicit Save As
-includes the current report; a document that needed neither baking nor checking
-is left completely alone.
+The report is written after a bake, when the URL contains `?skryb=lint` (or
+legacy `?skryb-lint`) or `?skryb=autowrap`, or when a reader selects **Check
+document**. Writing or replacing this derived metadata does not mark the
+document as changed or cause a save prompt. Existing source changes remain.
+**Save As** includes the current report.
 
 ### What baking touches
 
-Only a fence that declares a `layout` **and** had a position or anchor missing is
-rewritten, into canonical form: fields reordered, comments inside that fence
-dropped. A fence that is already complete is left exactly as its author wrote it,
-comments intact, and so is any fence with no `layout`. Nothing outside the
-diagram fences is rewritten, and line endings are preserved.
+Only a fence that declares `layout` and has a missing position or anchor is
+rewritten in canonical form. Canonicalisation reorders fields and removes
+comments inside that fence. Complete fences and fences without `layout` remain
+unchanged. Content outside diagram fences and line endings are preserved.
 
-Baking is idempotent, and a diagram that fails to parse fails the bake rather
-than being skipped quietly.
+Baking is idempotent. A diagram parse error fails the bake.
 
 ### The rules
 
@@ -1120,8 +1070,8 @@ The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
 `unbalanced-aspect-ratio`. The last rule may carry a `suggestedAction` with the
 `wrap-linear-flow` id and zero-based diagram index; lint itself never executes
 it. Only errors are blocking: warnings
-describe things a reader would notice, but a generated document is not held up
-on aesthetics. Message text remains stable for consumers that do not use the
+describe things a reader would notice, but do not block a build for visual
+issues alone. Message text remains stable for consumers that do not use the
 structured location.
 
 The repository CLI prints navigable `file:line:column` prefixes where a location
@@ -1140,36 +1090,25 @@ the browser template. `--errors` may be combined with either output format.
 A node with no connector is never reported. A `text` shape used for annotation, a
 label, or a legend is a normal part of a diagram.
 
-The rules live in the runtime beside the geometry they describe, so they cannot
-drift from the renderer that draws the diagram.
+Lint rules and diagram geometry are implemented in the same runtime.
 
 ## Printing a document
 
-The document menu's **Print / Save as PDF** prints the whole document, and the
-browser's own print command produces the same result: the layout is a print
-stylesheet rather than a separate export path, so nothing has to be opened or
-downloaded first.
+The document menu's **Print / Save as PDF** action and the browser print command
+use the same print stylesheet.
 
-What changes on paper:
+Print behaviour:
 
-- Editing chrome - the document toolbar, source tray, diagram toolbars and
-  inspectors - is not part of the document and is not printed.
-- A diagram frame becomes the diagram's own height with its camera reset. On
-  screen the frame is a fixed-height viewport that scrolls, zooms and pans; on
-  paper there is nothing to scroll, so a zoomed or panned diagram would otherwise
-  print cropped.
-- A panel, callout, diagram, table, code block or blockquote is never split
-  across a page boundary, and a heading is never left stranded at the foot of a
-  page.
-- A `:::grid` stacks into one column, because its columns are a screen-width
-  device and are too narrow to read on paper.
-- Colours are asked for explicitly, so palettes and syntax highlighting survive
-  rather than being dropped as browser backgrounds normally are.
+- The document toolbar, source tray, diagram toolbars, and inspectors are not
+  printed.
+- Diagram frames expand to the diagram height and reset zoom and pan.
+- Panels, callouts, diagrams, tables, code blocks, and blockquotes are not split
+  across page boundaries. Headings are kept with following content.
+- A `:::grid` changes to one column.
+- Palettes and syntax highlighting retain their colours.
 
-The menu action additionally puts the document back into its reading state
-first, collapsing an expanded frame, closing any editor and resetting stored
-frame heights and zoom, so what prints is the document rather than the current
-screen.
+The menu action first collapses expanded diagrams, closes editors, and resets
+stored frame heights and zoom.
 
 A single diagram can still be printed on its own from its **Export** menu.
 
