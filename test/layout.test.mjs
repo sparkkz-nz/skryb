@@ -179,7 +179,47 @@ test("a branch that splits and rejoins puts the branches in one stage and the jo
 
   assert.equal(positions.b.x, positions.c.x, "the branches share a stage");
   assert.notEqual(positions.b.y, positions.c.y, "the branches do not share a line");
+  assert.equal(positions.a.y, positions.d.y, "the split and join share a coherent main lane");
+  assert.ok(positions.b.y < positions.a.y && positions.a.y < positions.c.y, "the branches straddle the main lane");
   assert.ok(positions.a.x < positions.b.x && positions.b.x < positions.d.x, "the join is a stage further on");
+});
+
+test("layered coordinate assignment keeps connected paths in coherent lanes in every direction", () => {
+  const laneDiagram = (direction, sourceAnchor, targetAnchor) => parseDiagram(flowchartSource([
+    "canvas: { auto: true, grid: 20 }",
+    `layout: ${direction}`,
+    "nodes:",
+    ...["a", "b", "c", "side-a", "side-b"].flatMap((id) => [
+      `  - id: ${id}`,
+      `    label: ${id}`,
+      "    shape: rounded-rectangle"
+    ]),
+    "edges:",
+    ...[["a", "b"], ["b", "c"], ["side-a", "side-b"]].flatMap(([source, target]) => [
+      `  - source: ${source}`,
+      `    target: ${target}`,
+      `    sourceAnchor: ${sourceAnchor}`,
+      `    targetAnchor: ${targetAnchor}`
+    ])
+  ]));
+
+  for (const [direction, sourceAnchor, targetAnchor] of [
+    ["right", "right", "left"],
+    ["left", "left", "right"],
+    ["down", "bottom", "top"],
+    ["up", "top", "bottom"]
+  ]) {
+    const positions = positionsOf(laneDiagram(direction, sourceAnchor, targetAnchor));
+    const cross = direction === "right" || direction === "left" ? "y" : "x";
+    assert.equal(positions.a[cross], positions.b[cross], `${direction} main path starts straight`);
+    assert.equal(positions.b[cross], positions.c[cross], `${direction} main path stays straight`);
+    assert.equal(positions["side-a"][cross], positions["side-b"][cross], `${direction} side path stays straight`);
+    assert.ok(positions.a[cross] < positions["side-a"][cross], `${direction} stage order remains stable`);
+    for (const position of Object.values(positions)) {
+      assert.equal(position.x % 20, 0, `${direction} x coordinate is grid aligned`);
+      assert.equal(position.y % 20, 0, `${direction} y coordinate is grid aligned`);
+    }
+  }
 });
 
 test("layout is deterministic, so a file looks the same however often it is opened", () => {
