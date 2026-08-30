@@ -209,6 +209,120 @@ function orderStages(
   }
 }
 
+/**
+ * Assigns cross-axis coordinates after stage ordering. Alternating sweeps pull each node towards the
+ * median centre of its neighbours in the adjacent stage. Projecting those preferred coordinates
+ * back through the fixed stage order retains crossing reduction while restoring sibling clearance.
+ */
+function assignCrossCoordinates(
+  stageMembers: string[][],
+  stages: Map<string, number>,
+  edges: FlowchartEdge[],
+  byId: Map<string, FlowchartNode>,
+  horizontal: boolean,
+  siblingGap: number,
+  grid: number,
+  passes = 4
+): Map<string, number> {
+  const sizeAcross = (id: string): number => {
+    const size = nodeSize(byId.get(id)!);
+    return horizontal ? size.height : size.width;
+  };
+  const crossExtents = stageMembers.map((members) => members.reduce((total, id, index) =>
+    total + sizeAcross(id) + (index ? siblingGap : 0), 0));
+  const widestCross = Math.max(0, ...crossExtents);
+  const coordinates = new Map<string, number>();
+
+  stageMembers.forEach((members, stageIndex) => {
+    let across = (widestCross - crossExtents[stageIndex]) / 2;
+    for (const id of members) {
+      coordinates.set(id, across);
+      across += sizeAcross(id) + siblingGap;
+    }
+  });
+
+  const neighbours = new Map<string, string[]>();
+  for (const edge of edges) {
+    const sourceStage = stages.get(edge.source);
+    const targetStage = stages.get(edge.target);
+    if (sourceStage === undefined || targetStage === undefined || Math.abs(sourceStage - targetStage) !== 1) {
+      continue;
+    }
+    neighbours.set(edge.source, [...(neighbours.get(edge.source) || []), edge.target]);
+    neighbours.set(edge.target, [...(neighbours.get(edge.target) || []), edge.source]);
+  }
+
+  const alignStage = (stageIndex: number, referenceStage: number): void => {
+    const members = stageMembers[stageIndex];
+    const preferred = members.map((id) => {
+      const centres = (neighbours.get(id) || [])
+        .filter((neighbour) => stages.get(neighbour) === referenceStage)
+        .map((neighbour) => coordinates.get(neighbour)! + sizeAcross(neighbour) / 2)
+        .sort((first, second) => first - second);
+      const middle = centres.length
+        ? (centres[(centres.length - 1) >> 1] + centres[centres.length >> 1]) / 2
+        : coordinates.get(id)! + sizeAcross(id) / 2;
+      return middle - sizeAcross(id) / 2;
+    });
+
+    const assigned = [...preferred];
+    for (let index = 1; index < assigned.length; index += 1) {
+      assigned[index] = Math.max(
+        assigned[index],
+        assigned[index - 1] + sizeAcross(members[index - 1]) + siblingGap
+      );
+    }
+    for (let index = assigned.length - 2; index >= 0; index -= 1) {
+      assigned[index] = Math.min(
+        assigned[index],
+        assigned[index + 1] - sizeAcross(members[index]) - siblingGap
+      );
+    }
+    const centringOffset = assigned.length
+      ? preferred.reduce((total, coordinate, index) => total + coordinate - assigned[index], 0) / assigned.length
+      : 0;
+    members.forEach((id, index) => coordinates.set(id, assigned[index] + centringOffset));
+  };
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    const forward = pass % 2 === 0;
+    if (forward) {
+      for (let stage = 1; stage < stageMembers.length; stage += 1) {
+        alignStage(stage, stage - 1);
+      }
+    } else {
+      for (let stage = stageMembers.length - 2; stage >= 0; stage -= 1) {
+        alignStage(stage, stage + 1);
+      }
+    }
+  }
+
+  const minimum = coordinates.size ? Math.min(...coordinates.values()) : 0;
+  if (minimum !== 0) {
+    for (const [id, coordinate] of coordinates) {
+      coordinates.set(id, coordinate - minimum);
+    }
+  }
+
+  // Snap as part of coordinate assignment, then project once more so rounding cannot consume the
+  // requested sibling gap when adjacent nodes have different sizes.
+  for (const members of stageMembers) {
+    let previousEnd = Number.NEGATIVE_INFINITY;
+    for (const id of members) {
+      let coordinate = snapToGrid(coordinates.get(id)!, grid);
+      const minimumCoordinate = previousEnd + siblingGap;
+      if (coordinate < minimumCoordinate) {
+        coordinate = grid
+          ? Math.ceil(minimumCoordinate / grid) * grid
+          : Math.ceil(minimumCoordinate);
+      }
+      coordinates.set(id, coordinate);
+      previousEnd = coordinate + sizeAcross(id);
+    }
+  }
+  return coordinates;
+}
+
 /** Lays out a whole set of sibling nodes that hold no layout decisions of their own. */
 function layoutWholeGraph(
   nodes: FlowchartNode[],
@@ -235,11 +349,15 @@ function layoutWholeGraph(
     const size = nodeSize(byId.get(id)!);
     return horizontal ? size.width : size.height;
   })));
-  const crossExtents = stageMembers.map((members) => members.reduce((total, id, index) => {
-    const size = nodeSize(byId.get(id)!);
-    return total + (horizontal ? size.height : size.width) + (index ? settings.siblingGap : 0);
-  }, 0));
-  const widestCross = Math.max(0, ...crossExtents);
+  const crossCoordinates = assignCrossCoordinates(
+    stageMembers,
+    stages,
+    relevantEdges,
+    byId,
+    horizontal,
+    settings.siblingGap,
+    grid
+  );
 
   let along = 0;
   const alongOffsets = stageExtents.map((extent) => {
@@ -250,20 +368,17 @@ function layoutWholeGraph(
   const totalAlong = Math.max(0, along - settings.stageGap);
 
   stageMembers.forEach((members, stageIndex) => {
-    // Each stage is centred across the flow, so a narrow stage sits against the middle of a wide
-    // one rather than hugging one edge.
-    let across = (widestCross - crossExtents[stageIndex]) / 2;
     for (const id of members) {
       const node = byId.get(id)!;
       const size = nodeSize(node);
       const alongOffset = reversed
         ? totalAlong - alongOffsets[stageIndex] - (horizontal ? size.width : size.height)
         : alongOffsets[stageIndex];
+      const across = crossCoordinates.get(id)!;
       node.position = {
         x: snapToGrid(origin.x + (horizontal ? alongOffset : across), grid),
         y: snapToGrid(origin.y + (horizontal ? across : alongOffset), grid)
       };
-      across += (horizontal ? size.height : size.width) + settings.siblingGap;
     }
   });
 }

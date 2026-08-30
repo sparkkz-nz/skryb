@@ -516,7 +516,7 @@ The implemented defaults and fixture measurements are:
 
 ## Block 10 — Layered coordinate assignment quality
 
-**Status:** Planned  
+**Status:** In progress
 **Suggested branch:** `feat/layered-coordinate-assignment`  
 **Dependencies:** Blocks 2 and 4
 
@@ -540,6 +540,20 @@ stable order, spacing, and collision clearance.
 - Main paths through branching diagrams form a visibly coherent lane.
 - Crossing count does not regress in the accepted fixtures.
 - Layout remains deterministic and respects author-pinned positions.
+
+### Implementation result
+
+- Alternating median sweeps now align each stage towards connected neighbours in
+  the adjacent stage after the existing crossing-reduction order is fixed.
+- A deterministic spacing projection preserves that order, restores the configured
+  sibling gap after alignment and grid rounding, and leaves authored positions on
+  complete or partially positioned diagrams untouched.
+- Geometry fixtures cover split/join lanes, independent paths, containers, pinned
+  nodes, stable ordering, grid alignment, and all four layout directions. The full
+  suite passes with 302 tests.
+- Hosted artifacts measure `214,659` raw / `61,217` gzip / `52,515` brotli bytes;
+  self-packaged artifacts measure `437,918` / `122,843` / `62,649`. Existing size
+  budgets pass.
 
 ## Block 11 — One-shot relayout and constrained-layout example
 
@@ -622,8 +636,8 @@ Record merged work here in chronological order.
 | 5 | Complete | [#71](https://github.com/sparkkz-nz/skryb/pull/71) | Decomposed browser persistence, rendering, export, chrome, and lifecycle responsibilities into explicit services. |
 | 6 | Complete | [#72](https://github.com/sparkkz-nz/skryb/pull/72) | Added source-addressable browser and CLI lint findings with stale-source protection. |
 | 7 | Complete | [#74](https://github.com/sparkkz-nz/skryb/pull/74) | Added deterministic edge-label placement and source-addressable clearance lint. |
-| 8 | Planned | — | — |
-| 9 | Planned | — | — |
-| 10 | Planned | — | — |
+| 8 | Complete | [#75](https://github.com/sparkkz-nz/skryb/pull/75) | Added canonical accessible descriptions for flowchart and sequence diagrams. |
+| 9 | Complete | [#76](https://github.com/sparkkz-nz/skryb/pull/76) | Added aspect-ratio lint and explicit wrapped layout for long linear flows. |
+| 10 | In progress | — | Added median-based layered coordinate assignment with stable spacing and grid alignment. |
 | 11 | Planned | — | — |
 | 12 | Planned | — | — |
