@@ -619,7 +619,7 @@ export class BrowserRuntime {
       node && inspectorDiagram?.type === "flowchart"
         ? `<div class="docdiagram-inspector" data-kind="node">${buildNodeInspectorFields(inspectorDiagram, node, this.state.documentColorScheme, this.state.documentTheme)}</div>`
         : edge && inspectorDiagram
-          ? `<div class="docdiagram-inspector" data-kind="edge">${buildEdgeInspectorFields(inspectorDiagram, edge)}</div>`
+          ? `<div class="docdiagram-inspector" data-kind="edge">${buildEdgeInspectorFields(inspectorDiagram, edge, this.state.documentColorScheme, this.state.documentTheme)}</div>`
           : sequenceElement && inspectorDiagram
             ? `<div class="docdiagram-inspector" data-kind="sequence">${buildSequenceInspectorFields(inspectorDiagram, this.state.selectedSequenceElement!, sequenceElement, this.state.documentColorScheme, this.state.documentTheme)}</div>`
             : ""

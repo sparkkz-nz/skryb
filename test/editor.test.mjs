@@ -9,6 +9,7 @@ const {
   nodeShapes,
   edgeAnchors,
   edgeRoutes,
+  edgeStrokeTypes,
   edgeMarkerStyles,
   getGridSize,
   expandCanvasForNode,
@@ -35,8 +36,10 @@ const {
   setNodeStyleOverride,
   setNodeColorPalette,
   setNodeSize,
+  setNodeStrokeType,
   setEdgeLabel,
   setEdgeRoute,
+  setEdgeStrokeType,
   setEdgeAnchor,
   setEdgeStyleOverride,
   setStyleStrokeWidth,
@@ -48,6 +51,7 @@ const {
   renderNodeBody,
   buildEdgePath,
   buildEdgeInspectorFields,
+  buildNodeInspectorFields,
   paletteRoles,
   desugarBlockScalars,
   parseTextShapeInlineRuns
@@ -219,13 +223,15 @@ test("duplicates a node subtree with shape-derived IDs and independent propertie
       position: { x: 100, y: 100 },
       size: { width: 200, height: 150 },
       palette: "accent",
+      strokeType: "double",
       children: [{
         id: "api",
         label: "API",
         shape: "chevron",
         position: { x: 20, y: 30 },
         size: { width: 120, height: 60 },
-        style: { stroke: "#123456" }
+        style: { stroke: "#123456" },
+        strokeType: "dashed"
       }]
     }, {
       id: "roundedrectangle01",
@@ -243,6 +249,8 @@ test("duplicates a node subtree with shape-derived IDs and independent propertie
   assert.equal(duplicate.children[0].id, "chevron01");
   assert.equal(duplicate.label, "Platform");
   assert.equal(duplicate.palette, "accent");
+  assert.equal(duplicate.strokeType, "double");
+  assert.equal(duplicate.children[0].strokeType, "dashed");
   assert.notEqual(JSON.stringify(duplicate.position), JSON.stringify(diagram.nodes[0].position));
   assert.equal(JSON.stringify(duplicate.children[0].position), JSON.stringify({ x: 20, y: 30 }));
   assert.doesNotMatch(serializeDiagram(diagram), /undefined/);
@@ -516,14 +524,17 @@ test("a None palette clears fill/stroke to none for any node shape and restores 
   assert.equal(restored.stroke, colourSchemes.classic.light.danger.stroke);
 });
 
-test("requires supported node shapes and explicit edge anchors without retaining style.width aliases", () => {
-  const valid = twoNodeEdgeSource(["    route: curved", "    style: { strokeWidth: 3 }"]);
+test("requires supported node shapes and strokes, edge strokes, and explicit anchors without retaining style.width aliases", () => {
+  const valid = twoNodeEdgeSource(["    route: curved", "    strokeType: double", "    style: { strokeWidth: 3 }"])
+    .replace("    shape: rounded-rectangle", "    shape: rounded-rectangle\n    strokeType: dashed");
   const diagram = parseDiagram(valid);
 
   assert.equal(diagram.nodes[0].shape, "rounded-rectangle");
+  assert.equal(diagram.nodes[0].strokeType, "dashed");
   assert.equal(diagram.edges[0].sourceAnchor, "right");
   assert.equal(diagram.edges[0].targetAnchor, "left");
   assert.equal(diagram.edges[0].route, "curved");
+  assert.equal(diagram.edges[0].strokeType, "double");
   assert.equal(diagram.edges[0].style.strokeWidth, 3);
   assert.equal(JSON.stringify(parseDiagram(serializeDiagram(diagram))), JSON.stringify(diagram));
 
@@ -544,12 +555,20 @@ test("requires supported node shapes and explicit edge anchors without retaining
     /Unsupported node shape: star/
   );
   assert.throws(
+    () => parseDiagram(valid.replace("strokeType: dashed", "strokeType: wavy")),
+    /Unsupported node strokeType: wavy/
+  );
+  assert.throws(
     () => parseDiagram(valid.replace("sourceAnchor: right", "sourceAnchor: centre")),
     /Unsupported edge sourceAnchor: centre/
   );
   assert.throws(
     () => parseDiagram(valid.replace("route: curved", "route: loop")),
     /Unsupported edge route: loop/
+  );
+  assert.throws(
+    () => parseDiagram(valid.replace("strokeType: double", "strokeType: wavy")),
+    /Unsupported edge strokeType: wavy/
   );
   assert.throws(
     () => parseDiagram(valid.replace("strokeWidth: 3", "width: 3")),
@@ -569,7 +588,9 @@ test("resolves effective node and edge styles from theme defaults and overrides"
   const edge = { source: "api", target: "api" };
   const styledEdge = { ...edge, style: { stroke: "#ABCDEF" } };
 
-  assert.equal(getEdgeEffectiveStyle(diagram, edge).stroke, "#52616B");
+  assert.equal(getEdgeEffectiveStyle(diagram, edge).stroke, colourSchemes.classic.light.neutral.fill);
+  assert.equal(getEdgeEffectiveStyle(diagram, edge).text, colourSchemes.classic.light.background.text);
+  assert.equal(getEdgeEffectiveStyle(diagram, edge, "dark", "ice").stroke, colourSchemes.ice.dark.neutral.fill);
   assert.equal(getEdgeEffectiveStyle(diagram, styledEdge).stroke, "#ABCDEF");
 });
 
@@ -623,12 +644,14 @@ test("node inspector helpers mutate the canonical model and round-trip through Y
 
   setNodeLabel(node, "  Payment Gateway  ");
   setNodeStyleOverride(node, "fill", "#0000ff");
+  setNodeStrokeType(node, "double");
   setStyleStrokeWidth(node, "3.6");
   setNodeSize(diagram, node, "width", 123);
   setNodeSize(diagram, node, "height", 58);
 
   assert.equal(node.label, "Payment Gateway");
   assert.equal(node.style.fill, "#0000ff");
+  assert.equal(node.strokeType, "double");
   assert.equal(node.style.strokeWidth, 4);
   assert.equal(node.size.width, 120);
   assert.equal(node.size.height, 60);
@@ -636,6 +659,7 @@ test("node inspector helpers mutate the canonical model and round-trip through Y
   const reparsed = parseDiagram(serializeDiagram(diagram));
   assert.equal(reparsed.nodes[0].label, "Payment Gateway");
   assert.equal(reparsed.nodes[0].style.fill, "#0000ff");
+  assert.equal(reparsed.nodes[0].strokeType, "double");
   assert.equal(reparsed.nodes[0].style.strokeWidth, 4);
   assert.equal(reparsed.nodes[0].size.width, 120);
   assert.equal(reparsed.nodes[0].size.height, 60);
@@ -670,6 +694,7 @@ test("edge inspector helpers mutate the canonical model and round-trip through Y
 
   setEdgeLabel(edge, "  Create payment intent  ");
   setEdgeRoute(edge, "straight");
+  setEdgeStrokeType(edge, "dashed");
   setEdgeAnchor(edge, "source", "bottom");
   setEdgeAnchor(edge, "target", "top");
   setEdgeStyleOverride(edge, "stroke", "#ff0000");
@@ -678,6 +703,7 @@ test("edge inspector helpers mutate the canonical model and round-trip through Y
 
   assert.equal(edge.label, "Create payment intent");
   assert.equal(edge.route, "straight");
+  assert.equal(edge.strokeType, "dashed");
   assert.equal(edge.sourceAnchor, "bottom");
   assert.equal(edge.targetAnchor, "top");
   assert.equal(edge.style.stroke, "#ff0000");
@@ -687,6 +713,7 @@ test("edge inspector helpers mutate the canonical model and round-trip through Y
   const reparsed = parseDiagram(serializeDiagram(diagram));
   assert.equal(reparsed.edges[0].label, "Create payment intent");
   assert.equal(reparsed.edges[0].route, "straight");
+  assert.equal(reparsed.edges[0].strokeType, "dashed");
   assert.equal(reparsed.edges[0].sourceAnchor, "bottom");
   assert.equal(reparsed.edges[0].targetAnchor, "top");
   assert.equal(reparsed.edges[0].style.stroke, "#ff0000");
@@ -699,13 +726,17 @@ test("editor mutations reject unsupported validated values", () => {
 
   setNodeShape(node, "hexagon");
   setNodeColorPalette(node, "rainbow");
+  setNodeStrokeType(node, "wavy");
   setEdgeRoute(edge, "diagonal");
+  setEdgeStrokeType(edge, "wavy");
   setEdgeAnchor(edge, "source", "middle");
   reconnectConnector(edge, "target", "cache", "centre");
 
   assert.equal(node.shape, "rounded-rectangle");
   assert.equal(node.palette, "accent");
+  assert.equal(node.strokeType, undefined);
   assert.equal(edge.route, "orthogonal");
+  assert.equal(edge.strokeType, undefined);
   assert.equal(edge.sourceAnchor, "right");
   assert.equal(edge.target, "db");
   assert.equal(edge.targetAnchor, "left");
@@ -772,16 +803,32 @@ test("buildEdgePath produces deterministic geometry for every route and anchor p
   assert.deepEqual(JSON.parse(JSON.stringify(aligned.endTangent)), { x: 100, y: 0 });
 });
 
-test("edge inspector exposes route and both endpoint-side controls", () => {
+test("node inspector exposes an accessible stroke-type dropdown", () => {
+  const node = { id: "api", label: "API", shape: "rounded-rectangle", strokeType: "dashed" };
+  const markup = buildNodeInspectorFields({ canvas: {}, nodes: [node], edges: [] }, node, "classic", "light");
+
+  assert.match(markup, /<select class="docdiagram-inspector-node-stroke-type" aria-label="Stroke type">/);
+  for (const strokeType of edgeStrokeTypes) {
+    assert.match(markup, new RegExp(`value="${strokeType}"`));
+  }
+  assert.match(markup, /value="dashed"[^>]* selected/);
+});
+
+test("edge inspector exposes route, stroke type, and both endpoint-side controls", () => {
   const markup = buildEdgeInspectorFields(
     { theme: "light" },
-    { source: "api", target: "db", sourceAnchor: "bottom", targetAnchor: "top", route: "curved" }
+    { source: "api", target: "db", sourceAnchor: "bottom", targetAnchor: "top", route: "curved", strokeType: "double" }
   );
 
   assert.match(markup, /class="docdiagram-inspector-route"/);
+  assert.match(markup, /class="docdiagram-inspector-stroke-type"/);
   assert.match(markup, /class="docdiagram-inspector-source-anchor"/);
   assert.match(markup, /class="docdiagram-inspector-target-anchor"/);
   assert.match(markup, /value="curved" selected/);
+  assert.match(markup, /value="double" selected/);
+  for (const strokeType of edgeStrokeTypes) {
+    assert.match(markup, new RegExp(`value="${strokeType}"`));
+  }
   assert.match(markup, /value="bottom" selected/);
   assert.match(markup, /value="top" selected/);
 });

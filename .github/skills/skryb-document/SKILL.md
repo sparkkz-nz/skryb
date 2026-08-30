@@ -113,6 +113,7 @@ syntax reference, including:
 - node palettes: `palette: background|pale|light|neutral|dark|accent-soft|accent|accent-strong|note|success|warning|danger|highlight|none` (`none` clears fill and stroke on any shape);
 - anchors: `top`, `right`, `bottom`, and `left`;
 - routes: `orthogonal`, `straight`, and `curved`;
+- node and connector stroke types: `solid`, `dotted`, `dashed`, and `double`;
 - endpoint markers: `none`, `arrow`, and `circle`.
 
 Use explicit, stable node IDs and labels that describe a reader-visible

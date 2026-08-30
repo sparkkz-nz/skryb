@@ -139,6 +139,58 @@ test("diagram descriptions provide distinct accessible SVG metadata and round-tr
   );
 });
 
+test("flowchart rendering supports solid, dotted, dashed, and double edge strokes", () => {
+  const renderStroke = (strokeType) => renderDiagram(flowchartSource([
+    "canvas: auto",
+    "nodes:",
+    "  - id: a",
+    "    label: A",
+    "    shape: rounded-rectangle",
+    "    position: { x: 0, y: 0 }",
+    "  - id: b",
+    "    label: B",
+    "    shape: rounded-rectangle",
+    "    position: { x: 300, y: 0 }",
+    "edges:",
+    "  - source: a",
+    "    target: b",
+    "    sourceAnchor: right",
+    "    targetAnchor: left",
+    `    strokeType: ${strokeType}`
+  ]), 0);
+
+  assert.doesNotMatch(renderStroke("solid"), /stroke-dasharray/);
+  assert.match(renderStroke("dotted"), /stroke-linecap="round" stroke-dasharray="1 6"/);
+  assert.match(renderStroke("dashed"), /stroke-dasharray="8 6"/);
+  assert.match(
+    renderStroke("double"),
+    /<path class="docdiagram-edge"[^>]*stroke-width="6"\/><path[^>]*fill="none" stroke="#FFFFFF" stroke-width="2"\/><path[^>]*fill="none" stroke="none"\/>/
+  );
+});
+
+test("flowchart rendering supports solid, dotted, dashed, and double node strokes", () => {
+  const renderStroke = (strokeType) => renderDiagram(flowchartSource([
+    "theme: dark",
+    "canvas: auto",
+    "nodes:",
+    "  - id: a",
+    "    label: A",
+    "    shape: rounded-rectangle",
+    "    position: { x: 40, y: 40 }",
+    `    strokeType: ${strokeType}`,
+    "edges:"
+  ]), 0);
+
+  assert.doesNotMatch(renderStroke("solid"), /docdiagram-node-body[^>]*stroke-dasharray/);
+  assert.match(renderStroke("dotted"), /docdiagram-node-body[^>]*stroke-linecap="round" stroke-dasharray="1 6"/);
+  assert.match(renderStroke("dashed"), /docdiagram-node-body[^>]*stroke-dasharray="8 6"/);
+
+  const doubleNode = renderStroke("double");
+  assert.match(doubleNode, /docdiagram-node-body[^>]*stroke-width="6"/);
+  assert.match(doubleNode, /docdiagram-node-stroke-gap[^>]*stroke="#FFFFFF" stroke-width="2"/);
+  assert.match(renderNodeBody(getNodeGeometry({ shape: "rounded-rectangle" }, 0, 0, 190, 80), { fill: "#000000", stroke: "#FFFFFF", text: "#FFFFFF" }, 2, "double", "#111827"), /docdiagram-node-stroke-gap[^>]*stroke="#111827"/);
+});
+
 test("flowchart rendering uses the deterministic multiline edge-label geometry", () => {
   const source = flowchartSource([
     "canvas: auto",

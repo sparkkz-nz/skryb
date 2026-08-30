@@ -47,6 +47,7 @@ export interface FlowchartNode {
   pinned?: boolean;
   size?: Size;
   style?: NodeStyle;
+  strokeType?: NodeStrokeType;
   palette?: PaletteRole;
   subtitle?: string;
   textVAlign?: NodeTextVAlignment;
@@ -62,6 +63,7 @@ export interface FlowchartEdge {
   sourceAnchor?: EdgeAnchor;
   targetAnchor?: EdgeAnchor;
   route?: EdgeRoute;
+  strokeType?: EdgeStrokeType;
   label?: string;
   style?: EdgeStyle;
   start?: EdgeMarkerStyle;
@@ -200,6 +202,7 @@ export const nodeShapes = [
 
 export const edgeAnchors = ["top", "right", "bottom", "left"] as const;
 export const edgeRoutes = ["orthogonal", "straight", "curved"] as const;
+export const edgeStrokeTypes = ["solid", "dotted", "dashed", "double"] as const;
 export const edgeMarkerStyles = ["none", "arrow", "circle"] as const;
 export const edgeMarkerDefaults = { start: "none", end: "arrow" } as const;
 export const nodeTextVAlignments = ["top", "center"] as const;
@@ -210,6 +213,8 @@ export type LayoutDirection = (typeof layoutDirections)[number];
 export type NodeShape = (typeof nodeShapes)[number];
 export type EdgeAnchor = (typeof edgeAnchors)[number];
 export type EdgeRoute = (typeof edgeRoutes)[number];
+export type EdgeStrokeType = (typeof edgeStrokeTypes)[number];
+export type NodeStrokeType = EdgeStrokeType;
 export type EdgeMarkerStyle = (typeof edgeMarkerStyles)[number];
 export type NodeTextVAlignment = (typeof nodeTextVAlignments)[number];
 export type NodeTextHAlignment = (typeof nodeTextHAlignments)[number];

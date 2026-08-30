@@ -170,8 +170,6 @@ export function buildFlowchartEdgeGeometries(
     if (!geometry || !edge.label) {
       return;
     }
-    const source = index.getById(edge.source)!;
-    const target = index.getById(edge.target)!;
     const lines = splitTextLines(edge.label);
     const dimensions = buildPlacement(lines, { x: 0, y: 0 }).bounds;
     const segments = routeSegments.find((entry) => entry.edgeIndex === edgeIndex)?.segments || [];
@@ -183,9 +181,7 @@ export function buildFlowchartEdgeGeometries(
         hostSegmentIndex: -1
       });
     }
-    const nodeObstacles = index.entries.filter(({ node }) =>
-      !index.isRelated(node, source.node) && !index.isRelated(node, target.node)
-    ).map(({ node, bounds }) => ({ id: node.id, bounds }));
+    const nodeObstacles = index.entries.map(({ node, bounds }) => ({ id: node.id, bounds }));
     const otherRoutes = routeSegments.filter((entry) => entry.edgeIndex !== edgeIndex);
     let selected: EdgeLabelPlacement | null = null;
     for (const { center, hostSegmentIndex } of candidates) {

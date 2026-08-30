@@ -33,11 +33,12 @@ const result = await build({
 });
 
 const runtimeSource = result.outputFiles[0].text;
+const embeddedRuntimeSource = runtimeSource.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
 await Promise.all([
   writeFile(hostedRuntimePath, runtimeSource),
   writeFile(
     selfPackagedRuntimePath,
-    `${runtimeSource}globalThis.DocDiagramRuntimeSource=${JSON.stringify(runtimeSource)};\n`
+    `${runtimeSource}globalThis.DocDiagramRuntimeSource=\`${embeddedRuntimeSource}\`;\n`
   ),
   build({
     bundle: true,
