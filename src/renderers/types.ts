@@ -78,23 +78,25 @@ export function renderSvgAccessibility(
   diagram: Diagram,
   diagramIndex: number,
   fallbackLabel: string,
-  figure?: DiagramFigure
+  figure?: DiagramFigure,
+  interactive = false
 ): { attributes: string; metadata: string } {
+  const role = interactive ? "group" : "img";
   if (diagram.description === undefined) {
-    return { attributes: `role="img" aria-label="${escapeHtml(fallbackLabel)}"`, metadata: "" };
+    return { attributes: `role="${role}" aria-label="${escapeHtml(fallbackLabel)}"`, metadata: "" };
   }
 
   const titleId = `docdiagram-title-${diagramIndex}`;
   if (!figure?.caption) {
     return {
-      attributes: `role="img" aria-labelledby="${titleId}"`,
+      attributes: `role="${role}" aria-labelledby="${titleId}"`,
       metadata: `<title id="${titleId}">${escapeHtml(diagram.description)}</title>`
     };
   }
 
   const descriptionId = `docdiagram-description-${diagramIndex}`;
   return {
-    attributes: `role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionId}"`,
+    attributes: `role="${role}" aria-labelledby="${titleId}" aria-describedby="${descriptionId}"`,
     metadata: `<title id="${titleId}">${escapeHtml(figure.caption)}</title><desc id="${descriptionId}">${escapeHtml(diagram.description)}</desc>`
   };
 }

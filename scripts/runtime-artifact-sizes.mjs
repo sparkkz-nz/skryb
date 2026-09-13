@@ -5,12 +5,12 @@ export const runtimeArtifacts = [
   {
     name: "hosted",
     path: "dist/skryb-runtime.js",
-    budgets: { raw: 221_000, gzip: 63_000, brotli: 54_000 }
+    budgets: { raw: 239_000, gzip: 68_500, brotli: 59_000 }
   },
   {
     name: "self-packaged",
     path: "dist/skryb-runtime-self-packaged.js",
-    budgets: { raw: 447_000, gzip: 126_000, brotli: 64_000 }
+    budgets: { raw: 481_000, gzip: 137_000, brotli: 64_000 }
   }
 ];
 

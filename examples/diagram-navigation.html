@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diagram navigation</title>
+  <script src="../dist/skryb-runtime-self-packaged.js" defer></script>
+</head>
+<body>
+  <template id="source" type="text/markdown">
+---
+theme: light
+colourScheme: ice
+---
+
+# Diagram navigation
+
+This synthetic document demonstrates node links for the next runtime release.
+It uses the local companion runtime; the feature is not yet in published
+`latest` or an existing pinned release.
+
+## Overview
+
+The parent node opens the processing detail diagram. Its child opens the
+operating notes instead. The store node opens an uncaptioned diagram placed
+with a reference. In read mode, use a click or Tab and Enter to follow a node.
+In edit mode, select it and change **Destination** in the inspector.
+
+```diagram
+type: flowchart
+id: overview-flow
+caption: "Figure #: Request overview"
+description: A processing boundary contains validation and sends accepted requests to a record store.
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: processing
+    label: Processing
+    shape: rounded-rectangle
+    href: "#processing-detail"
+    textVAlign: top
+    palette: accent-soft
+    position: { x: 40, y: 40 }
+    size: { width: 280, height: 180 }
+    children:
+      - id: validation
+        label: Operating notes
+        shape: rounded-rectangle
+        href: "#operating-notes"
+        position: { x: 40, y: 70 }
+        size: { width: 200, height: 80 }
+  - id: store
+    label: Record store
+    shape: database
+    href: "#record-detail"
+    position: { x: 440, y: 90 }
+    size: { width: 200, height: 80 }
+edges:
+  - source: processing
+    target: store
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+## Processing detail
+
+Validation precedes recording. The return node links to the captioned overview.
+Expand this diagram and follow that node to return to the document view.
+
+```diagram
+type: flowchart
+id: processing-detail
+caption: "Figure #: Processing steps"
+description: Validation passes an accepted request to recording; the return node links to the overview.
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: validate
+    label: Validate request
+    shape: rounded-rectangle
+    position: { x: 40, y: 40 }
+  - id: record
+    label: Record request
+    shape: rounded-rectangle
+    position: { x: 350, y: 40 }
+  - id: return
+    label: Back to overview
+    shape: rounded-rectangle
+    href: "#overview-flow"
+    position: { x: 40, y: 180 }
+edges:
+  - source: validate
+    target: record
+    sourceAnchor: right
+    targetAnchor: left
+```
+
+[Back to overview](#overview-flow)
+
+## Operating notes
+
+Only accepted requests are recorded. This heading is a destination without a
+diagram. Heading links and diagram links use the same fragment URL mechanism.
+
+[Back to overview](#overview-flow)
+
+## Record detail
+
+This uncaptioned diagram renders here, although its definition is at the end
+of the source. Its self-link survives **Save as Skryb diagram**. Links to
+omitted content are removed from that export; isolated SVG removes all links.
+Neither export changes this document. **Save As** and **Save for Offline**
+preserve the complete document and its destinations.
+
+:::diagram { id=record-detail }
+
+[Back to overview](#overview-flow)
+
+```diagram
+type: flowchart
+id: record-detail
+description: The record store has a link back to this diagram's own anchor.
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: records
+    label: Record store
+    shape: database
+    href: "#record-detail"
+    position: { x: 40, y: 40 }
+    size: { width: 200, height: 80 }
+edges: []
+```
+  </template>
+  <main id="rendered-document"></main>
+</body>
+</html>

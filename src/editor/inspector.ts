@@ -1,4 +1,5 @@
 import {
+  annotationPositions,
   edgeAnchors,
   edgeMarkerStyles,
   edgeRoutes,
@@ -7,6 +8,7 @@ import {
   paletteRoles,
   nodeShapes,
   sequenceMessageStyles,
+  type AnnotationRef,
   type ColourSchemeName,
   type FlowchartDiagram,
   type FlowchartEdge,
@@ -16,13 +18,17 @@ import {
   type SequenceParticipant,
   type Theme
 } from "../core/diagrams/schema";
+import { getAnnotationLabel, getAnnotationPosition, validateAnnotationRef } from "../core/diagrams/annotations";
 import { escapeHtml } from "../core/diagrams/parser";
+import { isValidNodeHref, NodeHrefValidationError } from "../core/navigation";
 import { findFlowchartNode } from "../core/diagrams/hierarchy";
 import {
   clearEdgeWaypoint,
   deleteConnector,
   deleteNode,
   duplicateNode,
+  setAnnotationPosition,
+  setAnnotationRef,
   setEdgeAnchor,
   setEdgeLabel,
   setEdgeMarkerEnd,
@@ -31,6 +37,7 @@ import {
   setEdgeStrokeType,
   setEdgeStyleOverride,
   setNodeColorPalette,
+  setNodeHref,
   setNodeLabel,
   setNodeShape,
   setNodeSize,
@@ -52,6 +59,51 @@ export interface InspectorHost {
 
 type ControlElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 type SequenceInspectable = SequenceParticipant | SequenceNote | SequenceMessage;
+
+function annotationInspectorFields(ref: AnnotationRef | undefined, position = true, outsideOnly = false): string {
+  const selected = ref === undefined ? "NW" : getAnnotationPosition(ref);
+  return [
+    `<label class="docdiagram-field docdiagram-field-wide">Reference<input type="text" class="docdiagram-inspector-reference" value="${escapeHtml(ref === undefined ? "" : getAnnotationLabel(ref))}"></label>`,
+    position
+      ? `<label class="docdiagram-field">Position<select class="docdiagram-inspector-reference-position"${ref === undefined ? " disabled" : ""}>${annotationPositions.filter((value) => !outsideOnly || value === value.toUpperCase()).map((value) =>
+        `<option value="${value}"${value === (outsideOnly ? selected.toUpperCase() : selected) ? " selected" : ""}>${value}${outsideOnly ? "" : value === value.toUpperCase() ? " (outside)" : " (inside)"}</option>`
+      ).join("")}</select></label>`
+      : ""
+  ].join("");
+}
+
+function wireAnnotationInspector(
+  container: ParentNode,
+  apply: (mutate: (target: { ref?: AnnotationRef }) => void) => void
+): void {
+  for (const [selector, isPosition] of [
+    [".docdiagram-inspector-reference", false],
+    [".docdiagram-inspector-reference-position", true]
+  ] as const) {
+    const field = control(container, selector);
+    field?.addEventListener("change", () => {
+      const value = isPosition ? field.value : field.value.trim();
+      try {
+        if (isPosition || value) {
+          validateAnnotationRef(isPosition ? { label: 0, position: value } : value);
+        }
+      } catch (error) {
+        field.setAttribute("aria-invalid", "true");
+        globalThis.alert(error instanceof Error ? error.message : String(error));
+        field.focus();
+        return;
+      }
+      field.removeAttribute("aria-invalid");
+      apply((target) => {
+        if (isPosition) {
+          setAnnotationPosition(target, value);
+        } else {
+          setAnnotationRef(target, value);
+        }
+      });
+    });
+  }
+}
 
 function strokeTypeMarkup(selected: string): string {
   return `<select class="docdiagram-inspector-node-stroke-type" aria-label="Stroke type">${edgeStrokeTypes.map((strokeType) => `<option value="${strokeType}"${strokeType === selected ? " selected" : ""}>${strokeType}</option>`).join("")}</select>`;
@@ -95,6 +147,8 @@ export function buildNodeInspectorFields(
   return [
     `<label class="docdiagram-field docdiagram-field-wide">Label<textarea class="docdiagram-inspector-label docdiagram-inspector-textarea" rows="2">${escapeHtml(node.label)}</textarea></label>`,
     `<label class="docdiagram-field docdiagram-field-wide">Subtitle<textarea class="docdiagram-inspector-subtitle docdiagram-inspector-textarea" rows="2">${escapeHtml(node.subtitle || "")}</textarea></label>`,
+    `<label class="docdiagram-field docdiagram-field-wide">Destination<input type="text" class="docdiagram-inspector-destination" value="${escapeHtml(node.href || "")}" placeholder="#detail"></label>`,
+    annotationInspectorFields(node.ref),
     `<div class="docdiagram-field docdiagram-field-wide"><span>Palette</span><div class="docdiagram-inspector-palette">${paletteMarkup(colourScheme, documentTheme, selectedPalette, "node-palette")}</div></div>`,
     `<label class="docdiagram-inspector-shape-row"><span>Shape</span><select class="docdiagram-inspector-shape">${nodeShapes.map(
       (shape) => `<option value="${shape}"${shape === node.shape ? " selected" : ""}>${shape}</option>`
@@ -121,6 +175,7 @@ export function buildEdgeInspectorFields(
 
   return [
     `<label class="docdiagram-field docdiagram-field-wide">Label<textarea class="docdiagram-inspector-label docdiagram-inspector-textarea" rows="2">${escapeHtml(edge.label || "")}</textarea></label>`,
+    annotationInspectorFields(edge.ref, true, true),
     `<label class="docdiagram-field">Route<select class="docdiagram-inspector-route">${edgeRoutes.map(
       (candidate) => `<option value="${candidate}"${candidate === route ? " selected" : ""}>${candidate}</option>`
     ).join("")}</select></label>`,
@@ -163,6 +218,7 @@ export function buildSequenceInspectorFields(
 
   return [
     `<label class="docdiagram-field docdiagram-field-wide">Label<textarea class="docdiagram-sequence-inspector-label docdiagram-inspector-textarea" rows="2">${escapeHtml(element.label || "")}</textarea></label>`,
+    selection.kind === "message" ? annotationInspectorFields((element as SequenceMessage).ref, false) : "",
     selection.kind === "message"
       ? `<label class="docdiagram-field">Style<select class="docdiagram-sequence-inspector-message-style"><option value="solid"${(element as SequenceMessage).style !== "dashed" ? " selected" : ""}>Solid</option><option value="dashed"${(element as SequenceMessage).style === "dashed" ? " selected" : ""}>Dashed</option></select></label>`
       : "",
@@ -267,12 +323,25 @@ export function wireNodeInspector(host: InspectorHost, container: ParentNode, di
     (value) => persistNode((_, node) => setNodeLabel(node, value)),
     scheduleLiveTextRender
   );
+  wireAnnotationInspector(container, (mutate) => withNode((_, node) => mutate(node)));
   wireLiveTextInput(
     container.querySelector<HTMLTextAreaElement>(".docdiagram-inspector-subtitle"),
     ".docdiagram-inspector-subtitle",
     (value) => persistNode((_, node) => setNodeSubtitle(node, value)),
     scheduleLiveTextRender
   );
+  const destination = container.querySelector<HTMLInputElement>(".docdiagram-inspector-destination");
+  destination?.addEventListener("change", () => {
+    const href = destination.value;
+    if (href && !isValidNodeHref(href)) {
+      destination.setAttribute("aria-invalid", "true");
+      globalThis.alert(new NodeHrefValidationError(nodeId).message);
+      destination.focus();
+      return;
+    }
+    destination.removeAttribute("aria-invalid");
+    withNode((_, node) => setNodeHref(node, href));
+  });
   for (const palette of container.querySelectorAll<HTMLInputElement>(".docdiagram-inspector-palette input")) {
     palette.addEventListener("change", () => withNode((_, node) => setNodeColorPalette(node, palette.value, host.state.documentColorScheme)));
   }
@@ -318,6 +387,7 @@ export function wireEdgeInspector(host: InspectorHost, container: ParentNode, di
     update(host, () => mutate(diagram, edge));
   };
 
+  wireAnnotationInspector(container, (mutate) => withEdge((_, edge) => mutate(edge)));
   change(container, ".docdiagram-inspector-label", (value) => withEdge((_, edge) => setEdgeLabel(edge, value)));
   change(container, ".docdiagram-inspector-route", (value) => withEdge((_, edge) => setEdgeRoute(edge, value)));
   change(container, ".docdiagram-inspector-stroke-type", (value) => withEdge((_, edge) => setEdgeStrokeType(edge, value)));
@@ -345,9 +415,10 @@ export function wireSequenceInspector(host: InspectorHost, container: ParentNode
     return;
   }
   change(container, ".docdiagram-sequence-inspector-label", (value) => update(host, () => {
-    element.label = value.trim() || element.label;
+    element.label = selection.kind === "message" ? value.trim() : value.trim() || element.label;
   }));
   if (selection.kind === "message") {
+    wireAnnotationInspector(container, (mutate) => update(host, () => mutate(element as SequenceMessage)));
     change(container, ".docdiagram-sequence-inspector-message-style", (value) => update(host, () => {
       if (sequenceMessageStyles.includes(value as (typeof sequenceMessageStyles)[number])) {
         (element as SequenceMessage).style = value as (typeof sequenceMessageStyles)[number];

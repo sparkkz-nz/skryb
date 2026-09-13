@@ -1,5 +1,7 @@
 import { getDiagramId } from "../core/document";
 import { serializeDiagram } from "../core/diagrams/serializer";
+import type { FlowchartNode } from "../core/diagrams/schema";
+import { decodeDocumentFragment } from "../core/navigation";
 import type { EditorState } from "./state";
 import type { SourceEditor } from "./source-editor";
 import type { DocumentSession } from "./document-session";
@@ -69,6 +71,7 @@ export class DocumentExportService {
     }
     copy.querySelector("body")?.removeAttribute("data-docdiagram-theme");
     output?.replaceChildren();
+    output?.removeAttribute("tabindex");
     output?.removeAttribute("data-editing-shortcuts-bound");
     for (const attribute of [...(output?.attributes || [])]) {
       if (attribute.name === "style" || attribute.name.startsWith("data-")) {
@@ -98,7 +101,19 @@ export class DocumentExportService {
       globalThis.alert("The diagram is no longer available to save.");
       return;
     }
-    const diagramSource = serializeDiagram(diagram);
+    const copyNode = (node: FlowchartNode): FlowchartNode => {
+      const copy = { ...node };
+      if (!diagram.id || decodeDocumentFragment(copy.href) !== diagram.id) {
+        delete copy.href;
+      }
+      if (copy.children) {
+        copy.children = copy.children.map(copyNode);
+      }
+      return copy;
+    };
+    const diagramSource = serializeDiagram(diagram.type === "flowchart"
+      ? { ...diagram, nodes: diagram.nodes.map(copyNode) }
+      : diagram);
     const name = getDiagramId(diagramSource) || this.getDiagramExportName(diagramIndex);
     const source = [
       "---",
@@ -186,6 +201,14 @@ export class DocumentExportService {
     copy.querySelectorAll(".docdiagram-node-selected, .docdiagram-edge-selected").forEach((element) => {
       element.classList.remove("docdiagram-node-selected", "docdiagram-edge-selected");
     });
+    // Figure and document anchors are outside the isolated SVG, including its own diagram ID.
+    copy.querySelectorAll("a.docdiagram-node-link").forEach((link) => {
+      link.replaceWith(...link.childNodes);
+    });
+    copy.querySelectorAll(
+      ".docdiagram-node-link-hit, .docdiagram-node-link-focus, .docdiagram-node-link-indicator"
+    ).forEach((element) => element.remove());
+    copy.setAttribute("role", copy.querySelectorAll(".docdiagram-annotation-ref").length ? "group" : "img");
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = [
       "svg{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}",
@@ -196,9 +219,12 @@ export class DocumentExportService {
     ].join("");
     copy.insertBefore(style, copy.firstChild);
     const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const viewBox = copy.viewBox?.baseVal;
     background.setAttribute("class", "docdiagram-export-background");
-    background.setAttribute("width", "100%");
-    background.setAttribute("height", "100%");
+    background.setAttribute("x", String(viewBox?.x ?? 0));
+    background.setAttribute("y", String(viewBox?.y ?? 0));
+    background.setAttribute("width", viewBox && viewBox.width > 0 ? String(viewBox.width) : "100%");
+    background.setAttribute("height", viewBox && viewBox.height > 0 ? String(viewBox.height) : "100%");
     background.setAttribute("fill", backgroundColour);
     copy.insertBefore(background, style.nextSibling);
     return copy;

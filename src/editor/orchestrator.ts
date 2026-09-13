@@ -120,6 +120,7 @@ import { SourceEditor } from "./source-editor";
 import { DocumentExportService } from "./document-export-service";
 import { DocumentRenderer } from "./document-renderer";
 import { DocumentSession, TemplateSourceStore } from "./document-session";
+import { DocumentNavigation } from "./document-navigation";
 import { clearEditorState, createEditorState, isDiagramEditing, type EditorState } from "./state";
 
 type SequenceInspectable = SequenceParticipant | SequenceMessage | SequenceNote;
@@ -147,12 +148,13 @@ function measureDiagramContentHeight(figure: HTMLElement): number | null {
     return null;
   }
   const scale = svgBounds.height / canvasHeight;
+  const contentTop = contentBounds.y - (svg.viewBox?.baseVal?.y || 0);
   const frameStyles = getComputedStyle(figure);
   const chromeAbove = svgBounds.top - figure.getBoundingClientRect().top + figure.scrollTop;
   const chromeBelow = (parseFloat(frameStyles.paddingBottom) || 0) + (parseFloat(frameStyles.borderBottomWidth) || 0);
-  const trailingMargin = Math.min(Math.max(contentBounds.y, 0), 40) * scale;
+  const trailingMargin = Math.min(Math.max(contentTop, 0), 40) * scale;
   const fittedHeight = Math.ceil(
-    chromeAbove + (contentBounds.y + contentBounds.height) * scale + trailingMargin + chromeBelow
+    chromeAbove + (contentTop + contentBounds.height) * scale + trailingMargin + chromeBelow
   );
   return Math.min(fittedHeight, figure.offsetHeight);
 }
@@ -171,6 +173,7 @@ export class BrowserRuntime {
   private readonly exportService: DocumentExportService;
   private readonly renderer: DocumentRenderer;
   private readonly session: DocumentSession;
+  private readonly navigation: DocumentNavigation | null;
 
   public constructor(
     private readonly sourceElement: HTMLTemplateElement | null,
@@ -195,6 +198,10 @@ export class BrowserRuntime {
       renderDocument: () => this.renderDocument()
     }) : null;
     this.exportService = new DocumentExportService(this.session, this.state, outputElement, this.sourceEditor);
+    this.navigation = outputElement ? new DocumentNavigation({
+      outputElement,
+      prepareDocumentView: (targetId) => this.prepareNavigation(targetId)
+    }) : null;
     this.lifecycle = outputElement ? new BrowserLifecycle({
       outputElement,
       isAutoTheme: () => this.state.documentThemeSetting === "auto",
@@ -208,6 +215,7 @@ export class BrowserRuntime {
       closeDiagramExportMenus: () => this.closeDiagramExportMenus(),
       getExpandedDiagramIndex: () => this.state.expandedDiagramIndex,
       toggleDiagramExpansion: (diagramIndex) => this.toggleDiagramExpansion(diagramIndex),
+      activateDiagram: (diagramIndex) => this.diagramEditor?.activateDiagram(diagramIndex),
       hasSelection: () => Boolean(this.state.selectedNode || this.state.selectedEdge || this.state.selectedSequenceElement),
       clearSelection: () => {
         clearEditorState(this.state);
@@ -550,17 +558,23 @@ export class BrowserRuntime {
     this.session.captureSavedSource();
     this.bakeOnOpen();
     this.lifecycle?.bind();
+    this.navigation?.bind();
     // A `doctype: diagram` document opens straight into the expanded frame.
     // Reading the frontmatter up front keeps that to a single render, and an
     // unparseable header is reported by renderDocument as usual.
+    let expandOnOpen = false;
     try {
-      if (parseDocumentFrontmatter(this.getSource()).frontmatter.doctype === "diagram") {
-        this.state.expandedDiagramIndex = 0;
-      }
+      expandOnOpen = parseDocumentFrontmatter(this.getSource()).frontmatter.doctype === "diagram";
     } catch {
-      this.state.expandedDiagramIndex = null;
+      this.setExpandedDiagram(null);
+    }
+    if (expandOnOpen) {
+      this.setExpandedDiagram(0);
     }
     this.renderDocument();
+    if (globalThis.location?.hash) {
+      void this.navigation?.revealFragment();
+    }
   }
 
   public getCoreApi() {
@@ -849,7 +863,7 @@ export class BrowserRuntime {
     this.closeDocumentMenu();
     this.closeDiagramExportMenus();
     this.stopDiagramEditing();
-    this.state.expandedDiagramIndex = null;
+    this.setExpandedDiagram(null);
     // Stored heights are a record of how each frame was resized on screen, which says nothing
     // about how tall a diagram needs to be on paper.
     this.state.diagramViewportHeights.clear();
@@ -905,6 +919,7 @@ export class BrowserRuntime {
    * a fixed-position frame's viewport-filling height as its stored height.
    */
   private setExpandedDiagram(diagramIndex: number | null): void {
+    this.diagramEditor?.activateDiagram(diagramIndex);
     const previousIndex = this.state.expandedDiagramIndex;
     if (previousIndex === diagramIndex) {
       return;
@@ -919,6 +934,29 @@ export class BrowserRuntime {
       this.pendingViewportFits.add(index);
       this.autoFittedDiagrams.delete(index);
     }
+  }
+
+  private prepareNavigation(targetId: string | null): boolean {
+    if (this.sourceEditor?.isOpen) {
+      this.sourceEditor.close();
+      if (this.sourceEditor.isOpen) {
+        return false;
+      }
+    }
+    const target = targetId === null ? null :
+      [...(this.outputElement?.querySelectorAll<HTMLElement>(".docdiagram[id]") || [])]
+        .find((figure) => figure.id === targetId);
+    this.stopDiagramEditing();
+    this.setExpandedDiagram(null);
+    if (target) {
+      const index = Number(target.dataset.diagramIndex);
+      this.state.diagramZooms.set(index, 100);
+      this.state.diagramCameraOffsets.delete(index);
+      this.pendingViewportFits.add(index);
+    }
+    this.closeDocumentMenu();
+    this.closeDiagramExportMenus();
+    return this.renderDocument();
   }
 
   public toggleDiagramExpansion(diagramIndex: number): void {

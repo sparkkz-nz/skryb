@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Annotation references</title>
+  <script src="../dist/skryb-runtime-self-packaged.js" defer></script>
+</head>
+<body>
+  <template id="source" type="text/markdown">
+---
+theme: light
+colourScheme: ice
+---
+
+# Annotation references
+
+This synthetic example uses annotation badges from the next runtime release.
+It loads the local companion runtime; this feature is not yet in published
+`latest` or an existing pinned release.
+
+Badges identify elements explained in prose. They are not links and do not
+number themselves. One or two digits produce a circle; words produce a
+stadium-shaped badge.
+
+## Flowchart annotations
+
+{annotation=Start} marks the processing boundary. Its uppercase `NE` position
+places the badge outside the parent. Child {annotation=2} uses lowercase `sw`
+to place its badge inside the lower-left corner.
+
+{annotation=Check} explains the labeled acceptance connector.
+{annotation=3} marks the record operation using the default `NW` position.
+The unlabeled connector carries {annotation=4} beside its routed midpoint.
+Its lowercase `e` still means outside, because it belongs to a connector.
+{annotation=Ready} sits inside the archive node at `se`.
+
+```diagram
+type: flowchart
+id: annotated-processing
+caption: "Figure #: Annotated request processing"
+description: Validation inside a processing boundary sends accepted requests to recording and then archiving.
+layout: right
+canvas: { auto: true, grid: 5 }
+nodes:
+  - id: processing
+    label: Processing
+    shape: rounded-rectangle
+    ref: { label: Start, position: NE }
+    textVAlign: top
+    palette: accent-soft
+    position: { x: 80, y: 80 }
+    size: { width: 260, height: 200 }
+    children:
+      - id: validate
+        label: Validate request
+        shape: rounded-rectangle
+        ref: { label: 2, position: sw }
+        position: { x: 30, y: 75 }
+        size: { width: 200, height: 100 }
+  - id: record
+    label: Record request
+    shape: rounded-rectangle
+    ref: 3
+    position: { x: 600, y: 130 }
+    size: { width: 220, height: 100 }
+  - id: archive
+    label: Archive record
+    shape: rounded-rectangle
+    ref: { label: Ready, position: se }
+    position: { x: 600, y: 370 }
+    size: { width: 220, height: 110 }
+edges:
+  - source: processing
+    target: record
+    sourceAnchor: right
+    targetAnchor: left
+    label: Accepted
+    ref: { label: Check, position: S }
+  - source: record
+    target: archive
+    sourceAnchor: bottom
+    targetAnchor: top
+    ref: { label: 4, position: e }
+```
+
+See Figure {ref=annotated-processing} for the whole flow. This existing figure
+reference remains a link; the annotation badges above are not interactive.
+
+## Sequence annotations
+
+The client sends a request at {annotation=1}. The service checks it internally
+at {annotation=Review}, then returns the result at {annotation=12}.
+Sequence badges occupy a fixed left gutter aligned with each message arrow.
+The self-message gets one badge on its outgoing row. Its authored `SE`
+position is accepted but has no effect.
+
+```diagram
+type: sequence
+id: annotated-exchange
+caption: "Figure #: Annotated request exchange"
+description: A client sends a request, the service reviews it internally, and the service returns the result.
+canvas:
+  participantSpacing: 300
+participants:
+  - id: client
+    label: Client
+    kind: actor
+  - id: service
+    label: Service
+messages:
+  - from: client
+    to: service
+    label: Submit request
+    ref: 1
+  - from: service
+    to: service
+    label: Review request
+    ref: { label: Review, position: SE }
+  - from: service
+    to: client
+    label: Accepted
+    style: dashed
+    ref: 12
+```
+
+## Editing and saving
+
+Change **Reference** in the element inspector or edit its source. Flowchart
+inspectors also expose **Position**; sequence-message inspectors do not.
+Change prose badges in the source. Each label is independent, so update its
+explanation when renaming it.
+
+**Save As** and **Save for Offline** retain diagram and prose badges. SVG and
+isolated Skryb diagram exports retain the diagram badges, but not this
+surrounding explanation. Export leaves this document unchanged.
+  </template>
+  <main id="rendered-document"></main>
+</body>
+</html>

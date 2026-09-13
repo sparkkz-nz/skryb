@@ -94,6 +94,30 @@ export function injectStyles(): void {
       text-decoration-thickness: .1em;
       text-underline-offset: .15em;
     }
+    .docdiagram-annotation-inline {
+      align-items: center;
+      background: var(--docdiagram-annotation-fill);
+      border-radius: 999px;
+      box-sizing: border-box;
+      color: var(--docdiagram-annotation-text);
+      display: inline-flex;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      height: 24px;
+      justify-content: center;
+      line-height: 1;
+      min-width: 32px;
+      padding: 0 8px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .docdiagram-annotation-inline.docdiagram-annotation-inline-circle {
+      min-width: 24px;
+      padding: 0;
+      width: 24px;
+    }
     #rendered-document img {
       height: auto;
       max-width: 100%;
@@ -763,6 +787,10 @@ export function injectStyles(): void {
     .docdiagram-captioned {
       padding-bottom: 2.75rem;
     }
+    .docdiagram-scroll-active {
+      outline: 2px solid var(--docdiagram-accent);
+      outline-offset: -2px;
+    }
     .docdiagram-caption {
       bottom: .9rem;
       color: var(--docdiagram-muted);
@@ -953,6 +981,15 @@ export function injectStyles(): void {
     .docdiagram-node {
       cursor: default;
     }
+    .docdiagram-node-link .docdiagram-node {
+      cursor: pointer;
+    }
+    .docdiagram-node-link:focus-visible .docdiagram-node-link-focus {
+      visibility: visible;
+    }
+    #rendered-document [id] {
+      scroll-margin-top: 5rem;
+    }
     .docdiagram[data-editing="true"] .docdiagram-node {
       cursor: grab;
     }
@@ -1034,6 +1071,7 @@ export function injectStyles(): void {
          height and the camera is reset - otherwise a pan would print as a cropped diagram. */
       .docdiagram {
         break-inside: avoid;
+        outline: none !important;
         height: auto !important;
         max-height: none !important;
         min-height: 0 !important;

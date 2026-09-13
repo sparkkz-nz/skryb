@@ -4,6 +4,7 @@ import {
   edgeAnchors,
   minimumNodeSize,
   colourSchemes,
+  type AnnotationRef,
   type FlowchartDiagram,
   type FlowchartNode
 } from "../core/diagrams/schema";
@@ -12,6 +13,7 @@ import { FlowchartIndex } from "../core/diagrams/hierarchy";
 import { getNamedStyle, getNodeEffectiveStyle, getEdgeEffectiveStyle, getEdgeMarkerStyle } from "../core/diagrams/styles";
 import { renderTextBlock, getNodeGeometry, computeNodeTextLayout, renderNodeBody, buildEdgePath, buildEdgeMarkerDef, renderEdgeWaypointHandle, buildNodeCalloutPointer, renderNodeCalloutPointer } from "../core/diagrams/geometry";
 import { buildFlowchartEdgeGeometries, edgeLabelLineHeight } from "../core/diagrams/edge-labels";
+import { getAnnotationBadgeBounds, getAnnotationLabel, renderAnnotationBadge } from "../core/diagrams/annotations";
 import { renderTextShapeContent } from "../core/diagrams/text-shape";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
 import { renderFigureAttributes, renderFigureCaption, renderSvgAccessibility } from "./types";
@@ -76,6 +78,12 @@ export function renderFlowchartDiagram(
   const isDiagramEditing = state.editingDiagramIndex === diagramIndex;
   const flowchartIndex = new FlowchartIndex(diagram);
   const nodeEntries = flowchartIndex.entries;
+  const annotationBounds: Array<ReturnType<typeof getAnnotationBadgeBounds>> = [];
+  const renderReference = (ref: AnnotationRef, target: ReturnType<typeof getNodeBounds>, outsideOnly = false): string => {
+    const bounds = getAnnotationBadgeBounds(ref, target, outsideOnly);
+    annotationBounds.push(bounds);
+    return renderAnnotationBadge(ref, bounds, state.documentColorScheme, state.documentTheme);
+  };
 
   const edgeGeometries = buildFlowchartEdgeGeometries(diagram, flowchartIndex);
   const edgeMarkerDefs: string[] = [];
@@ -143,6 +151,9 @@ export function renderFlowchartDiagram(
         : edgeLabel
           ? renderTextBlock(labelX, edgeLabel.startY, edgeLabel.lines, edgeLabelLineHeight, "docdiagram-edge-label", style.text || "")
           : "",
+      edge.ref !== undefined ? renderReference(edge.ref, edgeLabel?.bounds ?? {
+        x: edgePath.midpoint.x, y: edgePath.midpoint.y, width: 0, height: 0
+      }, true) : "",
       `</g>`
     ].join("");
   }).join("");
@@ -188,9 +199,14 @@ export function renderFlowchartDiagram(
     const geometry = getNodeGeometry(node, x, y, nodeWidth, nodeHeight);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
     const isTextShape = node.shape === "text";
+    const href = isDiagramEditing ? undefined : node.href;
+    const linkName = node.label.trim() || node.subtitle?.trim() || `Go to ${href}`;
+    const accessibleName = node.ref !== undefined ? `${linkName}, reference ${getAnnotationLabel(node.ref)}` : linkName;
 
     return [
+      href ? `<a class="docdiagram-node-link" href="${escapeHtml(href)}" aria-label="${escapeHtml(accessibleName)}">` : "",
       `<g class="docdiagram-node${isSelected ? " docdiagram-node-selected" : ""}" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}">`,
+      href ? `<rect class="docdiagram-node-link-hit" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" fill="transparent" pointer-events="all"/>` : "",
       renderNodeBody(geometry, style, strokeWidth, node.strokeType, palette.background.fill),
       calloutPointer
         ? renderNodeCalloutPointer(
@@ -228,12 +244,21 @@ export function renderFlowchartDiagram(
       isSelected && isDiagramEditing && !isEditing && node.arrow
         ? `<circle class="docdiagram-callout-handle" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}" cx="${node.arrow.x}" cy="${node.arrow.y}" r="7" aria-label="Callout pointer target"/>`
         : "",
-      `</g>`
+      href
+        ? `<rect class="docdiagram-node-link-focus" x="${x + 2}" y="${y + 2}" width="${nodeWidth - 4}" height="${nodeHeight - 4}" rx="4" fill="none" stroke="${escapeHtml(style.text || "")}" stroke-width="2" stroke-dasharray="4 3" visibility="hidden" pointer-events="none"/><path class="docdiagram-node-link-indicator" d="M ${x + nodeWidth - 20} ${y + 16} h 10 m -4 -4 l 4 4 l -4 4" fill="none" stroke="${escapeHtml(style.text || "")}" stroke-width="1.5" aria-hidden="true" pointer-events="none"/>`
+        : "",
+      node.ref !== undefined ? renderReference(node.ref, { x, y, width: nodeWidth, height: nodeHeight }) : "",
+      `</g>`,
+      href ? `</a>` : ""
     ].join("");
   }).join("");
 
   const width = Number(diagram.canvas.width) || 1000;
   const height = Number(diagram.canvas.height) || 560;
+  const minX = Math.min(0, ...annotationBounds.map((bounds) => bounds.x - 2));
+  const minY = Math.min(0, ...annotationBounds.map((bounds) => bounds.y - 2));
+  const maxX = Math.max(width, ...annotationBounds.map((bounds) => bounds.x + bounds.width + 2));
+  const maxY = Math.max(height, ...annotationBounds.map((bounds) => bounds.y + bounds.height + 2));
   const isExpanded = state.expandedDiagramIndex === diagramIndex;
   const viewportHeight = state.diagramViewportHeights.get(diagramIndex);
   const viewportStyle = viewportHeight && !isExpanded
@@ -241,12 +266,15 @@ export function renderFlowchartDiagram(
     : "";
   const cameraOffset = diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
-  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Architecture diagram", figure);
+  const accessibility = renderSvgAccessibility(
+    diagram, diagramIndex, "Architecture diagram", figure,
+    annotationBounds.length > 0 || (!isDiagramEditing && nodeEntries.some(({ node }) => node.href !== undefined))
+  );
 
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "flowchart", state, diagram.layout !== undefined),
-    `<svg viewBox="0 0 ${width} ${height}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
+    `<svg viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="${cameraStyle}">`,
     accessibility.metadata,
     `<defs>${paletteDefs}${nodeDefs.join("")}${edgeMarkerDefs.join("")}</defs>`,
     nodeMarkup,

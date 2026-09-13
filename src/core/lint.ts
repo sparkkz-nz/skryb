@@ -12,7 +12,10 @@ import {
   type ExtractedDiagram,
   type SourceRange
 } from "./document";
-import { parseDiagram } from "./diagrams/parser";
+import { parseDiagram, parseScalar } from "./diagrams/parser";
+import { collectDocumentAnchors } from "./markdown";
+import { decodeDocumentFragment, NodeHrefValidationError } from "./navigation";
+import { getAnnotationPosition, getFlowchartAnnotationBounds } from "./diagrams/annotations";
 import { FlowchartIndex } from "./diagrams/hierarchy";
 import {
   computeNodeTextLayout,
@@ -99,14 +102,100 @@ function locateSubjects(diagram: ExtractedDiagram, subjects: LintSubject[]): Lin
   });
 
   return subjects.map((subject) => subject.kind === "node"
-    ? { ...subject, sourceRange: nodeRanges.get(subject.id) }
-    : { ...subject, sourceRange: edgeRanges[subject.index] });
+    ? { ...subject, sourceRange: subject.sourceRange ?? nodeRanges.get(subject.id) }
+    : { ...subject, sourceRange: subject.sourceRange ?? edgeRanges[subject.index] });
+}
+
+function locateNodeHrefs(diagram: ExtractedDiagram): Map<string, SourceRange> {
+  const entries: Array<{ indent: number; id?: string; range?: SourceRange }> = [];
+  const stack: typeof entries = [];
+  let inNodes = false;
+  let blockIndent: number | null = null;
+  for (const [index, line] of diagram.source.split("\n").entries()) {
+    const indent = line.length - line.trimStart().length;
+    if (blockIndent !== null) {
+      if (!line.trim() || indent > blockIndent) {
+        continue;
+      }
+      blockIndent = null;
+    }
+    if (/^[A-Za-z_][\w-]*:/.test(line)) {
+      inNodes = line.startsWith("nodes:");
+      stack.length = 0;
+    }
+    if (!inNodes) {
+      continue;
+    }
+    const field = line.match(/^\s*(-\s+)?([A-Za-z_][\w-]*):\s*(.*)$/);
+    if (!field) {
+      continue;
+    }
+    if (field[1]) {
+      while (stack.length && stack[stack.length - 1].indent >= indent) {
+        stack.pop();
+      }
+      const entry = { indent };
+      entries.push(entry);
+      stack.push(entry);
+    } else {
+      while (stack.length && stack[stack.length - 1].indent >= indent) {
+        stack.pop();
+      }
+    }
+    const node = stack[stack.length - 1];
+    if (node && (field[1] || indent === node.indent + 2)) {
+      if (field[2] === "id") {
+        const id = parseScalar(field[3]);
+        if (typeof id === "string") {
+          node.id = id;
+        }
+      } else if (field[2] === "href") {
+        const range = diagram.lineRanges[index];
+        const offset = line.indexOf("href:");
+        node.range = {
+          start: { ...range.start, column: range.start.column + offset, offset: range.start.offset + offset },
+          end: range.end
+        };
+      }
+    }
+    if (/^\|[+-]?$/.test(field[3])) {
+      blockIndent = indent + (field[1] ? 2 : 0);
+    }
+  }
+  return new Map(entries.filter((entry) => entry.id && entry.range)
+    .map((entry) => [entry.id!, entry.range!]));
 }
 
 function boundsOverlap(first: Bounds, second: Bounds): { width: number; height: number } | null {
   const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
   const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
   return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function lintAnnotations(
+  diagram: FlowchartDiagram,
+  index: FlowchartIndex,
+  report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
+): void {
+  const annotations = getFlowchartAnnotationBounds(diagram, index);
+  for (const annotation of annotations) {
+    const subject: LintSubject = annotation.kind === "node"
+      ? { kind: "node", id: annotation.id }
+      : { kind: "edge", index: annotation.index, source: diagram.edges[annotation.index].source, target: diagram.edges[annotation.index].target };
+    const description = annotation.kind === "node" ? `Node "${annotation.id}"` : `Edge ${annotation.index + 1}`;
+    const position = getAnnotationPosition(annotation.ref);
+    const { bounds, target } = annotation;
+    if (annotation.kind === "node" && position === position.toLowerCase() &&
+      (bounds.x < target.x || bounds.y < target.y ||
+        bounds.x + bounds.width > target.x + target.width || bounds.y + bounds.height > target.y + target.height)) {
+      report("annotation-overflow", `${description} annotation does not fit inside its node bounds. Enlarge the node or choose an outside position.`, "warning", [subject]);
+    }
+    const host = annotation.kind === "node" ? index.getById(annotation.id)?.node : null;
+    const obstruction = index.entries.find((entry) => (!host || !index.isRelated(host, entry.node)) && boundsOverlap(bounds, entry.bounds));
+    if (obstruction) {
+      report("annotation-overlap", `${description} annotation overlaps node "${obstruction.node.id}".`, "warning", [subject, { kind: "node", id: obstruction.node.id }]);
+    }
+  }
 }
 
 function lintNodeOverlaps(
@@ -265,11 +354,31 @@ export function lintDocument(source: string): LintResult {
   try {
     validateDocumentSource(source);
   } catch (error) {
-    messages.push({ severity: "error", rule: "schema", message: (error as Error).message });
+    const message: LintMessage = { severity: "error", rule: "schema", message: (error as Error).message };
+    if (error instanceof NodeHrefValidationError) {
+      for (const extracted of extractDiagramFences(source)) {
+        try {
+          parseDiagram(extracted.source);
+        } catch (candidate) {
+          if (candidate instanceof NodeHrefValidationError) {
+            message.diagram = describeDiagram(extracted.id, extracted.index);
+            message.location = {
+              diagramId: extracted.id,
+              diagramIndex: extracted.index,
+              fenceRange: extracted.fenceRange,
+              subjects: [{ kind: "node", id: candidate.nodeId, sourceRange: locateNodeHrefs(extracted).get(candidate.nodeId) }]
+            };
+            break;
+          }
+        }
+      }
+    }
+    messages.push(message);
     return { sourceHash, messages, errorCount: 1, warningCount: 0 };
   }
 
   const colourScheme = resolveDocument(source).colourScheme;
+  const anchors = collectDocumentAnchors(source);
   extractDiagramFences(source).forEach((extracted) => {
     const diagram = parseDiagram(extracted.source, colourScheme);
     if (diagram.type !== "flowchart") {
@@ -298,9 +407,28 @@ export function lintDocument(source: string): LintResult {
     };
 
     const flowchartIndex = new FlowchartIndex(diagram);
+    const hrefRanges = locateNodeHrefs(extracted);
+    for (const { node } of flowchartIndex.entries) {
+      if (node.href === undefined) {
+        continue;
+      }
+      const target = decodeDocumentFragment(node.href)!;
+      const count = anchors.get(target) || 0;
+      if (count !== 1) {
+        report(
+          count ? "ambiguous-node-destination" : "missing-node-destination",
+          count
+            ? `Node "${node.id}" destination "${node.href}" matches ${count} rendered anchors.`
+            : `Node "${node.id}" destination "${node.href}" does not match a rendered heading or diagram anchor.`,
+          "warning",
+          [{ kind: "node", id: node.id, sourceRange: hrefRanges.get(node.id) }]
+        );
+      }
+    }
     lintEdges(diagram, flowchartIndex, report);
     lintNodeOverlaps(flowchartIndex, report);
     lintNodeLabels(flowchartIndex, report);
+    lintAnnotations(diagram, flowchartIndex, report);
 
     const balance = analyseBalancedLayoutCandidate(diagram);
     if (balance) {

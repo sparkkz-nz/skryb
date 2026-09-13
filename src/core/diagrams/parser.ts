@@ -21,19 +21,21 @@ import {
 import { fitCanvasToContent } from "./mutations";
 import { applyFlowchartLayout, resolveLayoutSettings } from "./layout";
 import { applyOneShotRelayout } from "./relayout";
+import { isValidNodeHref, NodeHrefValidationError } from "../navigation";
+import { validateAnnotationRef } from "./annotations";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
 const diagramMetadataFields = ["version", "id", "caption", "description", "theme"] as const;
 const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "relayout", "styles", "canvas", "nodes", "edges"] as const;
 const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "class", "position", "pinned", "size", "style", "strokeType", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
-const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "strokeType", "label", "style", "start", "end", "waypoint"] as const;
+const flowchartNodeFields = ["id", "label", "href", "ref", "shape", "class", "position", "pinned", "size", "style", "strokeType", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
+const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "strokeType", "label", "ref", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
 const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
 const flowchartNodeStyleFields = ["fill", "stroke", "strokeWidth", "text"] as const;
 const flowchartEdgeStyleFields = ["stroke", "strokeWidth", "text"] as const;
 const sequenceParticipantFields = ["id", "label", "kind", "palette", "style", "size"] as const;
-const sequenceMessageFields = ["from", "to", "label", "style"] as const;
+const sequenceMessageFields = ["from", "to", "label", "ref", "style"] as const;
 const sequenceActivationFields = ["participant", "from", "to"] as const;
 const sequenceNoteFields = ["at", "after", "label", "palette", "style", "size"] as const;
 const sequenceGroupFields = ["label", "from", "to"] as const;
@@ -79,13 +81,53 @@ export function parseScalar(value: string): unknown {
     return trimmed === "true";
   }
 
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      throw new Error(`Invalid inline list: ${trimmed}`);
+    }
+  }
+
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
     const entriesSource = trimmed.slice(1, -1).trim();
     if (!entriesSource) {
       return {};
     }
 
-    const entries = entriesSource.split(",");
+    const entries: string[] = [];
+    let start = 0;
+    let quote = "";
+    let depth = 0;
+    let scalarStart = true;
+    for (let index = 0; index < entriesSource.length; index += 1) {
+      const character = entriesSource[index];
+      if (quote) {
+        if (character === "\\" && quote === '"') {
+          index += 1;
+        } else if (character === quote) {
+          quote = "";
+        }
+        continue;
+      }
+      if ((character === '"' || character === "'") && scalarStart) {
+        quote = character;
+      } else if (character === "{" || character === "[") {
+        depth += 1;
+      } else if (character === "}" || character === "]") {
+        depth -= 1;
+      } else if (character === "," && depth === 0) {
+        entries.push(entriesSource.slice(start, index));
+        start = index + 1;
+      }
+      if (!/\s/.test(character)) {
+        scalarStart = ":,[{".includes(character);
+      }
+    }
+    if (quote || depth !== 0) {
+      throw new Error(`Invalid inline mapping: ${trimmed}`);
+    }
+    entries.push(entriesSource.slice(start));
     const object: ParsedObject = {};
 
     for (const entry of entries) {
@@ -95,6 +137,9 @@ export function parseScalar(value: string): unknown {
       }
 
       const key = entry.slice(0, separator).trim();
+      if (Object.prototype.hasOwnProperty.call(object, key)) {
+        throw new Error(`Duplicate inline mapping field: ${key}`);
+      }
       object[key] = parseScalar(entry.slice(separator + 1));
     }
 
@@ -440,9 +485,16 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
     }
 
     assertAllowedFields(node, flowchartNodeFields, `node "${node.id || "unknown"}"`);
+    if (node.ref !== undefined) {
+      validateAnnotationRef(node.ref, `Node "${node.id}" ref`);
+    }
 
     if (!node.id || typeof node.label !== "string") {
       throw new Error("Every node requires an id and a string label.");
+    }
+
+    if (node.href !== undefined && !isValidNodeHref(node.href)) {
+      throw new NodeHrefValidationError(node.id);
     }
 
     if (!node.shape) {
@@ -509,6 +561,9 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
 
   for (const edge of diagram.edges) {
     assertAllowedFields(edge, flowchartEdgeFields, `edge "${edge.source || "unknown"}" -> "${edge.target || "unknown"}"`);
+    if (edge.ref !== undefined) {
+      validateAnnotationRef(edge.ref, `Edge "${edge.source}" -> "${edge.target}" ref`);
+    }
 
     // Anchors are resolved per side, so an author can pin the one that carries intent - the
     // deliberate back-edge that steers stage assignment - and leave the other to be derived.
@@ -622,9 +677,15 @@ function validateSequenceDiagram(diagram: SequenceDiagram, colorScheme = "classi
 
   for (const [index, message] of diagram.messages.entries()) {
     assertAllowedFields(message, sequenceMessageFields, `message ${index}`);
+    if (message.ref !== undefined) {
+      validateAnnotationRef(message.ref, `Sequence message ${index} ref`);
+    }
 
-    if (!message.from || !message.to || !message.label) {
-      throw new Error(`Sequence message ${index} requires from, to, and label.`);
+    if (!message.from || !message.to) {
+      throw new Error(`Sequence message ${index} requires from and to.`);
+    }
+    if (message.label !== undefined && typeof message.label !== "string") {
+      throw new Error(`Sequence message ${index} label must be a string.`);
     }
 
     if (!participantIds.has(message.from) || !participantIds.has(message.to)) {

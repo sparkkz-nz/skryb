@@ -296,7 +296,100 @@ Add `:::toc { depth=3 diagrams=true }` near the top of a long document. It takes
 no closing fence, and lists captioned diagrams under the heading they fall
 within.
 
+### Link nodes to detail views
+
+Node navigation is available in the next runtime release, not the published
+`latest` runtime or an existing pinned release.
+
+Add optional `href: "#diagram-id"` to a flowchart node to link to a diagram,
+or `href: "#heading-slug"` to link to a heading in the same document. Quote the
+value because an unquoted `#` begins a YAML comment. Only nonempty fragments
+are supported; external URLs, cross-file paths, an empty string, and `"#"` are
+invalid. Omit `href` to remove a destination. Edges and sequence participants
+do not support it.
+
+Diagram IDs resolve with or without captions and at the reading position of a
+`:::diagram` reference. Use the rendered slug for a heading; diagram IDs and
+repeated headings can cause numeric suffixes. Give targets stable, distinct
+names.
+
+Malformed destinations are `schema` errors. Lint reports
+`missing-node-destination` for a fragment with no rendered target and
+`ambiguous-node-destination` for multiple targets. Both are warnings and retain
+the authored link; correct them before distributing the document.
+
+In read mode, linked nodes are native links that support Tab and Enter.
+Parent and child nodes can have independent destinations. Navigation closes
+diagram expansion and browser fullscreen before revealing and focusing the
+destination; fragment URLs also support direct opening and browser history.
+In edit mode, clicking selects the node. Set, change, or clear its link with
+the node inspector's **Destination** field.
+
+For an overview/detail document, place an ordinary return link beside each
+detail diagram, such as `[Back to overview](#overview-flow)`. The overview
+diagram must declare `id: overview-flow`. No automatic breadcrumb or
+parent-diagram field is needed.
+
+Baking, relayout, node duplication, edits, **Save As**, and **Save for Offline**
+retain destinations. Isolated SVG exports remove all node links. **Save as
+Skryb diagram** keeps only links to the exported diagram's own `id`, removing
+destinations in omitted headings or diagrams. The original document is
+unchanged.
+
+### Annotate diagrams and prose
+
+Annotation badges are available in the next runtime release, not published
+`latest` or an existing pinned release. Use optional `ref: 3`, `ref: Start`,
+or `ref: { label: 3, position: ne }` on flowchart nodes, flowchart edges, and
+sequence messages. The label must be a finite number or nonblank single-line
+string without control characters. It renders as plain text. Omit `ref` to
+remove it. Unknown mapping fields and invalid labels or positions are `schema`
+errors. Quote numeric-looking strings such as `ref: "03"` to preserve leading
+zeros. Repeated labels are allowed. Source labels retain their whitespace;
+the inspector trims surrounding whitespace when a label is edited.
+
+Positions default to `NW`. On nodes, uppercase `N`, `S`, `E`, `W`, `NE`, `NW`,
+`SE`, `SW` means outside the bounding box with a gap; the corresponding
+lowercase positions mean inside with an inset. On connectors, both cases stay
+outside the actual label box, or use the routed midpoint for an unlabeled edge.
+Sequence badges use a fixed left gutter aligned with the message arrow. A
+self-message gets one badge on its outgoing row. Valid positions are accepted
+but ignored for messages; their inspector has no badge-position control.
+Omit a message's `label`, or clear **Label** in its inspector, to leave the
+arrow and badge without message text.
+
+One or two ASCII digits produce a circle; all other labels produce a
+stadium shape whose width fits the text. The solid blue treatment adjusts
+contrast for the document's theme and colour scheme. There are no custom badge
+styles.
+
+Write `{annotation=3}` or `{annotation=Start}` in prose for a matching
+noninteractive badge. Labels are authored, not automatically numbered or
+linked. Existing `{ref=diagram-id}` figure links and node `href` destinations
+are unchanged. Explain each badge in adjacent prose.
+
+Use **Reference** in the node, edge, or message inspector to change or clear a
+badge label. Flowchart inspectors also expose **Position**; the edge inspector
+offers uppercase outside positions.
+
+Badge bounds contribute to fitted flowchart bounds, but do not imply obstacle
+avoidance. Check that outside badges do not overlap nearby elements and that
+inside badges leave room for node labels and children. Baking, relayout,
+duplication, edits, **Save As**, and **Save for Offline** retain annotations.
+Isolated SVG and Skryb diagram exports retain diagram badges; isolated Skryb
+exports omit the surrounding prose. Export does not modify the original.
+
 ## Editing, saving, and printing
+
+The following activation and background double-click controls are available
+in the next runtime release, not published `latest` or an existing pinned release.
+
+Double-click empty diagram background to expand it; repeat to return to the
+document. Click a diagram, or Tab into it, to activate wheel panning and
+Ctrl/Cmd+wheel zoom. An outline marks the active diagram. Clicking or moving
+keyboard focus outside it restores document scrolling. Expanded diagrams
+activate automatically; collapsing deactivates them. These controls do not
+change the saved source.
 
 Use **Edit source** for canonical Markdown, document structure, and sequence
 diagram changes. Its menu inserts valid flowchart, sequence, diagram-reference,
@@ -407,15 +500,20 @@ outside diagram fences is not changed.
 | --- | --- | --- |
 | `schema` | error | The document or a diagram fails validation. Other checks do not run until this is fixed. |
 | `unknown-edge-endpoint` | error | An edge references a node that does not exist, so the renderer omits the edge. |
+| `missing-node-destination` | warning | A node's valid fragment does not match a rendered heading or diagram anchor. |
+| `ambiguous-node-destination` | warning | A node's valid fragment matches more than one rendered anchor. |
 | `node-overlap` | warning | Two unrelated node bounds overlap. A child within its parent is excluded. |
 | `edge-crosses-node` | warning | An edge passes through a node other than its source or target. |
 | `edge-label-overlap` | warning | All deterministic label positions conflict with a node, another label, or another route. The fallback label remains visible. |
 | `label-overflow` | warning | A label does not fit within its shape after reducing its padding. |
+| `annotation-overflow` | warning | An inside node badge extends beyond its node bounds. Enlarge the node or choose an outside position. |
+| `annotation-overlap` | warning | A node badge overlaps an unrelated node, or an edge badge overlaps any node, including its endpoints. A node badge's host, ancestors, and descendants are excluded. Check badge-to-badge, badge-to-label, and sequence collisions visually. |
 | `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip whose dominant path is eligible for wrapping. |
 
-Errors are blocking. Review every warning and either correct it or confirm that
-the geometry is intentional. Disconnected nodes are valid and are not reported;
-this supports annotations and legends.
+Errors are blocking. Correct missing or ambiguous destinations. Review geometry
+warnings and either correct them or confirm that the geometry is intentional.
+Disconnected nodes are valid and are not reported; this supports annotations
+and legends.
 
 ### Adjusting baked source
 
@@ -454,6 +552,12 @@ Before returning a document, verify:
   and sizes are multiples of it.
 - A flowchart either declares `layout` or gives every node a `position` and every
   edge both anchors.
+- Each node `href` is a quoted, nonempty same-document fragment with one
+  rendered target. Detail views have ordinary Markdown return links, and the
+  chosen runtime supports node navigation.
+- Annotation labels and positions follow the documented `ref` contract.
+  Prose uses `{annotation=...}`, and rendered badges do not obscure labels or
+  other elements.
 - The document has been baked and linted since the last source change. The saved
   source contains the geometry used for rendering.
 - The checks report no errors, and every warning is either fixed or a deliberate

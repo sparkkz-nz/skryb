@@ -1,4 +1,5 @@
 export * from "./diagrams/balanced-layout";
+export * from "./diagrams/annotations";
 export * from "./diagrams/geometry";
 export * from "./diagrams/edge-labels";
 export * from "./diagrams/hierarchy";
@@ -15,10 +16,12 @@ export * from "./document";
 export * from "./fences";
 export * from "./highlight";
 export * from "./lint";
-export { isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "./markdown";
+export * from "./navigation";
+export { collectDocumentAnchors, isSafeUrl, renderInline, renderMarkdown as renderMarkdownCore } from "./markdown";
 
 export { buildEdgeInspectorFields, buildNodeInspectorFields } from "../editor/inspector";
 export { DocumentExportService } from "../editor/document-export-service";
+export { DocumentNavigation } from "../editor/document-navigation";
 export { DocumentRenderer } from "../editor/document-renderer";
 export { DocumentSession, TemplateSourceStore } from "../editor/document-session";
 export { createEditorState } from "../editor/state";

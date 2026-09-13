@@ -1,4 +1,5 @@
 import {
+  type AnnotationRef,
   type FlowchartDiagram,
   type FlowchartEdge,
   type FlowchartNode,
@@ -17,6 +18,9 @@ import {
 } from "./schema";
 import { clampNodeSize, getGridSize, getNodeColorPalette, snapToGrid } from "./styles";
 import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds } from "./hierarchy";
+import { isValidNodeHref } from "../navigation";
+import { getAnnotationBadgeBounds, getAnnotationLabel, getFlowchartAnnotationBounds, validateAnnotationRef } from "./annotations";
+import { buildFlowchartEdgeGeometries } from "./edge-labels";
 
 function includesValue<T extends string>(values: readonly T[], value: string): value is T {
   return values.includes(value as T);
@@ -55,21 +59,30 @@ function resizeCanvas(diagram: FlowchartDiagram, node: FlowchartNode | null, pad
   const boundsFor = (candidate: FlowchartNode) => flowchartIndex.getByNode(candidate)?.bounds || getNodeBounds(candidate);
   // Callout targets are canvas coordinates outside the node box, so they have to be covered too or
   // the pointer tip falls outside the viewBox.
-  const occupiedBounds = () => [
-    ...nodes.map(boundsFor),
-    ...nodes.filter((candidate) => candidate.arrow).map((candidate) => ({
-      x: candidate.arrow!.x,
-      y: candidate.arrow!.y,
-      width: 0,
-      height: 0
-    })),
-    ...(diagram.edges || []).filter((edge) => edge.waypoint).map((edge) => ({
-      x: edge.waypoint!.x,
-      y: edge.waypoint!.y,
-      width: 0,
-      height: 0
-    }))
-  ];
+  const hasEdgeAnnotations = diagram.edges.some((edge) => edge.ref !== undefined);
+  const occupiedBounds = () => {
+    const geometries = hasEdgeAnnotations
+      ? buildFlowchartEdgeGeometries(diagram, flowchartIndex, { ignoreCanvas: true })
+      : undefined;
+    return [
+      ...nodes.map(boundsFor),
+      ...getFlowchartAnnotationBounds(diagram, flowchartIndex, geometries).map((entry) => entry.bounds),
+      ...(geometries || []).flatMap((geometry) => geometry?.label ? [geometry.label.bounds] : []),
+      ...(node && !knownNodes.has(node) && node.ref !== undefined ? [getAnnotationBadgeBounds(node.ref, boundsFor(node))] : []),
+      ...nodes.filter((candidate) => candidate.arrow).map((candidate) => ({
+        x: candidate.arrow!.x,
+        y: candidate.arrow!.y,
+        width: 0,
+        height: 0
+      })),
+      ...(diagram.edges || []).filter((edge) => edge.waypoint).map((edge) => ({
+        x: edge.waypoint!.x,
+        y: edge.waypoint!.y,
+        width: 0,
+        height: 0
+      }))
+    ];
+  };
   const bounds = occupiedBounds();
   const minimumX = Math.min(0, ...bounds.map((candidate) => candidate.x));
   const minimumY = Math.min(0, ...bounds.map((candidate) => candidate.y));
@@ -246,6 +259,8 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
   const clone = (node: FlowchartNode): FlowchartNode => ({
     id: createDuplicateNodeId(ids, node.shape),
     label: node.label,
+    ...(node.href !== undefined ? { href: node.href } : {}),
+    ...(node.ref !== undefined ? { ref: typeof node.ref === "object" ? { ...node.ref } : node.ref } : {}),
     shape: node.shape,
     ...(node.position ? { position: { ...node.position } } : {}),
     ...(node.size ? { size: { ...node.size } } : {}),
@@ -274,6 +289,43 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
   entry.siblings.push(duplicate);
   expandCanvasForNode(diagram, duplicate);
   return duplicate;
+}
+
+export function setNodeHref(node: FlowchartNode, href: string): FlowchartNode {
+  if (href === "") {
+    delete node.href;
+  } else {
+    if (!isValidNodeHref(href)) {
+      throw new Error('Node href must be a non-empty same-document fragment string, such as "#detail".');
+    }
+    node.href = href;
+  }
+  return node;
+}
+
+export function setAnnotationRef<T extends { ref?: AnnotationRef }>(target: T, label: string): T {
+  if (label === "") {
+    delete target.ref;
+    return target;
+  }
+  validateAnnotationRef(label);
+  if (target.ref !== undefined && getAnnotationLabel(target.ref) === label) {
+    return target;
+  }
+  target.ref = typeof target.ref === "object" ? { ...target.ref, label } : label;
+  return target;
+}
+
+export function setAnnotationPosition<T extends { ref?: AnnotationRef }>(target: T, position: string): T {
+  const ref: unknown = {
+    label: target.ref === undefined ? 0 : typeof target.ref === "object" ? target.ref.label : target.ref,
+    position
+  };
+  validateAnnotationRef(ref);
+  if (target.ref !== undefined) {
+    target.ref = ref;
+  }
+  return target;
 }
 
 export function createConnector(

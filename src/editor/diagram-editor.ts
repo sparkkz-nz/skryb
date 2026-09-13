@@ -7,7 +7,9 @@ import {
   type FlowchartNode,
   type Position
 } from "../core/diagrams/schema";
-import { buildEdgePath, buildNodeCalloutPointer, computeNodeTextLayout, getEdgeWaypointHandleGeometry, getNodeCalloutMaskRegion, getNodeGeometry, renderNodeBody, renderNodeCalloutMaskBody } from "../core/diagrams/geometry";
+import { buildEdgePath, buildNodeCalloutPointer, computeNodeTextLayout, getEdgeWaypointHandleGeometry, getNodeCalloutMaskRegion, getNodeGeometry, renderNodeBody, renderNodeCalloutMaskBody, renderTextBlock } from "../core/diagrams/geometry";
+import { getAnnotationBadgeBounds, renderAnnotationBadge } from "../core/diagrams/annotations";
+import { buildFlowchartEdgeGeometries, edgeLabelLineHeight } from "../core/diagrams/edge-labels";
 import {
   createConnector,
   deleteConnector,
@@ -23,7 +25,7 @@ import {
   setNodeCalloutPointer,
   setNodeLabel
 } from "../core/diagrams/mutations";
-import { getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
+import { getEdgeEffectiveStyle, getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
 import { getNodeBounds } from "../renderers/flowchart";
 import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds, reparentFlowchartNode, type FlowchartNodeBounds } from "../core/diagrams/hierarchy";
 import type { ConnectionDrag } from "../renderers/types";
@@ -63,21 +65,35 @@ function getSelectedNodeStrokeWidth(diagram: FlowchartDiagram, node: FlowchartNo
 
 export class DiagramEditor {
   private editingShortcutsBound = false;
+  private activeDiagramIndex: number | null = null;
 
   public constructor(private readonly host: DiagramEditorHost) {}
 
+  public activateDiagram(diagramIndex: number | null): void {
+    this.activeDiagramIndex = diagramIndex;
+    for (const frame of this.host.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
+      frame.classList.toggle("docdiagram-scroll-active", Number(frame.dataset.diagramIndex) === diagramIndex);
+    }
+  }
+
   public enableCanvasPanning(): void {
+    if (this.activeDiagramIndex !== null && !this.host.state.diagramModels[this.activeDiagramIndex]) {
+      this.activeDiagramIndex = null;
+    }
+    this.activateDiagram(this.activeDiagramIndex);
     for (const frame of this.host.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
       const svg = frame.querySelector<SVGSVGElement>("svg");
       if (!svg) {
         continue;
       }
+      frame.tabIndex = 0;
+      frame.setAttribute("aria-description", "Click or focus to pan with the wheel. Ctrl or Cmd with the wheel zooms. Double-click the background to expand or collapse.");
       frame.addEventListener("pointerdown", (event) => {
         if ((event.target === frame || event.target === svg) && !isViewportResizePointer(frame, event)) {
           this.beginCanvasPan(svg, event);
         }
       });
-      // Not passive, because both gestures replace a browser default: Ctrl or
+      // Not passive, because active gestures replace a browser default: Ctrl or
       // Cmd with the wheel would zoom the whole page, and a plain wheel would
       // scroll it.
       frame.addEventListener("wheel", (event) => this.moveCanvasWithWheel(svg, event), { passive: false });
@@ -96,8 +112,12 @@ export class DiagramEditor {
    * state, because a re-render per wheel event would rebuild the whole document.
    */
   private moveCanvasWithWheel(svg: SVGSVGElement, event: WheelEvent): void {
-    event.preventDefault();
     const diagramIndex = pointerNumber(svg.dataset.diagramIndex);
+    if (this.activeDiagramIndex !== diagramIndex ||
+      closest(event, "input, textarea, select, [contenteditable]")) {
+      return;
+    }
+    event.preventDefault();
     const offset = this.host.state.diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
 
     if (!event.ctrlKey && !event.metaKey) {
@@ -168,6 +188,10 @@ export class DiagramEditor {
             index: pointerNumber(message.getAttribute("data-message-index") || undefined)
           };
         } else {
+          // Keep the SVG in place so a second background click can produce dblclick.
+          if (!this.host.state.selectedSequenceElement && !this.host.state.selectedNode && !this.host.state.selectedEdge) {
+            return;
+          }
           this.host.state.selectedSequenceElement = null;
         }
         this.host.state.selectedNode = null;
@@ -603,6 +627,13 @@ export class DiagramEditor {
     const palette = colourSchemes[this.host.state.documentColorScheme][this.host.state.documentTheme === "dark" ? "dark" : "light"];
     const geometry = getNodeGeometry(node, x, y, width, height);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
+    const reference = group.querySelector(".docdiagram-annotation-ref");
+    if (reference && node.ref !== undefined) {
+      reference.outerHTML = renderAnnotationBadge(
+        node.ref, getAnnotationBadgeBounds(node.ref, { x, y, width, height }),
+        this.host.state.documentColorScheme, this.host.state.documentTheme
+      );
+    }
     for (const gap of group.querySelectorAll(".docdiagram-node-stroke-gap")) {
       gap.remove();
     }
@@ -799,7 +830,9 @@ export class DiagramEditor {
       const targetAnchorName = edge.targetAnchor || "left";
       const sourceAnchor = this.getNodePortPoint(sourceEntry.node, sourceAnchorName, sourceEntry.bounds);
       const targetAnchor = this.getNodePortPoint(targetEntry.node, targetAnchorName, targetEntry.bounds);
-      const path = buildEdgePath(
+      const annotatedGeometry = edge.ref !== undefined
+        ? buildFlowchartEdgeGeometries(diagram, flowchartIndex)[edgeIndex] : null;
+      const path = annotatedGeometry?.path ?? buildEdgePath(
         sourceAnchor,
         targetAnchor,
         sourceAnchorName,
@@ -820,6 +853,22 @@ export class DiagramEditor {
       );
       group?.querySelector(".docdiagram-edge")?.setAttribute("d", path.path);
       group?.querySelector(".docdiagram-edge-hit")?.setAttribute("d", path.hitPath);
+      const reference = group?.querySelector(".docdiagram-annotation-ref");
+      if (reference && edge.ref !== undefined && annotatedGeometry) {
+        const label = annotatedGeometry.label;
+        if (label) {
+          const style = getEdgeEffectiveStyle(diagram, edge, this.host.state.documentTheme, this.host.state.documentColorScheme);
+          const text = group?.querySelector(".docdiagram-edge-label");
+          if (text) {
+            text.outerHTML = renderTextBlock(label.center.x, label.startY, label.lines, edgeLabelLineHeight, "docdiagram-edge-label", style.text || "");
+          }
+        }
+        reference.outerHTML = renderAnnotationBadge(
+          edge.ref, getAnnotationBadgeBounds(edge.ref, label?.bounds ?? {
+            x: path.midpoint.x, y: path.midpoint.y, width: 0, height: 0
+          }, true), this.host.state.documentColorScheme, this.host.state.documentTheme
+        );
+      }
     };
     const finish = (finishEvent: PointerEvent) => {
       this.releasePointer(svg, finishEvent);
@@ -905,8 +954,8 @@ export class DiagramEditor {
     const bounds = svg.getBoundingClientRect();
     const viewBox = svg.viewBox.baseVal;
     return {
-      x: (event.clientX - bounds.left) * viewBox.width / bounds.width,
-      y: (event.clientY - bounds.top) * viewBox.height / bounds.height
+      x: viewBox.x + (event.clientX - bounds.left) * viewBox.width / bounds.width,
+      y: viewBox.y + (event.clientY - bounds.top) * viewBox.height / bounds.height
     };
   }
 

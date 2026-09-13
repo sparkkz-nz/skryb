@@ -15,6 +15,7 @@ export interface BrowserLifecycleHost {
   closeDiagramExportMenus(): void;
   getExpandedDiagramIndex(): number | null;
   toggleDiagramExpansion(diagramIndex: number): void;
+  activateDiagram(diagramIndex: number | null): void;
   hasSelection(): boolean;
   clearSelection(): void;
   revealSource(text: string): void;
@@ -48,13 +49,32 @@ export class BrowserLifecycle {
       event.returnValue = "";
     });
     document.addEventListener("keydown", (event) => this.handleKeydown(event));
+    document.addEventListener("pointerdown", (event) => {
+      if (event.button === 0) {
+        this.activateDiagramAt(event.target);
+      }
+    }, true);
+    document.addEventListener("focusin", (event) => this.activateDiagramAt(event.target));
     document.addEventListener("pointerdown", (event) => this.handlePointerDown(event));
     this.host.outputElement.addEventListener("dblclick", (event) => {
-      if (event.target instanceof Element && event.target.closest("button, input, textarea, select, [contenteditable]")) {
+      if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable]")) {
+        return;
+      }
+      const frame = event.target instanceof Element ? event.target.closest<HTMLElement>(".docdiagram") : null;
+      if (frame && (event.target === frame || event.target === frame.querySelector("svg"))) {
+        event.preventDefault();
+        this.host.toggleDiagramExpansion(Number(frame.dataset.diagramIndex));
         return;
       }
       this.host.revealSource(globalThis.getSelection?.()?.toString() || "");
     });
+  }
+
+  private activateDiagramAt(target: EventTarget | null): void {
+    const frame = target instanceof Element ? target.closest<HTMLElement>(".docdiagram") : null;
+    const dockedControls = target instanceof Element && target.closest(".docdiagram-diagram-toolbar");
+    this.host.activateDiagram(frame ? Number(frame.dataset.diagramIndex) :
+      dockedControls ? this.host.getExpandedDiagramIndex() : null);
   }
 
   private handleKeydown(event: KeyboardEvent): void {

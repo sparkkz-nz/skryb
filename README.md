@@ -107,16 +107,20 @@ Everything happens inside the open document; there is no separate application.
   the theme, and
   a menu change becomes canonical frontmatter when the document is saved.
 - **Layout and zoom** switch the reading view between centred and full-width,
-  and zoom, fit, or pan a diagram inside its frame. Over a diagram the wheel pans
-  and Ctrl/Cmd + wheel zooms around the pointer. Neither has bounds, so a diagram
-  can be pushed into a corner to clear working space; **Zoom to fit** brings it
-  back. These are view controls:
+  and zoom, fit, or pan a diagram inside its frame. In the next runtime release,
+  click or Tab into a diagram to activate wheel panning and Ctrl/Cmd+wheel zoom;
+  an outline marks the active diagram. Until activated, the wheel scrolls the
+  document. Click or move keyboard focus outside it to deactivate it.
+  Panning is unbounded; **Zoom to fit** brings the drawing back. These are view controls:
   panning and zooming never alter stored coordinates. A diagram frame sizes
   itself to the drawn shapes on first render, so short diagrams leave no empty
   band; drag the frame's bottom edge to resize it, or press **Zoom to fit** to
   return to the automatic height.
 - **Expand a diagram** to fill the window when a frame is too small to work in,
-  and collapse it again from the same control or with Escape. An expanded frame
+  and collapse it again from the same control or with Escape. In the next
+  runtime release, double-click empty diagram background to expand or collapse
+  it. Expansion activates wheel controls; collapse restores document scrolling.
+  An expanded frame
   keeps the source tray usable alongside it rather than hiding behind it. Set
   `doctype: diagram` in frontmatter for a file whose point is a single diagram:
   it opens with that diagram already expanded, while remaining an ordinary
@@ -126,6 +130,19 @@ Everything happens inside the open document; there is no separate application.
   move, and diagram ids that work as anchors. Fenced code is syntax highlighted
   in about forty languages, and `styles:` lets a diagram declare a look once and
   apply it with `class:`.
+- **Node navigation (next runtime release)** uses `href: "#diagram-id"` or
+  `href: "#heading-slug"` on flowchart nodes. Readers follow nodes to detail
+  views; editors set destinations in the node inspector. Use ordinary Markdown
+  links to return to the overview. See the
+  [synthetic navigation example](examples/diagram-navigation.html), which uses
+  the local companion runtime. This feature is not yet in published `latest`
+  or an existing pinned release.
+- **Annotation badges (next runtime release)** use `ref: 3` or
+  `ref: { label: Start, position: NE }` on flowchart nodes, edges, and sequence
+  messages. Prose uses `{annotation=3}` for the same noninteractive badge.
+  Labels are authored, not automatically numbered. See the local-runtime
+  [annotation example](examples/annotation-references.html). This feature is
+  not yet in published `latest` or an existing pinned release.
 - **Printing** covers the whole document, not just one diagram. Toolbars are
   dropped, diagrams print at full size regardless of how their frame is sized on
   screen, and panels, diagrams and tables are kept off page breaks.
@@ -245,6 +262,10 @@ The checks catch what the source will not show you:
 - nodes that overlap
 - an edge crossing an unrelated node
 - a label too big for its shape
+- a node destination that is missing or ambiguous (next runtime release)
+- an annotation badge that overflows its host or overlaps a node (next runtime
+  release; badge-to-badge, badge-to-label, and sequence collisions still need
+  visual review)
 
 Only the first is an error. The rest are advisory - a document is not broken for
 being slightly untidy. The rules live in the runtime next to the geometry they

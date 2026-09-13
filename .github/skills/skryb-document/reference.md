@@ -238,6 +238,8 @@ reference determines the rendered position.
 ### Captions, anchors, and cross-references
 
 A diagram's `id` is also its anchor, so `#payment-flow` links directly to it.
+This applies with or without a caption, including a diagram placed through a
+`:::diagram` reference.
 When a diagram id matches a generated heading slug, the diagram retains the id
 and the heading slug receives a numeric suffix.
 
@@ -636,6 +638,90 @@ values to an edge; a `palette` in that class is ignored there.
 An undeclared class is an error. Named styles apply only to flowcharts;
 sequence diagrams define `palette` and `style` on individual elements.
 
+### Annotation badges
+
+Annotation badges are available in the next runtime release, not the published
+`latest` runtime or an existing pinned release. They identify elements for
+explanation in adjacent prose. They do not navigate, resolve a destination, or
+number themselves.
+
+Flowchart nodes, flowchart edges, and sequence messages accept optional `ref`:
+
+```yaml
+ref: 3
+```
+
+```yaml
+ref: Start
+```
+
+```yaml
+ref: { label: 3, position: ne }
+```
+
+The scalar forms use position `NW`. In the mapping form, `label` is required
+and `position` is optional. A label is a finite number or a nonblank,
+single-line string without control characters. Labels render as plain text,
+not Markdown or HTML. Strings are preserved without trimming; quote a
+numeric-looking label such as `ref: "03"` to retain its leading zero.
+The inspector trims surrounding whitespace when a label is edited.
+Repeated labels are allowed. A mapping accepts only `label` and `position`; custom
+badge styles are unsupported. Invalid labels, unknown fields, and unsupported
+positions produce diagram validation errors reported by lint as `schema`.
+Booleans, null, arrays, blank strings, and nonfinite numbers are not valid
+labels. Omit `ref` to remove the badge.
+
+One or two ASCII digits, such as `3` or `12`, produce a circle. All other
+labels produce a stadium shape: a rectangle with semicircular ends. Badge width
+fits the label. All badges use a solid blue treatment with contrasting text
+selected for the document's colour scheme and light or dark theme. A node's
+palette, class, or style does not customise its badge.
+
+| Element | Position behaviour |
+| --- | --- |
+| Flowchart node, including a child | Uppercase `N`, `S`, `E`, `W`, `NE`, `NW`, `SE`, `SW` places the badge outside the node's bounding box with a gap. Lowercase `n`, `s`, `e`, `w`, `ne`, `nw`, `se`, `sw` places it inside with an inset. |
+| Flowchart edge | The same directions place the badge outside the actual connector-label box in either case. Without a label, the reference point is the routed path's midpoint. Lowercase does not mean inside for connectors. |
+| Sequence message | A fixed left gutter aligns the badge with the message's arrow row. A self-message has one badge on its outgoing row. A valid `position` is accepted but ignored; the message inspector has no badge-position control. |
+
+Positions are case-sensitive; mixed-case forms such as `Ne` are invalid.
+Directions use the bounding box, not the curved outline of a circle or diamond.
+Badge bounds are included when fitting flowchart content and exporting the
+diagram. This does not provide automatic obstacle avoidance. Leave space for
+outside badges, and keep inside badges clear of node labels and children.
+Inspect the rendered result after changing labels, sizes, or positions.
+Lint reports `annotation-overflow` when an inside node badge extends beyond
+its node bounds. `annotation-overlap` checks node badges against unrelated
+nodes, excluding their host and all ancestors and descendants. Edge badges
+are checked against every node, including connector endpoints. These checks do
+not cover badge-to-badge or badge-to-label collisions, or sequence geometry.
+
+Use `{annotation=3}` or `{annotation=Start}` in ordinary Markdown prose to show
+the matching noninteractive badge:
+
+```markdown
+At {annotation=3}, the service records the accepted request.
+{annotation=Start} marks the processing boundary.
+```
+
+Repeat the label explicitly; neither form automatically connects a badge to a
+diagram element. This syntax is separate from `{ref=diagram-id}`, which remains
+a link to a captioned diagram. A node's optional `href` also remains independent
+of its annotation.
+
+In the node, edge, or sequence-message inspector, use **Reference** to set or
+clear the badge label. Flowchart inspectors also provide **Position**. The
+edge inspector offers the uppercase outside positions; lowercase source values
+have the same placement. Sequence-message inspectors omit that control because
+their gutter position is fixed.
+Omit a sequence message's `label`, use `label: ""`, or clear **Label** in the
+message inspector to retain the arrow and badge without message text.
+
+Baking, relayout, duplication, graphical edits, and serialization retain `ref`.
+**Save As** and **Save for Offline** preserve diagram and inline badges.
+Isolated SVG exports retain diagram badges as vector graphics. **Save as Skryb
+diagram** retains the exported diagram's badges, but does not include omitted
+explanatory prose. Export leaves the original document unchanged.
+
 ### Nodes
 
 Every node requires `id` and `shape`; `label` must be present but may be empty.
@@ -665,6 +751,8 @@ child nodes at any depth:
 | `id` | **Required.** Stable identifier used by edges. |
 | `label` | **Required.** Node text; use `label: ""` for an unlabeled shape. A multiline label is written as a YAML literal block scalar (`label: \|+` followed by indented lines); a single-line double-quoted scalar with `\n`, for example `label: "Payments\nAPI"`, still parses for backward compatibility. |
 | `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
+| `href` | Optional same-document destination, such as `"#payment-flow"` or `"#operating-notes"`. Must be a nonempty fragment string. See [Node navigation](#node-navigation); available in the next runtime release. |
+| `ref` | Optional annotation badge: a string or finite number, or `{ label, position }`. See [Annotation badges](#annotation-badges); available in the next runtime release. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Node-level `palette` and `style` values take precedence. |
@@ -685,6 +773,72 @@ to `none` (no background, no border) while keeping readable text, and works
 on any node shape; selecting any other palette restores that palette's normal
 styling. A diagram always inherits the document-wide theme and colour scheme;
 per-diagram scheme overrides are not supported.
+
+#### Node navigation
+
+Node navigation is available in the next runtime release. It is not yet part of
+the published `latest` runtime or an existing pinned release.
+
+A flowchart node can link to a diagram or heading in the same document:
+
+```yaml
+- id: processing
+  label: Processing details
+  shape: rounded-rectangle
+  href: "#processing-detail"
+```
+
+Use a diagram's `id` for `"#processing-detail"`, or a rendered heading slug
+such as `"#operating-notes"` for `## Operating notes`. Quote the value: an
+unquoted `#` starts a YAML comment. Both captioned and uncaptioned diagrams are
+valid destinations. A `:::diagram` reference places the destination at its
+reading position, not at the fenced definition. Heading slugs follow the
+rendered document's collision rules; use the actual anchor when headings repeat
+or share a name with a diagram. Directive titles and generated SVG element IDs
+are not destinations.
+
+Only nonempty same-document fragments are supported. External URLs, cross-file
+paths, an empty string, and `"#"` are invalid. Unescaped whitespace, control
+characters, backslashes, angle brackets, double quotes, and backticks are
+rejected. Percent escapes must be valid UTF-8; the fragment is decoded once and
+must produce a nonblank anchor with no control characters or browser
+text-fragment directive (`:~:`). Percent-encoded internal spaces are allowed.
+Omit `href` to remove a link.
+The field applies to flowchart nodes, including child nodes, not edges or
+sequence participants. A Markdown link inside a node label does not replace
+`href`.
+
+In read mode, linked nodes are native links with keyboard focus and Enter
+activation. The accessible name uses the node label, then its subtitle if the
+label is blank, then `Go to #destination` if both are blank.
+A linked parent and a linked child have separate activation
+targets; following the child does not also follow the parent. Unlinked nodes
+keep their existing behaviour. Following a link closes diagram expansion and
+browser fullscreen before revealing and focusing the destination. The fragment
+URL supports direct opening and browser back/forward navigation.
+
+In edit mode, a click selects the node instead of following its link. Use the
+node inspector's **Destination** field to set, change, or clear `href`.
+Navigation does not replace selection, dragging, resizing, panning, or zooming.
+Baking, relayout, node duplication, graphical edits, and source serialization
+retain the destination.
+
+Build overview/detail documents with explicit return links in adjacent
+Markdown. For example, place `[Back to overview](#overview-flow)` after a
+detail diagram whose overview has `id: overview-flow`. No parent-diagram field
+or automatic breadcrumb is required.
+
+Malformed `href` values produce a `schema` error. A valid fragment with no
+rendered heading or diagram target produces a `missing-node-destination`
+warning; one matching multiple rendered anchors produces an
+`ambiguous-node-destination` warning. These warnings identify the source node
+and do not remove the link or choose a fallback target.
+
+**Save As** and **Save for Offline** retain node destinations in the complete
+document. Isolated SVG exports remove all node links. **Save as Skryb diagram**
+retains only links to that exported diagram's own `id`; it removes links to
+headings and other diagrams because their content is omitted. Export does not
+change the original document.
 
 #### Label wrapping and node width
 
@@ -770,6 +924,7 @@ Every edge requires both explicit endpoint anchors:
 | `source`, `target` | IDs of the connected nodes. |
 | `sourceAnchor`, `targetAnchor` | **Required unless the diagram declares a `layout`**, in which case either may be left out and is derived from where the nodes end up. `top`, `right`, `bottom`, or `left`. |
 | `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
+| `ref` | Optional annotation badge: a string or finite number, or `{ label, position }`. Both uppercase and lowercase positions stay outside the connector label. See [Annotation badges](#annotation-badges). |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
 | `strokeType` | `solid`, `dotted`, `dashed`, or `double`. Omit for `solid`. A double stroke uses two visibly separated rails; endpoint markers remain solid for legibility. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Only its `style` values apply to an edge. |
@@ -875,7 +1030,7 @@ groups:
 | Field | Required | Description |
 | --- | --- | --- |
 | `participants` | Yes | Ordered entries with unique `id`, visible `label`, optional `kind: actor`, and optional `palette`, `style`, or `size`. A multiline participant label is written as a YAML literal block scalar; the legacy double-quoted `\n` form still parses. Participant presentation also styles its activation bars. |
-| `messages` | Yes | Ordered entries with existing `from` and `to` participant IDs, visible `label`, and optional `style: solid` or `dashed`. |
+| `messages` | Yes | Ordered entries with existing `from` and `to` participant IDs, optional string `label`, optional `style: solid` or `dashed`, and optional annotation `ref`. Omit `label` or use `label: ""` for an unlabeled message. Message badges use a fixed left gutter; a valid `ref.position` is accepted but ignored. See [Annotation badges](#annotation-badges). |
 | `activations` | No | Entries with `participant` and inclusive one-based `from`/`to` message positions. |
 | `notes` | No | Entries with `at` participant ID, `after` message position, visible `label`, and optional `palette`, `style`, or `size`. Notes render above activation bars. |
 | `groups` | No | Entries with inclusive one-based `from`/`to` message positions and visible `label`. |
@@ -895,10 +1050,22 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
-The runtime provides per-diagram zoom, fit, pan, and edit controls. The wheel
-pans a diagram. Ctrl or Cmd with the wheel zooms around the pointer. Shift with
-a wheel that reports only a vertical delta pans horizontally. These gestures
-prevent page scrolling or browser zoom while the pointer is over a diagram.
+Click-to-activate wheel controls and background double-click expansion are
+available in the next runtime release, not published `latest` or an existing
+pinned release. The currently published runtime captures wheel gestures on
+hover without requiring activation.
+
+The runtime provides per-diagram zoom, fit, pan, and edit controls. Click a
+diagram, or Tab into it, to activate wheel controls. An outline marks the active
+diagram. Until activated, the wheel scrolls the document even over a diagram.
+Click or move keyboard focus outside it to deactivate it; activating another
+diagram deactivates the previous one.
+
+Over the active diagram, the wheel pans. Ctrl or Cmd with the wheel zooms
+around the pointer. Shift with a wheel that reports only a vertical delta pans
+horizontally. These gestures prevent page scrolling or browser zoom only while
+the pointer is over the active diagram. Editable fields retain their native
+wheel behaviour.
 
 Panning is unbounded. **Zoom to fit** restores the full diagram to the frame.
 Zoom ranges from one quarter to eight times the frame width.
@@ -915,7 +1082,7 @@ editing supports multiple lines: **Enter** adds a line, **Ctrl/Cmd+Enter**
 commits, and **Escape** cancels.
 
 Every retained edit serializes the diagram back into its matching `diagram`
-fence in `template#source`. **Save a copy** downloads a complete HTML document
+fence in `template#source`. **Save As** downloads a complete HTML document
 containing that updated source.
 
 The document menu's **Edit source** action opens a resizable lower tray with the
@@ -932,8 +1099,9 @@ diagram from another saved Skryb document or a plain Markdown file. If the file
 contains multiple diagrams, it prompts for a selection. Imported diagrams are
 validated. Conflicting `id` values are rewritten; duplicate diagram ids prevent
 document rendering. **Help** opens this reference. Use the tray for
-document structure and sequence-diagram changes; use the graphical editor for
-flowchart presentation and connections.
+document structure and sequence-diagram structure; use the graphical inspectors
+for flowchart presentation and connections, and sequence participant, note, and
+message presentation.
 
 If a draft has a frontmatter or diagram schema error, the last valid rendered
 document and its canonical source remain unchanged. The tray retains the draft
@@ -965,8 +1133,11 @@ A hosted runtime is fetched for that export; the explicitly named
 `file:` workflow with no network access. The export reports an error rather than
 producing a partial document if the runtime cannot be obtained.
 
-Each diagram frame has an **Expand** control that fills the window. The same
-control or Escape collapses it. An expanded frame stops above an open source
+Each diagram frame has an **Expand** control that fills the window. Double-click
+empty diagram background to expand it, and double-click again to collapse it.
+The same control or Escape also collapses it. Expansion activates wheel controls;
+collapsing returns wheel scrolling to the document. These interactions do not
+change the saved source. An expanded frame stops above an open source
 tray, and its controls move to the document toolbar. Expanding and collapsing
 fit the diagram to the new frame width without changing stored coordinates. A
 collapsed frame returns to its previous height.
@@ -1065,14 +1236,16 @@ its `sourceRange` selects the defining YAML line. Diagrams without ids remain
 addressable by `diagramIndex`, and a rendered `:::diagram` reference points back
 to the original fence rather than the reference directive.
 
-The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
-`edge-crosses-node`, `edge-label-overlap`, `label-overflow`, and
+The rules are `schema`, `unknown-edge-endpoint`, `missing-node-destination`,
+`ambiguous-node-destination`, `node-overlap`,
+`edge-crosses-node`, `edge-label-overlap`, `label-overflow`,
+`annotation-overflow`, `annotation-overlap`, and
 `unbalanced-aspect-ratio`. The last rule may carry a `suggestedAction` with the
 `wrap-linear-flow` id and zero-based diagram index; lint itself never executes
-it. Only errors are blocking: warnings
-describe things a reader would notice, but do not block a build for visual
-issues alone. Message text remains stable for consumers that do not use the
-structured location.
+it. `schema` and `unknown-edge-endpoint` are errors; the remaining rules are
+warnings. Node-destination warnings report unresolved or ambiguous links rather
+than geometry. Only errors are blocking. Message text remains stable for
+consumers that do not use the structured location.
 
 The repository CLI prints navigable `file:line:column` prefixes where a location
 is available:

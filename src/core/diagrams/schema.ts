@@ -23,6 +23,14 @@ export interface Size {
   height: number;
 }
 
+export const annotationPositions = [
+  "N", "S", "E", "W", "NE", "NW", "SE", "SW",
+  "n", "s", "e", "w", "ne", "nw", "se", "sw"
+] as const;
+
+export type AnnotationPosition = (typeof annotationPositions)[number];
+export type AnnotationRef = string | number | { label: string | number; position?: AnnotationPosition };
+
 export const paletteRoles = [
   "background", "pale", "light", "neutral", "dark",
   "accent-soft", "accent", "accent-strong",
@@ -41,6 +49,8 @@ export interface NamedStyle {
 export interface FlowchartNode {
   id: string;
   label: string;
+  href?: string;
+  ref?: AnnotationRef;
   shape: NodeShape;
   class?: string;
   position?: Position;
@@ -65,6 +75,7 @@ export interface FlowchartEdge {
   route?: EdgeRoute;
   strokeType?: EdgeStrokeType;
   label?: string;
+  ref?: AnnotationRef;
   style?: EdgeStyle;
   start?: EdgeMarkerStyle;
   end?: EdgeMarkerStyle;
@@ -117,6 +128,7 @@ export interface SequenceMessage {
   from: string;
   to: string;
   label?: string;
+  ref?: AnnotationRef;
   style?: SequenceMessageStyle;
 }
 
