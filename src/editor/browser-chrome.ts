@@ -1,4 +1,5 @@
 import { getNodeColorPalette } from "../core/diagrams/styles";
+import { getAnnotationColors } from "../core/diagrams/annotations";
 import type { Theme } from "../core/diagrams/schema";
 import type { EditorState } from "./state";
 
@@ -43,6 +44,9 @@ export class BrowserChrome {
     element.style.setProperty("--docdiagram-text", background.text || "");
     element.style.setProperty("--docdiagram-muted", neutral.text || "");
     element.style.setProperty("--docdiagram-accent", accent.stroke || "");
+    const annotation = getAnnotationColors(this.state.documentColorScheme, this.state.documentTheme);
+    element.style.setProperty("--docdiagram-annotation-fill", annotation.fill);
+    element.style.setProperty("--docdiagram-annotation-text", annotation.text);
   }
 
   public applyPageTheme(theme: Exclude<Theme, "auto">): void {

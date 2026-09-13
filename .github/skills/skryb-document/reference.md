@@ -638,6 +638,84 @@ values to an edge; a `palette` in that class is ignored there.
 An undeclared class is an error. Named styles apply only to flowcharts;
 sequence diagrams define `palette` and `style` on individual elements.
 
+### Annotation badges
+
+Annotation badges are available in the next runtime release, not the published
+`latest` runtime or an existing pinned release. They identify elements for
+explanation in adjacent prose. They do not navigate, resolve a destination, or
+number themselves.
+
+Flowchart nodes, flowchart edges, and sequence messages accept optional `ref`:
+
+```yaml
+ref: 3
+```
+
+```yaml
+ref: Start
+```
+
+```yaml
+ref: { label: 3, position: ne }
+```
+
+The scalar forms use position `NW`. In the mapping form, `label` is required
+and `position` is optional. A label is a finite number or a nonblank,
+single-line string without control characters. Labels render as plain text,
+not Markdown or HTML. A mapping accepts only `label` and `position`; custom
+badge styles are unsupported. Invalid labels, unknown fields, and unsupported
+positions produce diagram validation errors reported by lint as `schema`.
+Booleans, null, arrays, blank strings, and nonfinite numbers are not valid
+labels. Omit `ref` to remove the badge.
+
+One or two ASCII digits, such as `3` or `12`, produce a circle. Words and longer
+values produce a stadium shape: a rectangle with semicircular ends. Badge width
+fits the label. All badges use a solid blue treatment with contrasting text
+selected for the document's colour scheme and light or dark theme. A node's
+palette, class, or style does not customise its badge.
+
+| Element | Position behaviour |
+| --- | --- |
+| Flowchart node, including a child | Uppercase `N`, `S`, `E`, `W`, `NE`, `NW`, `SE`, `SW` places the badge outside the node's bounding box with a gap. Lowercase `n`, `s`, `e`, `w`, `ne`, `nw`, `se`, `sw` places it inside with an inset. |
+| Flowchart edge | The same directions place the badge outside the actual connector-label box in either case. Without a label, the reference point is the routed path's midpoint. Lowercase does not mean inside for connectors. |
+| Sequence message | A fixed left gutter aligns the badge with the message's arrow row. A self-message has one badge on its outgoing row. A valid `position` is accepted but ignored; the message inspector has no badge-position control. |
+
+Positions are case-sensitive; mixed-case forms such as `Ne` are invalid.
+Directions use the bounding box, not the curved outline of a circle or diamond.
+Badge bounds are included when fitting flowchart content and exporting the
+diagram. This does not provide automatic obstacle avoidance. Leave space for
+outside badges, and keep inside badges clear of node labels and children.
+Inspect the rendered result after changing labels, sizes, or positions.
+Lint reports `annotation-overflow` when an inside node badge extends beyond
+its node bounds, and `annotation-overlap` when a badge overlaps an unrelated
+node. Related parent/child nodes are excluded from the latter check for node
+badges. These warnings do not detect every collision with text or other badges.
+
+Use `{annotation=3}` or `{annotation=Start}` in ordinary Markdown prose to show
+the matching noninteractive badge:
+
+```markdown
+At {annotation=3}, the service records the accepted request.
+{annotation=Start} marks the processing boundary.
+```
+
+Repeat the label explicitly; neither form automatically connects a badge to a
+diagram element. This syntax is separate from `{ref=diagram-id}`, which remains
+a link to a captioned diagram. A node's optional `href` also remains independent
+of its annotation.
+
+In the node, edge, or sequence-message inspector, use **Reference** to set or
+clear the badge label. Flowchart inspectors also provide **Position**. The
+edge inspector offers the uppercase outside positions; lowercase source values
+have the same placement. Sequence-message inspectors omit that control because
+their gutter position is fixed.
+
+Baking, relayout, duplication, graphical edits, and serialization retain `ref`.
+**Save As** and **Save for Offline** preserve diagram and inline badges.
+Isolated SVG exports retain diagram badges as vector graphics. **Save as Skryb
+diagram** retains the exported diagram's badges, but does not include omitted
+explanatory prose. Export leaves the original document unchanged.
+
 ### Nodes
 
 Every node requires `id` and `shape`; `label` must be present but may be empty.
@@ -668,6 +746,7 @@ child nodes at any depth:
 | `label` | **Required.** Node text; use `label: ""` for an unlabeled shape. A multiline label is written as a YAML literal block scalar (`label: \|+` followed by indented lines); a single-line double-quoted scalar with `\n`, for example `label: "Payments\nAPI"`, still parses for backward compatibility. |
 | `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
 | `href` | Optional same-document destination, such as `"#payment-flow"` or `"#operating-notes"`. Must be a nonempty fragment string. See [Node navigation](#node-navigation); available in the next runtime release. |
+| `ref` | Optional annotation badge: a string or finite number, or `{ label, position }`. See [Annotation badges](#annotation-badges); available in the next runtime release. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Node-level `palette` and `style` values take precedence. |
@@ -839,6 +918,7 @@ Every edge requires both explicit endpoint anchors:
 | `source`, `target` | IDs of the connected nodes. |
 | `sourceAnchor`, `targetAnchor` | **Required unless the diagram declares a `layout`**, in which case either may be left out and is derived from where the nodes end up. `top`, `right`, `bottom`, or `left`. |
 | `label` | Optional edge label; a multiline label is written as a YAML literal block scalar, and the legacy double-quoted `\n` form still parses. |
+| `ref` | Optional annotation badge: a string or finite number, or `{ label, position }`. Both uppercase and lowercase positions stay outside the connector label. See [Annotation badges](#annotation-badges). |
 | `route` | `orthogonal`, `straight`, or `curved`. Omit for the default orthogonal route. |
 | `strokeType` | `solid`, `dotted`, `dashed`, or `double`. Omit for `solid`. A double stroke uses two visibly separated rails; endpoint markers remain solid for legibility. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Only its `style` values apply to an edge. |
@@ -944,7 +1024,7 @@ groups:
 | Field | Required | Description |
 | --- | --- | --- |
 | `participants` | Yes | Ordered entries with unique `id`, visible `label`, optional `kind: actor`, and optional `palette`, `style`, or `size`. A multiline participant label is written as a YAML literal block scalar; the legacy double-quoted `\n` form still parses. Participant presentation also styles its activation bars. |
-| `messages` | Yes | Ordered entries with existing `from` and `to` participant IDs, visible `label`, and optional `style: solid` or `dashed`. |
+| `messages` | Yes | Ordered entries with existing `from` and `to` participant IDs, optional string `label`, optional `style: solid` or `dashed`, and optional annotation `ref`. Omit `label` or use `label: ""` for an unlabeled message. Message badges use a fixed left gutter; a valid `ref.position` is accepted but ignored. See [Annotation badges](#annotation-badges). |
 | `activations` | No | Entries with `participant` and inclusive one-based `from`/`to` message positions. |
 | `notes` | No | Entries with `at` participant ID, `after` message position, visible `label`, and optional `palette`, `style`, or `size`. Notes render above activation bars. |
 | `groups` | No | Entries with inclusive one-based `from`/`to` message positions and visible `label`. |
@@ -1136,7 +1216,8 @@ to the original fence rather than the reference directive.
 
 The rules are `schema`, `unknown-edge-endpoint`, `missing-node-destination`,
 `ambiguous-node-destination`, `node-overlap`,
-`edge-crosses-node`, `edge-label-overlap`, `label-overflow`, and
+`edge-crosses-node`, `edge-label-overlap`, `label-overflow`,
+`annotation-overflow`, `annotation-overlap`, and
 `unbalanced-aspect-ratio`. The last rule may carry a `suggestedAction` with the
 `wrap-linear-flow` id and zero-based diagram index; lint itself never executes
 it. `schema` and `unknown-edge-endpoint` are errors; the remaining rules are

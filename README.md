@@ -133,6 +133,12 @@ Everything happens inside the open document; there is no separate application.
   [synthetic navigation example](examples/diagram-navigation.html), which uses
   the local companion runtime. This feature is not yet in published `latest`
   or an existing pinned release.
+- **Annotation badges (next runtime release)** use `ref: 3` or
+  `ref: { label: Start, position: NE }` on flowchart nodes, edges, and sequence
+  messages. Prose uses `{annotation=3}` for the same noninteractive badge.
+  Labels are authored, not automatically numbered. See the local-runtime
+  [annotation example](examples/annotation-references.html). This feature is
+  not yet in published `latest` or an existing pinned release.
 - **Printing** covers the whole document, not just one diagram. Toolbars are
   dropped, diagrams print at full size regardless of how their frame is sized on
   screen, and panels, diagrams and tables are kept off page breaks.

@@ -336,6 +336,45 @@ Skryb diagram** keeps only links to the exported diagram's own `id`, removing
 destinations in omitted headings or diagrams. The original document is
 unchanged.
 
+### Annotate diagrams and prose
+
+Annotation badges are available in the next runtime release, not published
+`latest` or an existing pinned release. Use optional `ref: 3`, `ref: Start`,
+or `ref: { label: 3, position: ne }` on flowchart nodes, flowchart edges, and
+sequence messages. The label must be a finite number or nonblank single-line
+string without control characters. It renders as plain text. Omit `ref` to
+remove it. Unknown mapping fields and invalid labels or positions are `schema`
+errors.
+
+Positions default to `NW`. On nodes, uppercase `N`, `S`, `E`, `W`, `NE`, `NW`,
+`SE`, `SW` means outside the bounding box with a gap; the corresponding
+lowercase positions mean inside with an inset. On connectors, both cases stay
+outside the actual label box, or use the routed midpoint for an unlabeled edge.
+Sequence badges use a fixed left gutter aligned with the message arrow. A
+self-message gets one badge on its outgoing row. Valid positions are accepted
+but ignored for messages; their inspector has no badge-position control.
+
+One or two ASCII digits produce a circle; words and longer labels produce a
+stadium shape whose width fits the text. The solid blue treatment adjusts
+contrast for the document's theme and colour scheme. There are no custom badge
+styles.
+
+Write `{annotation=3}` or `{annotation=Start}` in prose for a matching
+noninteractive badge. Labels are authored, not automatically numbered or
+linked. Existing `{ref=diagram-id}` figure links and node `href` destinations
+are unchanged. Explain each badge in adjacent prose.
+
+Use **Reference** in the node, edge, or message inspector to change or clear a
+badge label. Flowchart inspectors also expose **Position**; the edge inspector
+offers uppercase outside positions.
+
+Badge bounds contribute to fitted flowchart bounds, but do not imply obstacle
+avoidance. Check that outside badges do not overlap nearby elements and that
+inside badges leave room for node labels and children. Baking, relayout,
+duplication, edits, **Save As**, and **Save for Offline** retain annotations.
+Isolated SVG and Skryb diagram exports retain diagram badges; isolated Skryb
+exports omit the surrounding prose. Export does not modify the original.
+
 ## Editing, saving, and printing
 
 Use **Edit source** for canonical Markdown, document structure, and sequence
@@ -453,6 +492,8 @@ outside diagram fences is not changed.
 | `edge-crosses-node` | warning | An edge passes through a node other than its source or target. |
 | `edge-label-overlap` | warning | All deterministic label positions conflict with a node, another label, or another route. The fallback label remains visible. |
 | `label-overflow` | warning | A label does not fit within its shape after reducing its padding. |
+| `annotation-overflow` | warning | An inside node badge extends beyond its node bounds. Enlarge the node or choose an outside position. |
+| `annotation-overlap` | warning | A badge overlaps an unrelated node. Related parents and children are excluded for node badges. Check other badge and text collisions visually. |
 | `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip whose dominant path is eligible for wrapping. |
 
 Errors are blocking. Correct missing or ambiguous destinations. Review geometry
@@ -500,6 +541,9 @@ Before returning a document, verify:
 - Each node `href` is a quoted, nonempty same-document fragment with one
   rendered target. Detail views have ordinary Markdown return links, and the
   chosen runtime supports node navigation.
+- Annotation labels and positions follow the documented `ref` contract.
+  Prose uses `{annotation=...}`, and rendered badges do not obscure labels or
+  other elements.
 - The document has been baked and linted since the last source change. The saved
   source contains the geometry used for rendering.
 - The checks report no errors, and every warning is either fixed or a deliberate

@@ -15,6 +15,7 @@ import {
 import { parseDiagram, parseScalar } from "./diagrams/parser";
 import { collectDocumentAnchors } from "./markdown";
 import { decodeDocumentFragment, NodeHrefValidationError } from "./navigation";
+import { getAnnotationPosition, getFlowchartAnnotationBounds } from "./diagrams/annotations";
 import { FlowchartIndex } from "./diagrams/hierarchy";
 import {
   computeNodeTextLayout,
@@ -169,6 +170,32 @@ function boundsOverlap(first: Bounds, second: Bounds): { width: number; height: 
   const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
   const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
   return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function lintAnnotations(
+  diagram: FlowchartDiagram,
+  index: FlowchartIndex,
+  report: (rule: string, message: string, severity?: LintSeverity, subjects?: LintSubject[]) => void
+): void {
+  const annotations = getFlowchartAnnotationBounds(diagram, index);
+  for (const annotation of annotations) {
+    const subject: LintSubject = annotation.kind === "node"
+      ? { kind: "node", id: annotation.id }
+      : { kind: "edge", index: annotation.index, source: diagram.edges[annotation.index].source, target: diagram.edges[annotation.index].target };
+    const description = annotation.kind === "node" ? `Node "${annotation.id}"` : `Edge ${annotation.index + 1}`;
+    const position = getAnnotationPosition(annotation.ref);
+    const { bounds, target } = annotation;
+    if (annotation.kind === "node" && position === position.toLowerCase() &&
+      (bounds.x < target.x || bounds.y < target.y ||
+        bounds.x + bounds.width > target.x + target.width || bounds.y + bounds.height > target.y + target.height)) {
+      report("annotation-overflow", `${description} annotation does not fit inside its node bounds. Enlarge the node or choose an outside position.`, "warning", [subject]);
+    }
+    const host = annotation.kind === "node" ? index.getById(annotation.id)?.node : null;
+    const obstruction = index.entries.find((entry) => (!host || !index.isRelated(host, entry.node)) && boundsOverlap(bounds, entry.bounds));
+    if (obstruction) {
+      report("annotation-overlap", `${description} annotation overlaps node "${obstruction.node.id}".`, "warning", [subject, { kind: "node", id: obstruction.node.id }]);
+    }
+  }
 }
 
 function lintNodeOverlaps(
@@ -401,6 +428,7 @@ export function lintDocument(source: string): LintResult {
     lintEdges(diagram, flowchartIndex, report);
     lintNodeOverlaps(flowchartIndex, report);
     lintNodeLabels(flowchartIndex, report);
+    lintAnnotations(diagram, flowchartIndex, report);
 
     const balance = analyseBalancedLayoutCandidate(diagram);
     if (balance) {

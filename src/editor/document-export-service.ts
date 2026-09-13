@@ -208,7 +208,7 @@ export class DocumentExportService {
     copy.querySelectorAll(
       ".docdiagram-node-link-hit, .docdiagram-node-link-focus, .docdiagram-node-link-indicator"
     ).forEach((element) => element.remove());
-    copy.setAttribute("role", "img");
+    copy.setAttribute("role", copy.querySelectorAll(".docdiagram-annotation-ref").length ? "group" : "img");
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = [
       "svg{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}",
@@ -219,9 +219,12 @@ export class DocumentExportService {
     ].join("");
     copy.insertBefore(style, copy.firstChild);
     const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    const viewBox = copy.viewBox?.baseVal;
     background.setAttribute("class", "docdiagram-export-background");
-    background.setAttribute("width", "100%");
-    background.setAttribute("height", "100%");
+    background.setAttribute("x", String(viewBox?.x ?? 0));
+    background.setAttribute("y", String(viewBox?.y ?? 0));
+    background.setAttribute("width", viewBox && viewBox.width > 0 ? String(viewBox.width) : "100%");
+    background.setAttribute("height", viewBox && viewBox.height > 0 ? String(viewBox.height) : "100%");
     background.setAttribute("fill", backgroundColour);
     copy.insertBefore(background, style.nextSibling);
     return copy;

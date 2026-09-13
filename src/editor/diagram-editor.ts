@@ -7,7 +7,9 @@ import {
   type FlowchartNode,
   type Position
 } from "../core/diagrams/schema";
-import { buildEdgePath, buildNodeCalloutPointer, computeNodeTextLayout, getEdgeWaypointHandleGeometry, getNodeCalloutMaskRegion, getNodeGeometry, renderNodeBody, renderNodeCalloutMaskBody } from "../core/diagrams/geometry";
+import { buildEdgePath, buildNodeCalloutPointer, computeNodeTextLayout, getEdgeWaypointHandleGeometry, getNodeCalloutMaskRegion, getNodeGeometry, renderNodeBody, renderNodeCalloutMaskBody, renderTextBlock } from "../core/diagrams/geometry";
+import { getAnnotationBadgeBounds, renderAnnotationBadge } from "../core/diagrams/annotations";
+import { buildFlowchartEdgeGeometries, edgeLabelLineHeight } from "../core/diagrams/edge-labels";
 import {
   createConnector,
   deleteConnector,
@@ -23,7 +25,7 @@ import {
   setNodeCalloutPointer,
   setNodeLabel
 } from "../core/diagrams/mutations";
-import { getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
+import { getEdgeEffectiveStyle, getGridSize, getNodeEffectiveStyle, snapToGrid } from "../core/diagrams/styles";
 import { getNodeBounds } from "../renderers/flowchart";
 import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds, reparentFlowchartNode, type FlowchartNodeBounds } from "../core/diagrams/hierarchy";
 import type { ConnectionDrag } from "../renderers/types";
@@ -603,6 +605,13 @@ export class DiagramEditor {
     const palette = colourSchemes[this.host.state.documentColorScheme][this.host.state.documentTheme === "dark" ? "dark" : "light"];
     const geometry = getNodeGeometry(node, x, y, width, height);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
+    const reference = group.querySelector(".docdiagram-annotation-ref");
+    if (reference && node.ref !== undefined) {
+      reference.outerHTML = renderAnnotationBadge(
+        node.ref, getAnnotationBadgeBounds(node.ref, { x, y, width, height }),
+        this.host.state.documentColorScheme, this.host.state.documentTheme
+      );
+    }
     for (const gap of group.querySelectorAll(".docdiagram-node-stroke-gap")) {
       gap.remove();
     }
@@ -799,7 +808,9 @@ export class DiagramEditor {
       const targetAnchorName = edge.targetAnchor || "left";
       const sourceAnchor = this.getNodePortPoint(sourceEntry.node, sourceAnchorName, sourceEntry.bounds);
       const targetAnchor = this.getNodePortPoint(targetEntry.node, targetAnchorName, targetEntry.bounds);
-      const path = buildEdgePath(
+      const annotatedGeometry = edge.ref !== undefined
+        ? buildFlowchartEdgeGeometries(diagram, flowchartIndex)[edgeIndex] : null;
+      const path = annotatedGeometry?.path ?? buildEdgePath(
         sourceAnchor,
         targetAnchor,
         sourceAnchorName,
@@ -820,6 +831,22 @@ export class DiagramEditor {
       );
       group?.querySelector(".docdiagram-edge")?.setAttribute("d", path.path);
       group?.querySelector(".docdiagram-edge-hit")?.setAttribute("d", path.hitPath);
+      const reference = group?.querySelector(".docdiagram-annotation-ref");
+      if (reference && edge.ref !== undefined && annotatedGeometry) {
+        const label = annotatedGeometry.label;
+        if (label) {
+          const style = getEdgeEffectiveStyle(diagram, edge, this.host.state.documentTheme, this.host.state.documentColorScheme);
+          const text = group?.querySelector(".docdiagram-edge-label");
+          if (text) {
+            text.outerHTML = renderTextBlock(label.center.x, label.startY, label.lines, edgeLabelLineHeight, "docdiagram-edge-label", style.text || "");
+          }
+        }
+        reference.outerHTML = renderAnnotationBadge(
+          edge.ref, getAnnotationBadgeBounds(edge.ref, label?.bounds ?? {
+            x: path.midpoint.x, y: path.midpoint.y, width: 0, height: 0
+          }, true), this.host.state.documentColorScheme, this.host.state.documentTheme
+        );
+      }
     };
     const finish = (finishEvent: PointerEvent) => {
       this.releasePointer(svg, finishEvent);
@@ -905,8 +932,8 @@ export class DiagramEditor {
     const bounds = svg.getBoundingClientRect();
     const viewBox = svg.viewBox.baseVal;
     return {
-      x: (event.clientX - bounds.left) * viewBox.width / bounds.width,
-      y: (event.clientY - bounds.top) * viewBox.height / bounds.height
+      x: viewBox.x + (event.clientX - bounds.left) * viewBox.width / bounds.width,
+      y: viewBox.y + (event.clientY - bounds.top) * viewBox.height / bounds.height
     };
   }
 

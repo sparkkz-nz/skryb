@@ -96,16 +96,16 @@ function candidateCenters(segment: Segment, width: number, height: number): Posi
 
 function candidateConflicts(
   placement: EdgeLabelPlacement,
-  canvas: EdgeLabelBounds,
+  canvas: EdgeLabelBounds | null,
   nodeObstacles: Array<{ id: string; bounds: Obstacle }>,
   placedLabels: Array<{ edgeIndex: number; bounds: EdgeLabelBounds }>,
   otherRoutes: Array<{ edgeIndex: number; segments: Segment[] }>
 ): EdgeLabelConflict[] {
   const padded = inflate(placement.bounds, labelClearance);
   const conflicts: EdgeLabelConflict[] = [];
-  if (placement.bounds.x < canvas.x || placement.bounds.y < canvas.y ||
+  if (canvas && (placement.bounds.x < canvas.x || placement.bounds.y < canvas.y ||
     placement.bounds.x + placement.bounds.width > canvas.x + canvas.width ||
-    placement.bounds.y + placement.bounds.height > canvas.y + canvas.height) {
+    placement.bounds.y + placement.bounds.height > canvas.y + canvas.height)) {
     conflicts.push({ kind: "canvas" });
   }
   for (const obstacle of nodeObstacles) {
@@ -129,7 +129,8 @@ function candidateConflicts(
 /** Builds the edge paths and selects the label positions consumed by both rendering and lint. */
 export function buildFlowchartEdgeGeometries(
   diagram: FlowchartDiagram,
-  index = new FlowchartIndex(diagram)
+  index = new FlowchartIndex(diagram),
+  options: { ignoreCanvas?: boolean } = {}
 ): Array<FlowchartEdgeGeometry | null> {
   const geometries: Array<FlowchartEdgeGeometry | null> = diagram.edges.map((edge) => {
     const source = index.getById(edge.source);
@@ -158,7 +159,10 @@ export function buildFlowchartEdgeGeometries(
     ? { edgeIndex, segments: getSegments(geometry.path.path) }
     : null).filter((entry): entry is { edgeIndex: number; segments: Segment[] } => Boolean(entry));
   const placedLabels: Array<{ edgeIndex: number; bounds: EdgeLabelBounds }> = [];
-  const canvas = {
+  // An annotated auto canvas is derived from these labels and their badges. Constraining label
+  // selection to that same canvas would change the selection each time fitting moves its origin.
+  const ignoreCanvas = options.ignoreCanvas ?? (diagram.canvas.auto && diagram.edges.some((edge) => edge.ref !== undefined));
+  const canvas = ignoreCanvas ? null : {
     x: 0,
     y: 0,
     width: Number(diagram.canvas.width) || 1000,

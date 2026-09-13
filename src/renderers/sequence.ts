@@ -1,7 +1,8 @@
 import { escapeHtml } from "../core/diagrams/parser";
-import { buildEdgeMarkerDef, renderTextBlock, splitTextLines } from "../core/diagrams/geometry";
+import { buildEdgeMarkerDef, measureTextWidth, renderTextBlock, splitTextLines } from "../core/diagrams/geometry";
+import { getAnnotationBadgeSize, renderAnnotationBadge } from "../core/diagrams/annotations";
 import { getSequenceElementEffectiveStyle, getTheme } from "../core/diagrams/styles";
-import type { SequenceDiagram, SequenceNote } from "../core/diagrams/schema";
+import type { AnnotationRef, SequenceDiagram, SequenceNote } from "../core/diagrams/schema";
 import type { DiagramFigure, DiagramRenderState, DiagramToolbarRenderer } from "./types";
 import { renderFigureAttributes, renderFigureCaption, renderSvgAccessibility } from "./types";
 import { renderInline } from "../core/markdown";
@@ -10,6 +11,7 @@ type MessageRow = {
   from: string;
   to: string;
   label?: string;
+  ref?: AnnotationRef;
   style?: string;
   index: number;
   y: number;
@@ -41,6 +43,7 @@ export function renderSequenceDiagram(
   const activations = diagram.activations || [];
   const notes = diagram.notes || [];
   const groups = diagram.groups || [];
+  const hasReferences = messages.some((message) => message.ref !== undefined);
   const leftMargin = 90;
   const rightMargin = 90;
   const headerTop = 28;
@@ -69,7 +72,7 @@ export function renderSequenceDiagram(
     ? ` style="box-sizing: border-box; height: ${viewportHeight}px; min-height: 0"`
     : "";
   const sequenceMarkerId = `docdiagram-sequence-arrow-${diagramIndex}`;
-  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Sequence diagram", figure);
+  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Sequence diagram", figure, hasReferences);
   const lifelineTop = headerTop + actorHeaderHeight + 12;
   const firstParticipant = participants[0];
   const lastParticipant = participants[participants.length - 1];
@@ -320,12 +323,74 @@ export function renderSequenceDiagram(
     ].join("");
   }).join("");
 
+  let renderWidth = width;
+  let renderHeight = height;
+  let contentOffset = 0;
+  let annotationMarkup = "";
+  if (hasReferences) {
+    const gutterWidth = Math.max(...messages.map((message) =>
+      message.ref === undefined ? 0 : getAnnotationBadgeSize(message.ref).width
+    ));
+    let minX = 0;
+    let maxX = width;
+    const include = (x: number, itemWidth: number) => {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x + itemWidth);
+    };
+    const includeText = (centerX: number, lines: string[], fontSize: number, bold = false) => {
+      const textWidth = Math.max(0, ...lines.map((line) => measureTextWidth(line, fontSize, bold)));
+      include(centerX - textWidth / 2, textWidth);
+    };
+    // Reserve the gutter against actual content bounds, not only participant centres.
+    participants.forEach((participant) => {
+      const centerX = positions.get(participant.id) || 0;
+      const headerWidth = Number(participant.size?.width) || participantBoxWidth;
+      include(centerX - headerWidth / 2, headerWidth);
+      includeText(centerX, splitTextLines(participant.label || ""), 16, true);
+      renderHeight = Math.max(renderHeight, headerTop + (Number(participant.size?.height) || participantBoxHeight) + 16);
+    });
+    noteLayouts.forEach((note) => {
+      include(note.x, note.width);
+      includeText(note.x + note.width / 2, note.lines, 13);
+    });
+    groupGeometry.forEach(({ group, inset, labelWidth }) => {
+      include(inset, Math.max(60, width - inset * 2));
+      include(inset + 12, labelWidth);
+      includeText(inset + 12 + labelWidth / 2, [group.label || ""], 15);
+    });
+    activationRects.forEach((activation) => {
+      include((positions.get(activation.participantId) || 0) - 6 + activation.depth * 7, 12);
+    });
+    messageRows.forEach((message) => {
+      const sourceX = positions.get(message.from) || 0;
+      const targetX = positions.get(message.to) || 0;
+      const self = message.from === message.to;
+      include(Math.min(sourceX, targetX), self ? 48 : Math.abs(targetX - sourceX));
+      includeText(self ? sourceX + 24 : (sourceX + targetX) / 2, message.lines, 15);
+    });
+    contentOffset = 12 + gutterWidth + 20 - minX;
+    renderWidth = maxX + contentOffset + 12;
+    annotationMarkup = messageRows.map((message) => {
+      if (message.ref === undefined) {
+        return "";
+      }
+      const size = getAnnotationBadgeSize(message.ref);
+      return renderAnnotationBadge(
+        message.ref,
+        { x: 12, y: message.y - size.height / 2, ...size },
+        state.documentColorScheme,
+        state.documentTheme
+      );
+    }).join("");
+  }
+
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="sequence" data-editing="${state.editingDiagramIndex === diagramIndex}" data-expanded="${isExpanded}"${viewportStyle}>`,
     renderToolbar(diagramIndex, "sequence", state),
-    `<svg viewBox="0 0 ${width} ${height}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
+    `<svg viewBox="0 0 ${renderWidth} ${renderHeight}" ${accessibility.attributes} data-diagram-index="${diagramIndex}" style="width: ${state.diagramZooms.get(diagramIndex) || 100}%">`,
     accessibility.metadata,
     `<defs>${buildEdgeMarkerDef(sequenceMarkerId, "arrow", "end", theme.edge.stroke, 2)}</defs>`,
+    hasReferences ? `<g class="docdiagram-sequence-content" transform="translate(${contentOffset} 0)">` : "",
     groupFrameMarkup,
     lifelineMarkup,
     participantMarkup,
@@ -333,6 +398,8 @@ export function renderSequenceDiagram(
     noteMarkup,
     messageMarkup,
     groupLabelMarkup,
+    hasReferences ? "</g>" : "",
+    annotationMarkup,
     `</svg>`,
     renderFigureCaption(figure, renderInline),
     `</figure>`

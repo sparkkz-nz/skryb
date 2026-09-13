@@ -1,4 +1,5 @@
 export * from "./diagrams/balanced-layout";
+export * from "./diagrams/annotations";
 export * from "./diagrams/geometry";
 export * from "./diagrams/edge-labels";
 export * from "./diagrams/hierarchy";

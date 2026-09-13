@@ -12,7 +12,7 @@ function formatScalar(value: unknown): string {
     return `{ ${Object.entries(value).map(([key, entry]) => `${key}: ${formatScalar(entry)}`).join(", ")} }`;
   }
 
-  return /^[\w./-]+(?: [\w./-]+)*$/.test(String(value))
+  return /^[\w./-]+(?: [\w./-]+)*$/.test(String(value)) && !/^(?:-?\d+(?:\.\d+)?|true|false)$/.test(String(value))
     ? String(value)
     : JSON.stringify(String(value));
 }

@@ -148,12 +148,13 @@ function measureDiagramContentHeight(figure: HTMLElement): number | null {
     return null;
   }
   const scale = svgBounds.height / canvasHeight;
+  const contentTop = contentBounds.y - (svg.viewBox?.baseVal?.y || 0);
   const frameStyles = getComputedStyle(figure);
   const chromeAbove = svgBounds.top - figure.getBoundingClientRect().top + figure.scrollTop;
   const chromeBelow = (parseFloat(frameStyles.paddingBottom) || 0) + (parseFloat(frameStyles.borderBottomWidth) || 0);
-  const trailingMargin = Math.min(Math.max(contentBounds.y, 0), 40) * scale;
+  const trailingMargin = Math.min(Math.max(contentTop, 0), 40) * scale;
   const fittedHeight = Math.ceil(
-    chromeAbove + (contentBounds.y + contentBounds.height) * scale + trailingMargin + chromeBelow
+    chromeAbove + (contentTop + contentBounds.height) * scale + trailingMargin + chromeBelow
   );
   return Math.min(fittedHeight, figure.offsetHeight);
 }

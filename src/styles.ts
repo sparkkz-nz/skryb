@@ -94,6 +94,30 @@ export function injectStyles(): void {
       text-decoration-thickness: .1em;
       text-underline-offset: .15em;
     }
+    .docdiagram-annotation-inline {
+      align-items: center;
+      background: var(--docdiagram-annotation-fill);
+      border-radius: 999px;
+      box-sizing: border-box;
+      color: var(--docdiagram-annotation-text);
+      display: inline-flex;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 700;
+      height: 24px;
+      justify-content: center;
+      line-height: 1;
+      min-width: 32px;
+      padding: 0 8px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .docdiagram-annotation-inline.docdiagram-annotation-inline-circle {
+      min-width: 24px;
+      padding: 0;
+      width: 24px;
+    }
     #rendered-document img {
       height: auto;
       max-width: 100%;

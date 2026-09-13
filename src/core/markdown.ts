@@ -11,6 +11,7 @@ import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
 import { highlightCode } from "./highlight";
 import { getDiagramId, resolveDocument } from "./document";
+import { getAnnotationLabel } from "./diagrams/annotations";
 
 type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram" | "toc";
 
@@ -313,6 +314,24 @@ export function renderInline(source: string): string {
     codeTokens.push(`<code>${escapeHtml(code)}</code>`);
     return token;
   });
+
+  const annotationExcluded: string[] = [];
+  value = value.replace(/!\[[^\]]*\]\([^)]*\)|(\[[^\]]*\]\()([^)]*)(\))/g, (match, open: string, destination: string, close: string) => {
+    const token = `\u0002${annotationExcluded.length}\u0002`;
+    annotationExcluded.push(open ? destination : match);
+    return open ? `${open}${token}${close}` : token;
+  });
+  value = value.replace(/\{annotation=(?:"([^"}\r\n]+)"|([^{}\r\n]+))\}/g, (match, quoted: string, bare: string) => {
+    const label = getAnnotationLabel(quoted ?? bare);
+    if (!label.trim() || /[\u0000-\u001f\u007f]/.test(label)) {
+      return match;
+    }
+    const token = `\u0000${codeTokens.length}\u0000`;
+    const circle = /^[0-9]{1,2}$/.test(label) ? " docdiagram-annotation-inline-circle" : "";
+    codeTokens.push(`<span class="docdiagram-annotation-inline${circle}" role="img" aria-label="Reference ${escapeHtml(label)}">${escapeHtml(label)}</span>`);
+    return token;
+  });
+  value = value.replace(/\u0002(\d+)\u0002/g, (_, index: string) => annotationExcluded[Number(index)]);
 
   // A cross-reference can point at a figure that has not been rendered yet, so it becomes a
   // placeholder here and is resolved once the whole document has been traversed.
