@@ -225,6 +225,30 @@ nodes:
 Node-level values override the class, allowing individual exceptions without a
 second named style.
 
+## Navigate diagrams and references (next runtime release)
+
+The following additions are not yet in published `latest` or an existing pinned
+release. This guide currently loads `latest`.
+
+- Click or Tab into a diagram to activate wheel panning and Ctrl/Cmd+wheel zoom.
+  An outline marks the active diagram. Until activated, the wheel scrolls the
+  document. Click or move keyboard focus outside to deactivate it.
+- Double-click empty diagram background to expand it; repeat to return to the
+  document. The expand control and Escape remain available. Expansion activates
+  wheel controls; collapse deactivates them without changing saved coordinates.
+- Give a flowchart node `href: "#detail"` to navigate to a diagram ID or heading
+  in the same document. Use **Destination** in its inspector to edit the link.
+  Add an ordinary Markdown return link beside the detail view.
+- Add `ref: 3`, `ref: Start`, or `ref: { label: 3, position: ne }` to a
+  flowchart node, connector, or sequence message. One or two digits produce a
+  circle; other labels produce a stadium. Prose uses `{annotation=3}` for the
+  same noninteractive badge. Use **Reference** in the element inspector to
+  change or remove it. These badges do not number themselves or navigate.
+
+See the [node navigation](https://sparkkz-nz.github.io/skryb/docs/reference.html#node-navigation)
+and [annotation badge](https://sparkkz-nz.github.io/skryb/docs/reference.html#annotation-badges)
+contracts for destination validation and badge placement rules.
+
 ## Export a diagram
 
 Each diagram toolbar has an **Export** menu:
@@ -232,6 +256,8 @@ Each diagram toolbar has an **Export** menu:
 - **Open full diagram** opens the diagram alone in a new browser tab.
 - **Save as SVG** downloads a standalone, scalable vector image that can be
   opened in a browser or compatible graphics application.
+- **Save as Skryb diagram** downloads an editable single-diagram document that
+  can be imported into another document through the source tray.
 - **Print / Save as PDF** opens the browser's native print dialog for the
   diagram alone.
 
@@ -248,9 +274,10 @@ invalid draft. Double-click rendered text to open the tray at its matching
 source. Double-click and drag a text selection for more search precision.
 
 The tray menu inserts valid templates for a flowchart, sequence, diagram
-reference, contents, panel, or grid. Use it for document structure and all sequence
-diagram changes; sequence participants appear left to right and messages appear
-top to bottom in source order.
+reference, contents, panel, or grid. Use it for document structure and sequence
+participants, message order, activations, and groups. The graphical sequence
+inspector edits participant, note, and message presentation. Participants appear
+left to right and messages appear top to bottom in source order.
 
 ## Save the result
 
