@@ -1054,10 +1054,17 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
-The runtime provides per-diagram zoom, fit, pan, and edit controls. The wheel
-pans a diagram. Ctrl or Cmd with the wheel zooms around the pointer. Shift with
-a wheel that reports only a vertical delta pans horizontally. These gestures
-prevent page scrolling or browser zoom while the pointer is over a diagram.
+The runtime provides per-diagram zoom, fit, pan, and edit controls. Click a
+diagram, or Tab into it, to activate wheel controls. An outline marks the active
+diagram. Until activated, the wheel scrolls the document even over a diagram.
+Click or move keyboard focus outside it to deactivate it; activating another
+diagram deactivates the previous one.
+
+Over the active diagram, the wheel pans. Ctrl or Cmd with the wheel zooms
+around the pointer. Shift with a wheel that reports only a vertical delta pans
+horizontally. These gestures prevent page scrolling or browser zoom only while
+the pointer is over the active diagram. Editable fields retain their native
+wheel behaviour.
 
 Panning is unbounded. **Zoom to fit** restores the full diagram to the frame.
 Zoom ranges from one quarter to eight times the frame width.
@@ -1124,8 +1131,11 @@ A hosted runtime is fetched for that export; the explicitly named
 `file:` workflow with no network access. The export reports an error rather than
 producing a partial document if the runtime cannot be obtained.
 
-Each diagram frame has an **Expand** control that fills the window. The same
-control or Escape collapses it. An expanded frame stops above an open source
+Each diagram frame has an **Expand** control that fills the window. Double-click
+empty diagram background to expand it, and double-click again to collapse it.
+The same control or Escape also collapses it. Expansion activates wheel controls;
+collapsing returns wheel scrolling to the document. These interactions do not
+change the saved source. An expanded frame stops above an open source
 tray, and its controls move to the document toolbar. Expanding and collapsing
 fit the diagram to the new frame width without changing stored coordinates. A
 collapsed frame returns to its previous height.

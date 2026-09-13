@@ -787,6 +787,10 @@ export function injectStyles(): void {
     .docdiagram-captioned {
       padding-bottom: 2.75rem;
     }
+    .docdiagram-scroll-active {
+      outline: 2px solid var(--docdiagram-accent);
+      outline-offset: -2px;
+    }
     .docdiagram-caption {
       bottom: .9rem;
       color: var(--docdiagram-muted);
@@ -1067,6 +1071,7 @@ export function injectStyles(): void {
          height and the camera is reset - otherwise a pan would print as a cropped diagram. */
       .docdiagram {
         break-inside: avoid;
+        outline: none !important;
         height: auto !important;
         max-height: none !important;
         min-height: 0 !important;

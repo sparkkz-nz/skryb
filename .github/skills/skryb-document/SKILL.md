@@ -377,6 +377,13 @@ exports omit the surrounding prose. Export does not modify the original.
 
 ## Editing, saving, and printing
 
+Double-click empty diagram background to expand it; repeat to return to the
+document. Click a diagram, or Tab into it, to activate wheel panning and
+Ctrl/Cmd+wheel zoom. An outline marks the active diagram. Clicking or moving
+keyboard focus outside it restores document scrolling. Expanded diagrams
+activate automatically; collapsing deactivates them. These controls do not
+change the saved source.
+
 Use **Edit source** for canonical Markdown, document structure, and sequence
 diagram changes. Its menu inserts valid flowchart, sequence, diagram-reference,
 contents, panel, and grid templates. **Help** opens the published reference.

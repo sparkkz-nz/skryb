@@ -65,21 +65,35 @@ function getSelectedNodeStrokeWidth(diagram: FlowchartDiagram, node: FlowchartNo
 
 export class DiagramEditor {
   private editingShortcutsBound = false;
+  private activeDiagramIndex: number | null = null;
 
   public constructor(private readonly host: DiagramEditorHost) {}
 
+  public activateDiagram(diagramIndex: number | null): void {
+    this.activeDiagramIndex = diagramIndex;
+    for (const frame of this.host.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
+      frame.classList.toggle("docdiagram-scroll-active", Number(frame.dataset.diagramIndex) === diagramIndex);
+    }
+  }
+
   public enableCanvasPanning(): void {
+    if (this.activeDiagramIndex !== null && !this.host.state.diagramModels[this.activeDiagramIndex]) {
+      this.activeDiagramIndex = null;
+    }
+    this.activateDiagram(this.activeDiagramIndex);
     for (const frame of this.host.outputElement.querySelectorAll<HTMLElement>(".docdiagram")) {
       const svg = frame.querySelector<SVGSVGElement>("svg");
       if (!svg) {
         continue;
       }
+      frame.tabIndex = 0;
+      frame.setAttribute("aria-description", "Click or focus to pan with the wheel. Ctrl or Cmd with the wheel zooms. Double-click the background to expand or collapse.");
       frame.addEventListener("pointerdown", (event) => {
         if ((event.target === frame || event.target === svg) && !isViewportResizePointer(frame, event)) {
           this.beginCanvasPan(svg, event);
         }
       });
-      // Not passive, because both gestures replace a browser default: Ctrl or
+      // Not passive, because active gestures replace a browser default: Ctrl or
       // Cmd with the wheel would zoom the whole page, and a plain wheel would
       // scroll it.
       frame.addEventListener("wheel", (event) => this.moveCanvasWithWheel(svg, event), { passive: false });
@@ -98,8 +112,12 @@ export class DiagramEditor {
    * state, because a re-render per wheel event would rebuild the whole document.
    */
   private moveCanvasWithWheel(svg: SVGSVGElement, event: WheelEvent): void {
-    event.preventDefault();
     const diagramIndex = pointerNumber(svg.dataset.diagramIndex);
+    if (this.activeDiagramIndex !== diagramIndex ||
+      closest(event, "input, textarea, select, [contenteditable]")) {
+      return;
+    }
+    event.preventDefault();
     const offset = this.host.state.diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
 
     if (!event.ctrlKey && !event.metaKey) {
@@ -170,6 +188,10 @@ export class DiagramEditor {
             index: pointerNumber(message.getAttribute("data-message-index") || undefined)
           };
         } else {
+          // Keep the SVG in place so a second background click can produce dblclick.
+          if (!this.host.state.selectedSequenceElement && !this.host.state.selectedNode && !this.host.state.selectedEdge) {
+            return;
+          }
           this.host.state.selectedSequenceElement = null;
         }
         this.host.state.selectedNode = null;

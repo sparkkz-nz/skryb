@@ -215,6 +215,7 @@ export class BrowserRuntime {
       closeDiagramExportMenus: () => this.closeDiagramExportMenus(),
       getExpandedDiagramIndex: () => this.state.expandedDiagramIndex,
       toggleDiagramExpansion: (diagramIndex) => this.toggleDiagramExpansion(diagramIndex),
+      activateDiagram: (diagramIndex) => this.diagramEditor?.activateDiagram(diagramIndex),
       hasSelection: () => Boolean(this.state.selectedNode || this.state.selectedEdge || this.state.selectedSequenceElement),
       clearSelection: () => {
         clearEditorState(this.state);
@@ -561,12 +562,14 @@ export class BrowserRuntime {
     // A `doctype: diagram` document opens straight into the expanded frame.
     // Reading the frontmatter up front keeps that to a single render, and an
     // unparseable header is reported by renderDocument as usual.
+    let expandOnOpen = false;
     try {
-      if (parseDocumentFrontmatter(this.getSource()).frontmatter.doctype === "diagram") {
-        this.state.expandedDiagramIndex = 0;
-      }
+      expandOnOpen = parseDocumentFrontmatter(this.getSource()).frontmatter.doctype === "diagram";
     } catch {
-      this.state.expandedDiagramIndex = null;
+      this.setExpandedDiagram(null);
+    }
+    if (expandOnOpen) {
+      this.setExpandedDiagram(0);
     }
     this.renderDocument();
     if (globalThis.location?.hash) {
@@ -860,7 +863,7 @@ export class BrowserRuntime {
     this.closeDocumentMenu();
     this.closeDiagramExportMenus();
     this.stopDiagramEditing();
-    this.state.expandedDiagramIndex = null;
+    this.setExpandedDiagram(null);
     // Stored heights are a record of how each frame was resized on screen, which says nothing
     // about how tall a diagram needs to be on paper.
     this.state.diagramViewportHeights.clear();
@@ -916,6 +919,7 @@ export class BrowserRuntime {
    * a fixed-position frame's viewport-filling height as its stored height.
    */
   private setExpandedDiagram(diagramIndex: number | null): void {
+    this.diagramEditor?.activateDiagram(diagramIndex);
     const previousIndex = this.state.expandedDiagramIndex;
     if (previousIndex === diagramIndex) {
       return;
