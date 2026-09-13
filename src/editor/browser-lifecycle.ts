@@ -50,7 +50,7 @@ export class BrowserLifecycle {
     document.addEventListener("keydown", (event) => this.handleKeydown(event));
     document.addEventListener("pointerdown", (event) => this.handlePointerDown(event));
     this.host.outputElement.addEventListener("dblclick", (event) => {
-      if (event.target instanceof Element && event.target.closest("button, input, textarea, select, [contenteditable]")) {
+      if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable]")) {
         return;
       }
       this.host.revealSource(globalThis.getSelection?.()?.toString() || "");

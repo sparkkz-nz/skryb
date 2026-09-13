@@ -126,6 +126,13 @@ Everything happens inside the open document; there is no separate application.
   move, and diagram ids that work as anchors. Fenced code is syntax highlighted
   in about forty languages, and `styles:` lets a diagram declare a look once and
   apply it with `class:`.
+- **Node navigation (next runtime release)** uses `href: "#diagram-id"` or
+  `href: "#heading-slug"` on flowchart nodes. Readers follow nodes to detail
+  views; editors set destinations in the node inspector. Use ordinary Markdown
+  links to return to the overview. See the
+  [synthetic navigation example](examples/diagram-navigation.html), which uses
+  the local companion runtime. This feature is not yet in published `latest`
+  or an existing pinned release.
 - **Printing** covers the whole document, not just one diagram. Toolbars are
   dropped, diagrams print at full size regardless of how their frame is sized on
   screen, and panels, diagrams and tables are kept off page breaks.

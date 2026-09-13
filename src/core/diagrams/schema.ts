@@ -41,6 +41,7 @@ export interface NamedStyle {
 export interface FlowchartNode {
   id: string;
   label: string;
+  href?: string;
   shape: NodeShape;
   class?: string;
   position?: Position;

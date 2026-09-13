@@ -296,6 +296,46 @@ Add `:::toc { depth=3 diagrams=true }` near the top of a long document. It takes
 no closing fence, and lists captioned diagrams under the heading they fall
 within.
 
+### Link nodes to detail views
+
+Node navigation is available in the next runtime release, not the published
+`latest` runtime or an existing pinned release.
+
+Add optional `href: "#diagram-id"` to a flowchart node to link to a diagram,
+or `href: "#heading-slug"` to link to a heading in the same document. Quote the
+value because an unquoted `#` begins a YAML comment. Only nonempty fragments
+are supported; external URLs, cross-file paths, an empty string, and `"#"` are
+invalid. Omit `href` to remove a destination. Edges and sequence participants
+do not support it.
+
+Diagram IDs resolve with or without captions and at the reading position of a
+`:::diagram` reference. Use the rendered slug for a heading; diagram IDs and
+repeated headings can cause numeric suffixes. Give targets stable, distinct
+names.
+
+Malformed destinations are `schema` errors. Lint reports
+`missing-node-destination` for a fragment with no rendered target and
+`ambiguous-node-destination` for multiple targets. Both are warnings and retain
+the authored link; correct them before distributing the document.
+
+In read mode, linked nodes are native links that support Tab and Enter.
+Parent and child nodes can have independent destinations. Navigation closes
+diagram expansion and browser fullscreen before revealing and focusing the
+destination; fragment URLs also support direct opening and browser history.
+In edit mode, clicking selects the node. Set, change, or clear its link with
+the node inspector's **Destination** field.
+
+For an overview/detail document, place an ordinary return link beside each
+detail diagram, such as `[Back to overview](#overview-flow)`. The overview
+diagram must declare `id: overview-flow`. No automatic breadcrumb or
+parent-diagram field is needed.
+
+Baking, relayout, node duplication, edits, **Save As**, and **Save for Offline**
+retain destinations. Isolated SVG exports remove all node links. **Save as
+Skryb diagram** keeps only links to the exported diagram's own `id`, removing
+destinations in omitted headings or diagrams. The original document is
+unchanged.
+
 ## Editing, saving, and printing
 
 Use **Edit source** for canonical Markdown, document structure, and sequence
@@ -407,15 +447,18 @@ outside diagram fences is not changed.
 | --- | --- | --- |
 | `schema` | error | The document or a diagram fails validation. Other checks do not run until this is fixed. |
 | `unknown-edge-endpoint` | error | An edge references a node that does not exist, so the renderer omits the edge. |
+| `missing-node-destination` | warning | A node's valid fragment does not match a rendered heading or diagram anchor. |
+| `ambiguous-node-destination` | warning | A node's valid fragment matches more than one rendered anchor. |
 | `node-overlap` | warning | Two unrelated node bounds overlap. A child within its parent is excluded. |
 | `edge-crosses-node` | warning | An edge passes through a node other than its source or target. |
 | `edge-label-overlap` | warning | All deterministic label positions conflict with a node, another label, or another route. The fallback label remains visible. |
 | `label-overflow` | warning | A label does not fit within its shape after reducing its padding. |
 | `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip whose dominant path is eligible for wrapping. |
 
-Errors are blocking. Review every warning and either correct it or confirm that
-the geometry is intentional. Disconnected nodes are valid and are not reported;
-this supports annotations and legends.
+Errors are blocking. Correct missing or ambiguous destinations. Review geometry
+warnings and either correct them or confirm that the geometry is intentional.
+Disconnected nodes are valid and are not reported; this supports annotations
+and legends.
 
 ### Adjusting baked source
 
@@ -454,6 +497,9 @@ Before returning a document, verify:
   and sizes are multiples of it.
 - A flowchart either declares `layout` or gives every node a `position` and every
   edge both anchors.
+- Each node `href` is a quoted, nonempty same-document fragment with one
+  rendered target. Detail views have ordinary Markdown return links, and the
+  chosen runtime supports node navigation.
 - The document has been baked and linted since the last source change. The saved
   source contains the geometry used for rendering.
 - The checks report no errors, and every warning is either fixed or a deliberate

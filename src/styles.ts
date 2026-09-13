@@ -953,6 +953,15 @@ export function injectStyles(): void {
     .docdiagram-node {
       cursor: default;
     }
+    .docdiagram-node-link .docdiagram-node {
+      cursor: pointer;
+    }
+    .docdiagram-node-link:focus-visible .docdiagram-node-link-focus {
+      visibility: visible;
+    }
+    #rendered-document [id] {
+      scroll-margin-top: 5rem;
+    }
     .docdiagram[data-editing="true"] .docdiagram-node {
       cursor: grab;
     }

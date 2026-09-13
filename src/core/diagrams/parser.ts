@@ -21,12 +21,13 @@ import {
 import { fitCanvasToContent } from "./mutations";
 import { applyFlowchartLayout, resolveLayoutSettings } from "./layout";
 import { applyOneShotRelayout } from "./relayout";
+import { isValidNodeHref, NodeHrefValidationError } from "../navigation";
 
 const diagramCollectionNames = ["nodes", "edges", "participants", "messages", "activations", "notes", "groups"] as const;
 const diagramMetadataFields = ["version", "id", "caption", "description", "theme"] as const;
 const flowchartDiagramFields = [...diagramMetadataFields, "type", "layout", "relayout", "styles", "canvas", "nodes", "edges"] as const;
 const sequenceDiagramFields = [...diagramMetadataFields, "type", "canvas", "participants", "messages", "activations", "notes", "groups"] as const;
-const flowchartNodeFields = ["id", "label", "shape", "class", "position", "pinned", "size", "style", "strokeType", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
+const flowchartNodeFields = ["id", "label", "href", "shape", "class", "position", "pinned", "size", "style", "strokeType", "palette", "subtitle", "textVAlign", "textHAlign", "arrow", "children"] as const;
 const flowchartEdgeFields = ["source", "target", "class", "sourceAnchor", "targetAnchor", "route", "strokeType", "label", "style", "start", "end", "waypoint"] as const;
 const namedStyleFields = ["palette", "style"] as const;
 const layoutFields = ["direction", "stageGap", "siblingGap"] as const;
@@ -443,6 +444,10 @@ function validateFlowchartDiagram(diagram: FlowchartDiagram, colorScheme = "clas
 
     if (!node.id || typeof node.label !== "string") {
       throw new Error("Every node requires an id and a string label.");
+    }
+
+    if (node.href !== undefined && !isValidNodeHref(node.href)) {
+      throw new NodeHrefValidationError(node.id);
     }
 
     if (!node.shape) {

@@ -1,5 +1,7 @@
 import { getDiagramId } from "../core/document";
 import { serializeDiagram } from "../core/diagrams/serializer";
+import type { FlowchartNode } from "../core/diagrams/schema";
+import { decodeDocumentFragment } from "../core/navigation";
 import type { EditorState } from "./state";
 import type { SourceEditor } from "./source-editor";
 import type { DocumentSession } from "./document-session";
@@ -69,6 +71,7 @@ export class DocumentExportService {
     }
     copy.querySelector("body")?.removeAttribute("data-docdiagram-theme");
     output?.replaceChildren();
+    output?.removeAttribute("tabindex");
     output?.removeAttribute("data-editing-shortcuts-bound");
     for (const attribute of [...(output?.attributes || [])]) {
       if (attribute.name === "style" || attribute.name.startsWith("data-")) {
@@ -98,7 +101,19 @@ export class DocumentExportService {
       globalThis.alert("The diagram is no longer available to save.");
       return;
     }
-    const diagramSource = serializeDiagram(diagram);
+    const copyNode = (node: FlowchartNode): FlowchartNode => {
+      const copy = { ...node };
+      if (!diagram.id || decodeDocumentFragment(copy.href) !== diagram.id) {
+        delete copy.href;
+      }
+      if (copy.children) {
+        copy.children = copy.children.map(copyNode);
+      }
+      return copy;
+    };
+    const diagramSource = serializeDiagram(diagram.type === "flowchart"
+      ? { ...diagram, nodes: diagram.nodes.map(copyNode) }
+      : diagram);
     const name = getDiagramId(diagramSource) || this.getDiagramExportName(diagramIndex);
     const source = [
       "---",
@@ -186,6 +201,14 @@ export class DocumentExportService {
     copy.querySelectorAll(".docdiagram-node-selected, .docdiagram-edge-selected").forEach((element) => {
       element.classList.remove("docdiagram-node-selected", "docdiagram-edge-selected");
     });
+    // Figure and document anchors are outside the isolated SVG, including its own diagram ID.
+    copy.querySelectorAll("a.docdiagram-node-link").forEach((link) => {
+      link.replaceWith(...link.childNodes);
+    });
+    copy.querySelectorAll(
+      ".docdiagram-node-link-hit, .docdiagram-node-link-focus, .docdiagram-node-link-indicator"
+    ).forEach((element) => element.remove());
+    copy.setAttribute("role", "img");
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = [
       "svg{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}",

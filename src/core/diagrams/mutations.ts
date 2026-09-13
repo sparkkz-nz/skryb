@@ -17,6 +17,7 @@ import {
 } from "./schema";
 import { clampNodeSize, getGridSize, getNodeColorPalette, snapToGrid } from "./styles";
 import { FlowchartIndex, findFlowchartNode, getFlowchartNodeBounds } from "./hierarchy";
+import { isValidNodeHref } from "../navigation";
 
 function includesValue<T extends string>(values: readonly T[], value: string): value is T {
   return values.includes(value as T);
@@ -246,6 +247,7 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
   const clone = (node: FlowchartNode): FlowchartNode => ({
     id: createDuplicateNodeId(ids, node.shape),
     label: node.label,
+    ...(node.href !== undefined ? { href: node.href } : {}),
     shape: node.shape,
     ...(node.position ? { position: { ...node.position } } : {}),
     ...(node.size ? { size: { ...node.size } } : {}),
@@ -274,6 +276,18 @@ export function duplicateNode(diagram: FlowchartDiagram, nodeId: string): Flowch
   entry.siblings.push(duplicate);
   expandCanvasForNode(diagram, duplicate);
   return duplicate;
+}
+
+export function setNodeHref(node: FlowchartNode, href: string): FlowchartNode {
+  if (href === "") {
+    delete node.href;
+  } else {
+    if (!isValidNodeHref(href)) {
+      throw new Error('Node href must be a non-empty same-document fragment string, such as "#detail".');
+    }
+    node.href = href;
+  }
+  return node;
 }
 
 export function createConnector(

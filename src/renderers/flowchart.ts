@@ -188,9 +188,12 @@ export function renderFlowchartDiagram(
     const geometry = getNodeGeometry(node, x, y, nodeWidth, nodeHeight);
     const layout = computeNodeTextLayout(geometry.textBounds, node);
     const isTextShape = node.shape === "text";
+    const href = isDiagramEditing ? undefined : node.href;
 
     return [
+      href ? `<a class="docdiagram-node-link" href="${escapeHtml(href)}" aria-label="${escapeHtml(node.label.trim() || node.subtitle?.trim() || `Go to ${href}`)}">` : "",
       `<g class="docdiagram-node${isSelected ? " docdiagram-node-selected" : ""}" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}">`,
+      href ? `<rect class="docdiagram-node-link-hit" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" fill="transparent" pointer-events="all"/>` : "",
       renderNodeBody(geometry, style, strokeWidth, node.strokeType, palette.background.fill),
       calloutPointer
         ? renderNodeCalloutPointer(
@@ -228,7 +231,11 @@ export function renderFlowchartDiagram(
       isSelected && isDiagramEditing && !isEditing && node.arrow
         ? `<circle class="docdiagram-callout-handle" data-diagram-index="${diagramIndex}" data-node-id="${escapeHtml(node.id)}" cx="${node.arrow.x}" cy="${node.arrow.y}" r="7" aria-label="Callout pointer target"/>`
         : "",
-      `</g>`
+      href
+        ? `<rect class="docdiagram-node-link-focus" x="${x + 2}" y="${y + 2}" width="${nodeWidth - 4}" height="${nodeHeight - 4}" rx="4" fill="none" stroke="${escapeHtml(style.text || "")}" stroke-width="2" stroke-dasharray="4 3" visibility="hidden" pointer-events="none"/><path class="docdiagram-node-link-indicator" d="M ${x + nodeWidth - 20} ${y + 16} h 10 m -4 -4 l 4 4 l -4 4" fill="none" stroke="${escapeHtml(style.text || "")}" stroke-width="1.5" aria-hidden="true" pointer-events="none"/>`
+        : "",
+      `</g>`,
+      href ? `</a>` : ""
     ].join("");
   }).join("");
 
@@ -241,7 +248,10 @@ export function renderFlowchartDiagram(
     : "";
   const cameraOffset = diagramCameraOffsets.get(diagramIndex) || { x: 0, y: 0 };
   const cameraStyle = `width: ${diagramZooms.get(diagramIndex) || 100}%; transform: translate(${cameraOffset.x}px, ${cameraOffset.y}px)`;
-  const accessibility = renderSvgAccessibility(diagram, diagramIndex, "Architecture diagram", figure);
+  const accessibility = renderSvgAccessibility(
+    diagram, diagramIndex, "Architecture diagram", figure,
+    !isDiagramEditing && nodeEntries.some(({ node }) => node.href !== undefined)
+  );
 
   return [
     `<figure${renderFigureAttributes(figure)} data-diagram-index="${diagramIndex}" data-diagram-type="flowchart" data-editing="${isDiagramEditing}" data-expanded="${isExpanded}"${viewportStyle}>`,

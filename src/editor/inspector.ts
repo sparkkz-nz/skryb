@@ -17,6 +17,7 @@ import {
   type Theme
 } from "../core/diagrams/schema";
 import { escapeHtml } from "../core/diagrams/parser";
+import { isValidNodeHref, NodeHrefValidationError } from "../core/navigation";
 import { findFlowchartNode } from "../core/diagrams/hierarchy";
 import {
   clearEdgeWaypoint,
@@ -31,6 +32,7 @@ import {
   setEdgeStrokeType,
   setEdgeStyleOverride,
   setNodeColorPalette,
+  setNodeHref,
   setNodeLabel,
   setNodeShape,
   setNodeSize,
@@ -95,6 +97,7 @@ export function buildNodeInspectorFields(
   return [
     `<label class="docdiagram-field docdiagram-field-wide">Label<textarea class="docdiagram-inspector-label docdiagram-inspector-textarea" rows="2">${escapeHtml(node.label)}</textarea></label>`,
     `<label class="docdiagram-field docdiagram-field-wide">Subtitle<textarea class="docdiagram-inspector-subtitle docdiagram-inspector-textarea" rows="2">${escapeHtml(node.subtitle || "")}</textarea></label>`,
+    `<label class="docdiagram-field docdiagram-field-wide">Destination<input type="text" class="docdiagram-inspector-destination" value="${escapeHtml(node.href || "")}" placeholder="#detail"></label>`,
     `<div class="docdiagram-field docdiagram-field-wide"><span>Palette</span><div class="docdiagram-inspector-palette">${paletteMarkup(colourScheme, documentTheme, selectedPalette, "node-palette")}</div></div>`,
     `<label class="docdiagram-inspector-shape-row"><span>Shape</span><select class="docdiagram-inspector-shape">${nodeShapes.map(
       (shape) => `<option value="${shape}"${shape === node.shape ? " selected" : ""}>${shape}</option>`
@@ -273,6 +276,18 @@ export function wireNodeInspector(host: InspectorHost, container: ParentNode, di
     (value) => persistNode((_, node) => setNodeSubtitle(node, value)),
     scheduleLiveTextRender
   );
+  const destination = container.querySelector<HTMLInputElement>(".docdiagram-inspector-destination");
+  destination?.addEventListener("change", () => {
+    const href = destination.value;
+    if (href && !isValidNodeHref(href)) {
+      destination.setAttribute("aria-invalid", "true");
+      globalThis.alert(new NodeHrefValidationError(nodeId).message);
+      destination.focus();
+      return;
+    }
+    destination.removeAttribute("aria-invalid");
+    withNode((_, node) => setNodeHref(node, href));
+  });
   for (const palette of container.querySelectorAll<HTMLInputElement>(".docdiagram-inspector-palette input")) {
     palette.addEventListener("change", () => withNode((_, node) => setNodeColorPalette(node, palette.value, host.state.documentColorScheme)));
   }

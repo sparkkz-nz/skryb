@@ -117,7 +117,7 @@ export function validateDocumentSource(source: string): ResolvedDocument {
         .map((candidate) => stripFencePrefix(candidate))
         .join("\n");
       parseDiagram(diagramSource, document.colourScheme);
-      const id = diagramSource.match(/^id:\s*(?:"([^"]+)"|([^\s#]+))\s*$/m)?.slice(1).find(Boolean);
+      const id = getDiagramId(diagramSource);
       if (id) {
         if (diagramIds.has(id)) {
           throw new Error(`Duplicate diagram id: ${id}`);

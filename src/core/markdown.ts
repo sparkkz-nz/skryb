@@ -10,6 +10,7 @@ import { escapeHtml, parseScalar } from "./diagrams/parser";
 import { getNodeColorPalette, mergeStyle } from "./diagrams/styles";
 import { findFenceClose, isFenceClose, parseFenceOpen } from "./fences";
 import { highlightCode } from "./highlight";
+import { getDiagramId, resolveDocument } from "./document";
 
 type DirectiveName = "section" | "panel" | "callout" | "grid" | "stack" | "diagram" | "toc";
 
@@ -70,6 +71,7 @@ type MarkdownRenderState = {
   figureNumber?: number;
   figures?: Map<string, FigureEntry>;
   contents?: ContentsEntry[];
+  anchors?: Map<string, number>;
 };
 
 // Deferred substitutions. A cross-reference or a contents listing can point forwards, so both are
@@ -200,11 +202,6 @@ function parseDiagramReference(line: string): { id: string } | null {
   const keys = Object.keys(directive.attributes);
   const id = directive.attributes.id;
   return keys.length === 1 && id ? { id } : null;
-}
-
-function getDiagramId(source: string): string | null {
-  const match = source.match(/^id:\s*(?:"([^"]+)"|([^\s#]+))\s*$/m);
-  return match?.[1] ?? match?.[2] ?? null;
 }
 
 function getDiagramCaption(source: string): string | null {
@@ -429,6 +426,9 @@ export function renderMarkdown(
 
   function renderFigure(definitionSource: string): string {
     const id = getDiagramId(definitionSource);
+    if (id && state.anchors) {
+      state.anchors.set(id, (state.anchors.get(id) || 0) + 1);
+    }
     const caption = getDiagramCaption(definitionSource);
     const parsed = caption ? parseCaption(caption) : null;
     // Only a caption asking for a number consumes one, which keeps numbering contiguous when a
@@ -687,6 +687,9 @@ export function renderMarkdown(
       if (heading) {
         const level = heading[1].length;
         const headingId = getHeadingId(heading[2], state);
+        if (state.anchors) {
+          state.anchors.set(headingId, (state.anchors.get(headingId) || 0) + 1);
+        }
         state.contents!.push({ kind: "heading", level, id: headingId, text: renderInline(heading[2]) });
         output.push(`<h${level} id="${headingId}">${renderInline(heading[2])}</h${level}>`);
         index += 1;
@@ -753,6 +756,18 @@ export function renderMarkdown(
   // A nested render (a block quote) shares the outer state, so substitution is left to the
   // outermost call, where every figure and heading has been collected.
   return isNestedRender ? markup : resolveDeferredMarkup(markup, state);
+}
+
+/** Counts anchors at their rendered placement, including uncaptioned diagrams. */
+export function collectDocumentAnchors(source: string): Map<string, number> {
+  const document = resolveDocument(source);
+  const anchors = new Map<string, number>();
+  renderMarkdown(document.content, { diagramIndex: 0, anchors }, {
+    renderDiagram: () => "",
+    documentColorScheme: document.colourScheme,
+    documentTheme: document.theme
+  });
+  return anchors;
 }
 
 function renderContentsList(entries: ContentsEntry[], depth: number, includeDiagrams: boolean): string {

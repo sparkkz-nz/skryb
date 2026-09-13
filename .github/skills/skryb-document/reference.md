@@ -238,6 +238,8 @@ reference determines the rendered position.
 ### Captions, anchors, and cross-references
 
 A diagram's `id` is also its anchor, so `#payment-flow` links directly to it.
+This applies with or without a caption, including a diagram placed through a
+`:::diagram` reference.
 When a diagram id matches a generated heading slug, the diagram retains the id
 and the heading slug receives a numeric suffix.
 
@@ -665,6 +667,7 @@ child nodes at any depth:
 | `id` | **Required.** Stable identifier used by edges. |
 | `label` | **Required.** Node text; use `label: ""` for an unlabeled shape. A multiline label is written as a YAML literal block scalar (`label: \|+` followed by indented lines); a single-line double-quoted scalar with `\n`, for example `label: "Payments\nAPI"`, still parses for backward compatibility. |
 | `subtitle` | Optional text below the label; multiline subtitles use the same literal block scalar (or legacy double-quoted `\n`) form. |
+| `href` | Optional same-document destination, such as `"#payment-flow"` or `"#operating-notes"`. Must be a nonempty fragment string. See [Node navigation](#node-navigation); available in the next runtime release. |
 | `textVAlign` | Optional vertical text-stack alignment: `top` or `center` (default). |
 | `textHAlign` | Optional horizontal text-stack alignment: `left`, `center` (default), or `right`. |
 | `class` | Optional name of a style declared in the diagram's `styles:` block. Node-level `palette` and `style` values take precedence. |
@@ -685,6 +688,72 @@ to `none` (no background, no border) while keeping readable text, and works
 on any node shape; selecting any other palette restores that palette's normal
 styling. A diagram always inherits the document-wide theme and colour scheme;
 per-diagram scheme overrides are not supported.
+
+#### Node navigation
+
+Node navigation is available in the next runtime release. It is not yet part of
+the published `latest` runtime or an existing pinned release.
+
+A flowchart node can link to a diagram or heading in the same document:
+
+```yaml
+- id: processing
+  label: Processing details
+  shape: rounded-rectangle
+  href: "#processing-detail"
+```
+
+Use a diagram's `id` for `"#processing-detail"`, or a rendered heading slug
+such as `"#operating-notes"` for `## Operating notes`. Quote the value: an
+unquoted `#` starts a YAML comment. Both captioned and uncaptioned diagrams are
+valid destinations. A `:::diagram` reference places the destination at its
+reading position, not at the fenced definition. Heading slugs follow the
+rendered document's collision rules; use the actual anchor when headings repeat
+or share a name with a diagram. Directive titles and generated SVG element IDs
+are not destinations.
+
+Only nonempty same-document fragments are supported. External URLs, cross-file
+paths, an empty string, and `"#"` are invalid. Unescaped whitespace, control
+characters, backslashes, angle brackets, double quotes, and backticks are
+rejected. Percent escapes must be valid UTF-8; the fragment is decoded once and
+must produce a nonblank anchor with no control characters or browser
+text-fragment directive (`:~:`). Percent-encoded internal spaces are allowed.
+Omit `href` to remove a link.
+The field applies to flowchart nodes, including child nodes, not edges or
+sequence participants. A Markdown link inside a node label does not replace
+`href`.
+
+In read mode, linked nodes are native links with keyboard focus and Enter
+activation. The accessible name uses the node label, then its subtitle if the
+label is blank, then `Go to #destination` if both are blank.
+A linked parent and a linked child have separate activation
+targets; following the child does not also follow the parent. Unlinked nodes
+keep their existing behaviour. Following a link closes diagram expansion and
+browser fullscreen before revealing and focusing the destination. The fragment
+URL supports direct opening and browser back/forward navigation.
+
+In edit mode, a click selects the node instead of following its link. Use the
+node inspector's **Destination** field to set, change, or clear `href`.
+Navigation does not replace selection, dragging, resizing, panning, or zooming.
+Baking, relayout, node duplication, graphical edits, and source serialization
+retain the destination.
+
+Build overview/detail documents with explicit return links in adjacent
+Markdown. For example, place `[Back to overview](#overview-flow)` after a
+detail diagram whose overview has `id: overview-flow`. No parent-diagram field
+or automatic breadcrumb is required.
+
+Malformed `href` values produce a `schema` error. A valid fragment with no
+rendered heading or diagram target produces a `missing-node-destination`
+warning; one matching multiple rendered anchors produces an
+`ambiguous-node-destination` warning. These warnings identify the source node
+and do not remove the link or choose a fallback target.
+
+**Save As** and **Save for Offline** retain node destinations in the complete
+document. Isolated SVG exports remove all node links. **Save as Skryb diagram**
+retains only links to that exported diagram's own `id`; it removes links to
+headings and other diagrams because their content is omitted. Export does not
+change the original document.
 
 #### Label wrapping and node width
 
@@ -1065,14 +1134,15 @@ its `sourceRange` selects the defining YAML line. Diagrams without ids remain
 addressable by `diagramIndex`, and a rendered `:::diagram` reference points back
 to the original fence rather than the reference directive.
 
-The rules are `schema`, `unknown-edge-endpoint`, `node-overlap`,
+The rules are `schema`, `unknown-edge-endpoint`, `missing-node-destination`,
+`ambiguous-node-destination`, `node-overlap`,
 `edge-crosses-node`, `edge-label-overlap`, `label-overflow`, and
 `unbalanced-aspect-ratio`. The last rule may carry a `suggestedAction` with the
 `wrap-linear-flow` id and zero-based diagram index; lint itself never executes
-it. Only errors are blocking: warnings
-describe things a reader would notice, but do not block a build for visual
-issues alone. Message text remains stable for consumers that do not use the
-structured location.
+it. `schema` and `unknown-edge-endpoint` are errors; the remaining rules are
+warnings. Node-destination warnings report unresolved or ambiguous links rather
+than geometry. Only errors are blocking. Message text remains stable for
+consumers that do not use the structured location.
 
 The repository CLI prints navigable `file:line:column` prefixes where a location
 is available:

@@ -120,6 +120,7 @@ import { SourceEditor } from "./source-editor";
 import { DocumentExportService } from "./document-export-service";
 import { DocumentRenderer } from "./document-renderer";
 import { DocumentSession, TemplateSourceStore } from "./document-session";
+import { DocumentNavigation } from "./document-navigation";
 import { clearEditorState, createEditorState, isDiagramEditing, type EditorState } from "./state";
 
 type SequenceInspectable = SequenceParticipant | SequenceMessage | SequenceNote;
@@ -171,6 +172,7 @@ export class BrowserRuntime {
   private readonly exportService: DocumentExportService;
   private readonly renderer: DocumentRenderer;
   private readonly session: DocumentSession;
+  private readonly navigation: DocumentNavigation | null;
 
   public constructor(
     private readonly sourceElement: HTMLTemplateElement | null,
@@ -195,6 +197,10 @@ export class BrowserRuntime {
       renderDocument: () => this.renderDocument()
     }) : null;
     this.exportService = new DocumentExportService(this.session, this.state, outputElement, this.sourceEditor);
+    this.navigation = outputElement ? new DocumentNavigation({
+      outputElement,
+      prepareDocumentView: (targetId) => this.prepareNavigation(targetId)
+    }) : null;
     this.lifecycle = outputElement ? new BrowserLifecycle({
       outputElement,
       isAutoTheme: () => this.state.documentThemeSetting === "auto",
@@ -550,6 +556,7 @@ export class BrowserRuntime {
     this.session.captureSavedSource();
     this.bakeOnOpen();
     this.lifecycle?.bind();
+    this.navigation?.bind();
     // A `doctype: diagram` document opens straight into the expanded frame.
     // Reading the frontmatter up front keeps that to a single render, and an
     // unparseable header is reported by renderDocument as usual.
@@ -561,6 +568,9 @@ export class BrowserRuntime {
       this.state.expandedDiagramIndex = null;
     }
     this.renderDocument();
+    if (globalThis.location?.hash) {
+      void this.navigation?.revealFragment();
+    }
   }
 
   public getCoreApi() {
@@ -919,6 +929,29 @@ export class BrowserRuntime {
       this.pendingViewportFits.add(index);
       this.autoFittedDiagrams.delete(index);
     }
+  }
+
+  private prepareNavigation(targetId: string | null): boolean {
+    if (this.sourceEditor?.isOpen) {
+      this.sourceEditor.close();
+      if (this.sourceEditor.isOpen) {
+        return false;
+      }
+    }
+    const target = targetId === null ? null :
+      [...(this.outputElement?.querySelectorAll<HTMLElement>(".docdiagram[id]") || [])]
+        .find((figure) => figure.id === targetId);
+    this.stopDiagramEditing();
+    this.setExpandedDiagram(null);
+    if (target) {
+      const index = Number(target.dataset.diagramIndex);
+      this.state.diagramZooms.set(index, 100);
+      this.state.diagramCameraOffsets.delete(index);
+      this.pendingViewportFits.add(index);
+    }
+    this.closeDocumentMenu();
+    this.closeDiagramExportMenus();
+    return this.renderDocument();
   }
 
   public toggleDiagramExpansion(diagramIndex: number): void {
