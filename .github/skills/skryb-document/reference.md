@@ -662,14 +662,17 @@ ref: { label: 3, position: ne }
 The scalar forms use position `NW`. In the mapping form, `label` is required
 and `position` is optional. A label is a finite number or a nonblank,
 single-line string without control characters. Labels render as plain text,
-not Markdown or HTML. A mapping accepts only `label` and `position`; custom
+not Markdown or HTML. Strings are preserved without trimming; quote a
+numeric-looking label such as `ref: "03"` to retain its leading zero.
+The inspector trims surrounding whitespace when a label is edited.
+Repeated labels are allowed. A mapping accepts only `label` and `position`; custom
 badge styles are unsupported. Invalid labels, unknown fields, and unsupported
 positions produce diagram validation errors reported by lint as `schema`.
 Booleans, null, arrays, blank strings, and nonfinite numbers are not valid
 labels. Omit `ref` to remove the badge.
 
-One or two ASCII digits, such as `3` or `12`, produce a circle. Words and longer
-values produce a stadium shape: a rectangle with semicircular ends. Badge width
+One or two ASCII digits, such as `3` or `12`, produce a circle. All other
+labels produce a stadium shape: a rectangle with semicircular ends. Badge width
 fits the label. All badges use a solid blue treatment with contrasting text
 selected for the document's colour scheme and light or dark theme. A node's
 palette, class, or style does not customise its badge.
@@ -687,9 +690,10 @@ diagram. This does not provide automatic obstacle avoidance. Leave space for
 outside badges, and keep inside badges clear of node labels and children.
 Inspect the rendered result after changing labels, sizes, or positions.
 Lint reports `annotation-overflow` when an inside node badge extends beyond
-its node bounds, and `annotation-overlap` when a badge overlaps an unrelated
-node. Related parent/child nodes are excluded from the latter check for node
-badges. These warnings do not detect every collision with text or other badges.
+its node bounds. `annotation-overlap` checks node badges against unrelated
+nodes, excluding their host and all ancestors and descendants. Edge badges
+are checked against every node, including connector endpoints. These checks do
+not cover badge-to-badge or badge-to-label collisions, or sequence geometry.
 
 Use `{annotation=3}` or `{annotation=Start}` in ordinary Markdown prose to show
 the matching noninteractive badge:
@@ -709,6 +713,8 @@ clear the badge label. Flowchart inspectors also provide **Position**. The
 edge inspector offers the uppercase outside positions; lowercase source values
 have the same placement. Sequence-message inspectors omit that control because
 their gutter position is fixed.
+Omit a sequence message's `label`, use `label: ""`, or clear **Label** in the
+message inspector to retain the arrow and badge without message text.
 
 Baking, relayout, duplication, graphical edits, and serialization retain `ref`.
 **Save As** and **Save for Offline** preserve diagram and inline badges.
@@ -1044,6 +1050,11 @@ configured lifeline spacing.
 
 ## Editing and serialization
 
+Click-to-activate wheel controls and background double-click expansion are
+available in the next runtime release, not published `latest` or an existing
+pinned release. The currently published runtime captures wheel gestures on
+hover without requiring activation.
+
 The runtime provides per-diagram zoom, fit, pan, and edit controls. Click a
 diagram, or Tab into it, to activate wheel controls. An outline marks the active
 diagram. Until activated, the wheel scrolls the document even over a diagram.
@@ -1071,7 +1082,7 @@ editing supports multiple lines: **Enter** adds a line, **Ctrl/Cmd+Enter**
 commits, and **Escape** cancels.
 
 Every retained edit serializes the diagram back into its matching `diagram`
-fence in `template#source`. **Save a copy** downloads a complete HTML document
+fence in `template#source`. **Save As** downloads a complete HTML document
 containing that updated source.
 
 The document menu's **Edit source** action opens a resizable lower tray with the
@@ -1088,8 +1099,9 @@ diagram from another saved Skryb document or a plain Markdown file. If the file
 contains multiple diagrams, it prompts for a selection. Imported diagrams are
 validated. Conflicting `id` values are rewritten; duplicate diagram ids prevent
 document rendering. **Help** opens this reference. Use the tray for
-document structure and sequence-diagram changes; use the graphical editor for
-flowchart presentation and connections.
+document structure and sequence-diagram structure; use the graphical inspectors
+for flowchart presentation and connections, and sequence participant, note, and
+message presentation.
 
 If a draft has a frontmatter or diagram schema error, the last valid rendered
 document and its canonical source remain unchanged. The tray retains the draft

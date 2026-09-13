@@ -344,7 +344,9 @@ or `ref: { label: 3, position: ne }` on flowchart nodes, flowchart edges, and
 sequence messages. The label must be a finite number or nonblank single-line
 string without control characters. It renders as plain text. Omit `ref` to
 remove it. Unknown mapping fields and invalid labels or positions are `schema`
-errors.
+errors. Quote numeric-looking strings such as `ref: "03"` to preserve leading
+zeros. Repeated labels are allowed. Source labels retain their whitespace;
+the inspector trims surrounding whitespace when a label is edited.
 
 Positions default to `NW`. On nodes, uppercase `N`, `S`, `E`, `W`, `NE`, `NW`,
 `SE`, `SW` means outside the bounding box with a gap; the corresponding
@@ -353,8 +355,10 @@ outside the actual label box, or use the routed midpoint for an unlabeled edge.
 Sequence badges use a fixed left gutter aligned with the message arrow. A
 self-message gets one badge on its outgoing row. Valid positions are accepted
 but ignored for messages; their inspector has no badge-position control.
+Omit a message's `label`, or clear **Label** in its inspector, to leave the
+arrow and badge without message text.
 
-One or two ASCII digits produce a circle; words and longer labels produce a
+One or two ASCII digits produce a circle; all other labels produce a
 stadium shape whose width fits the text. The solid blue treatment adjusts
 contrast for the document's theme and colour scheme. There are no custom badge
 styles.
@@ -376,6 +380,9 @@ Isolated SVG and Skryb diagram exports retain diagram badges; isolated Skryb
 exports omit the surrounding prose. Export does not modify the original.
 
 ## Editing, saving, and printing
+
+The following activation and background double-click controls are available
+in the next runtime release, not published `latest` or an existing pinned release.
 
 Double-click empty diagram background to expand it; repeat to return to the
 document. Click a diagram, or Tab into it, to activate wheel panning and
@@ -500,7 +507,7 @@ outside diagram fences is not changed.
 | `edge-label-overlap` | warning | All deterministic label positions conflict with a node, another label, or another route. The fallback label remains visible. |
 | `label-overflow` | warning | A label does not fit within its shape after reducing its padding. |
 | `annotation-overflow` | warning | An inside node badge extends beyond its node bounds. Enlarge the node or choose an outside position. |
-| `annotation-overlap` | warning | A badge overlaps an unrelated node. Related parents and children are excluded for node badges. Check other badge and text collisions visually. |
+| `annotation-overlap` | warning | A node badge overlaps an unrelated node, or an edge badge overlaps any node, including its endpoints. A node badge's host, ancestors, and descendants are excluded. Check badge-to-badge, badge-to-label, and sequence collisions visually. |
 | `unbalanced-aspect-ratio` | warning | Fitted content forms a long horizontal or vertical strip whose dominant path is eligible for wrapping. |
 
 Errors are blocking. Correct missing or ambiguous destinations. Review geometry
